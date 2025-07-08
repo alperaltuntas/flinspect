@@ -1,0 +1,11 @@
+name: flinspect
+
+channels:
+  - conda-forge
+  - anaconda
+  
+dependencies:
+  - pip
+  - pip:
+      - -e ./ # flinspect itself
+      - pyvis
