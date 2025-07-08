@@ -2,8 +2,6 @@ import networkx as nx
 from pathlib import Path
 
 from flinspect.ingest_parse_tree import extract_all_modules
-from flinspect.utils import get_module_paths
-
 
 
 def gen_dependency_graph(dirs):
@@ -36,22 +34,10 @@ def gen_dependency_graph(dirs):
     G = nx.DiGraph()
     for module in modules:
 
-        # Set the node attributes
-        node_color, edge_color = "lightseagreen", "turquoise" # for core MOM6
-        if "/MARBL/" in path_names[module.file_name.lower()]:
-            node_color, edge_color = "purple", "orchid"
-        elif "/CVMix-src/" in path_names[module.file_name.lower()]:
-            node_color, edge_color = "orangered", "coral"
-        elif "/GSW-Fortran/" in path_names[module.file_name.lower()]:
-            node_color, edge_color = "darkgrey", "grey"
-        elif "/FMS/" in path_names[module.file_name.lower()]:
-            node_color, edge_color = "orange", "gold"
-        elif "/config_src/infra" in path_names[module.file_name.lower()]:
-            node_color, edge_color = "blue", "lightblue"
-        
-        G.add_node(module.name, color=node_color)
+        G.add_node(module.name)
+        G.nodes[module.name]['source_path'] = path_names[module.file_name.lower()]
         for used_module in module.used_modules:
-            G.add_edge(module.name, used_module.name, color=edge_color)
+            G.add_edge(module.name, used_module.name)
 
     return G
 
