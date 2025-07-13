@@ -11,6 +11,8 @@ def level(line):
         elif c == ' ':
             continue
         else:
-            return res
+            break
+    
+    return res
 
 

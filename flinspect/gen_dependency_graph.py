@@ -1,64 +1,40 @@
 import networkx as nx
 from pathlib import Path
 
-from flinspect.ingest_parse_tree import extract_all_modules
+from flinspect.ingest_parse_tree import read_ptree_file
 
 
-def gen_dependency_graph(dirs):
+def gen_module_dependency_graph(paths):
+    """Generates a directed graph of module dependencies.
 
+    Parameters
+    ----------
+    paths : list of str or Path
+        List of paths to Python files or directories containing parse tree files.
 
-    # dirs must be str, Path, or list of str/Path
-    if isinstance(dirs, (str, Path)):
-        dirs = [dirs]
-    elif isinstance(dirs, list):
-        assert all(isinstance(p, (str, Path)) for p in dirs), \
-            f"Expected a list of str or Path objects, got {type(dirs)}"
+    Returns
+    -------
+    networkx.DiGraph
+        A directed graph where nodes are module names and edges represent dependencies.
+        Each node has an attribute 'source_name' indicating the original file name of the module.
+    """
+
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+    elif isinstance(paths, list):
+        assert all(isinstance(p, (str, Path)) for p in paths), \
+            f"Expected a list of str or Path objects, got {type(paths)}"
     else:
-        raise TypeError(f"Expected a list of paths, str, or Path object, got {type(dirs)}")
-
-    dirs = [Path(p) for p in dirs]
+        raise TypeError(f"Expected a list of paths, str, or Path object, got {type(paths)}")
 
     modules = []
-    for dir in dirs:
-        modules.extend(extract_all_modules(dir))
+    for path in paths:
+        modules.extend(read_ptree_file(path))
 
-    path_names= {}
-    for dir in dirs:
-        path_names_file = dir / "path_names"
-        with open(path_names_file) as f:
-            for line in f:
-                src_file_path = Path(line.strip())
-                path_names[src_file_path.stem.lower()] = src_file_path.as_posix()
-
-    # Now generate a NetworkX directed graph from the dependencies
-    G = nx.DiGraph()
+    g_modules = nx.DiGraph()
     for module in modules:
-
-        G.add_node(module.name)
-        G.nodes[module.name]['source_path'] = path_names[module.file_name.lower()]
+        g_modules.add_node(module, source_name=module.ptree_path.stem)
         for used_module in module.used_modules:
-            G.add_edge(module.name, used_module.name)
-
-    return G
-
-def main():
-    path = Path("/glade/work/altuntas/turbo-stack/bin/flangparse/FMS/")
-    dependencies = gen_dependency_graph_dict(path)
-
-    # Create a directed graph from the dependencies
-    G = nx.DiGraph()
-    for module, used_modules in dependencies.items():
-        for used_module in used_modules:
-            G.add_edge(module, used_module) 
+            g_modules.add_edge(module, used_module)
     
-    # Draw the graph
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(G, seed=42)  # positions for all nodes
-    nx.draw(G, pos, with_labels=True, node_size=2000, node_color='lightblue', font_size=10, font_color='black', font_weight='bold', arrows=True, arrowsize=20)
-    plt.title("Dependency Graph of Fortran Modules")
-    plt.show()
-
-
-if __name__ == "__main__":
-    main()
+    return g_modules
