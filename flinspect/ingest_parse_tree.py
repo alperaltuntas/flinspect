@@ -38,7 +38,7 @@ class Node:
 class ProgramUnit(Node):
     def _initialize(self, name):
         self.name = name
-        self.used_modules = set()
+        self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.subroutines = set()
         self.functions = set()
         self.ptree_path = ''
@@ -55,7 +55,7 @@ class Callable(Node):
     def _initialize(self, name, program_unit, parent=None):
         self.name = name
         self.program_unit = program_unit
-        self.used_modules = set()
+        self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.parent = parent
 
     @classmethod
@@ -88,10 +88,15 @@ def read_ptree_file(file_path, sweep=0):
     assert file_path.is_file(), f"Expected a file, got {file_path}"
 
     modules = []
-    program = None # this is set only when the file corresponds to a main program
-    module = None
-    routine = None # soubroutine or function
-    outer_routine = None # outer routine is the one that contains the current subroutine/function
+    program = None  # Current program. Is None if we are not in a program unit.
+    module = None   # Current module or subprogram (i.e., a source file with no module or program statement).
+    routine = None  # Current subroutine or function.
+    outer_routine = None  # Outer routine is the one that contains the current subroutine/function.
+    used_module = None  # Name of the last used module.
+
+    # Define lambdas for convenience
+    program_unit = lambda: module or program    # Returns the current program unit (program, module, or subprogram)
+    scope = lambda: routine or program_unit()   # Returns the current lower scope (routine or program unit)
 
     with open(file_path, 'r') as f:
 
@@ -119,15 +124,14 @@ def read_ptree_file(file_path, sweep=0):
                     assert outer_routine is None, f"More than one level of routine nesting found in {file_path}"
                 outer_routine = routine
 
-                program_unit = module or program
-                assert program_unit is not None, f"FunctionStmt found without a preceding ModuleStmt or ProgramStmt in {file_path}"
+                assert program_unit() is not None, f"FunctionStmt found without a preceding ModuleStmt or ProgramStmt in {file_path}"
 
                 if is_function:
-                    routine = Function(name, program_unit, outer_routine)
-                    program_unit.functions.add(routine)
+                    routine = Function(name, program_unit(), outer_routine)
+                    program_unit().functions.add(routine)
                 else:
-                    routine = Subroutine(name, program_unit, outer_routine)
-                    program_unit.subroutines.add(routine)
+                    routine = Subroutine(name, program_unit(), outer_routine)
+                    program_unit().subroutines.add(routine)
 
             elif "| EndFunctionStmt" in line:
                 assert type(routine) is Function, f"EndFunctionStmt found without a preceding FunctionStmt in {file_path}"
@@ -146,8 +150,35 @@ def read_ptree_file(file_path, sweep=0):
                     assert end_subroutine_name == routine.name, f"EndSubroutineStmt name {end_subroutine_name} does not match SubroutineStmt name {routine.name} in {file_path}"
                 routine = outer_routine
                 outer_routine = None                
+            
+            elif "| Only" in line:
 
-            elif " UseStmt" in line:
+                only_name = None
+                if (m := re.search(r"Only -> GenericSpec -> Name = '(\w+)'", line)):
+                    only_name = m.group(1)
+                elif  (m := re.search(r"Only -> GenericSpec -> DefinedOperator -> IntrinsicOperator = (\w+)", line)):
+                    only_name = m.group(1)
+                elif (m := re.search(r"Only -> GenericSpec -> Assignment", line)):
+                    only_name = "assignment(=)"
+                elif (m := re.search(r"Only -> Rename -> Names", line)):
+                    line = f.readline().strip()
+                    m = re.search(r"Name = '(\w+)'", line)
+                    assert m, f"Only Rename syntax not recognized in {file_path}, line: {line}"
+                    line = f.readline().strip()
+                    m = re.search(r"Name = '(\w+)'", line)
+                    assert m, f"Only Rename syntax not recognized in {file_path}, line: {line}"
+                    only_name = m.group(1)
+                else:
+                    raise ValueError(f"Only syntax not recognized in {file_path}, line: {line}")
+
+                assert used_module, f"Only clause found without a preceding UseStmt in {file_path} at line: {line}"
+                used_module_only_list = scope().used_modules[used_module]
+                if used_module_only_list and used_module_only_list[0] == '*':
+                    pass
+                else:
+                    used_module_only_list.append(only_name)
+
+            elif "| UseStmt" in line:
                 m = re.search(r"UseStmt *$", line)
                 assert m, f"UseStmt syntax not recognized in {file_path}"
                 line = f.readline().strip()
@@ -157,12 +188,9 @@ def read_ptree_file(file_path, sweep=0):
                 assert m, f"UseStmt Name syntax not recognized in {file_path}, line: {line}"
                 used_module_name = m.group(1)
                 used_module = Module(used_module_name)
-                if module:
-                    module.used_modules.add(used_module)
-                elif program:
-                    program.used_modules.add(used_module)
+                scope().used_modules[used_module] = []
 
-            elif " ModuleStmt" in line:
+            elif "| ModuleStmt" in line:
                 m = re.search(r"ModuleStmt -> Name = '(\w+)'", line)
                 assert m, f"ModuleStmt syntax not recognized in {file_path}"
                 assert not module, f"ModuleStmt found without a preceding EndModuleStmt in {file_path}"
@@ -171,7 +199,7 @@ def read_ptree_file(file_path, sweep=0):
                 module.ptree_path = file_path
                 modules.append(module)
 
-            elif " EndModuleStmt" in line:
+            elif "| EndModuleStmt" in line:
                 assert module, f"EndModuleStmt found without a preceding ModuleStmt in {file_path}"
                 m = re.search(r"EndModuleStmt -> Name = '(\w+)'", line)
                 if m:
@@ -203,5 +231,15 @@ def read_ptree_file(file_path, sweep=0):
                 
                 else:
                     raise ValueError(f"ProgramUnit syntax not recognized in {file_path}, line: {line}")
+            
+            # end of checking content of this line. Apply cleanups if necessary
+            # ======================================================================================
+
+            elif used_module:
+                # This is the case where we had a "UseStmt" in the previous line, which apparently
+                # is not followed by an "Only" clause, so we just add the entire module.
+                scope().used_modules[used_module] = ['*']
+                used_module = None
+
 
     return modules

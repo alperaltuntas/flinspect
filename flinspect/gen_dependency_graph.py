@@ -34,7 +34,15 @@ def gen_module_dependency_graph(paths):
     g_modules = nx.DiGraph()
     for module in modules:
         g_modules.add_node(module, source_name=module.ptree_path.stem)
+        # Add edges for for used modules at the module level
         for used_module in module.used_modules:
             g_modules.add_edge(module, used_module)
+        # Add edges for used modules in subroutines and functions
+        for subroutine in module.subroutines:
+            for used_module in subroutine.used_modules:
+                g_modules.add_edge(module, used_module)
+        for function in module.functions:
+            for used_module in function.used_modules:
+                g_modules.add_edge(module, used_module)
     
     return g_modules
