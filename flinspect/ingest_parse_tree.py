@@ -1,9 +1,10 @@
 import re
 from pathlib import Path
 from flinspect.utils import level
+from abc import ABC, abstractmethod
 
 
-class Node:
+class Node(ABC):
     """Base class for nodes in the parse tree."""
 
     def __new__(cls, *args, **kwargs):
@@ -14,7 +15,6 @@ class Node:
             cls._registry[key] = instance
         return cls._registry[key]
 
-    @classmethod
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         cls._registry = {}
@@ -23,17 +23,19 @@ class Node:
         return self.name
 
     @classmethod
+    @abstractmethod
     def _make_key(cls, *args, **kwargs):
         """Generates a unique key for the instance to be used in the registry."""
-        raise NotImplementedError("Subclasses must implement _make_key")
+        pass
     
+    @abstractmethod
     def _initialize(self, *args, **kwargs):
         """Initializes the instance with the provided arguments. We use this method to set up
         the instance attributes as opposed to using __init__ directly because __init__ gets
         called every time the __new__ method is invoked, and we use the __new__ method to 
         return existing instances from the registry if they exist, so we need to ensure that
         the attributes are only set once (via this _initialize method and not __init_)."""
-        raise NotImplementedError("Subclasses must implement _initialize")
+        pass
 
 class ProgramUnit(Node):
     def _initialize(self, name):
