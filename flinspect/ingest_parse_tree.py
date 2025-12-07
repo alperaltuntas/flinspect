@@ -5,9 +5,16 @@ from abc import ABC, abstractmethod
 
 
 class Node(ABC):
-    """Base class for nodes in the parse tree."""
+    """Base class for all nodes in the parse tree representation.
+    The Node class implements a registry to return existing instances
+    if they already exist. Otherwise, a new instance is created and stored
+    in the registry, and returned.
+    """
 
     def __new__(cls, *args, **kwargs):
+        """Creates a new instance of the class or returns an existing one from the registry.
+        Do not override in subclasses."""
+
         key = cls._make_key(*args, **kwargs)
         if key not in cls._registry:
             instance = super().__new__(cls)
@@ -16,6 +23,8 @@ class Node(ABC):
         return cls._registry[key]
 
     def __init_subclass__(cls, **kwargs):
+        """Initializes the registry for each subclass. Do not override in subclasses."""
+
         super().__init_subclass__(**kwargs)
         cls._registry = {}
 
@@ -25,7 +34,8 @@ class Node(ABC):
     @classmethod
     @abstractmethod
     def _make_key(cls, *args, **kwargs):
-        """Generates a unique key for the instance to be used in the registry."""
+        """Generates a unique key for the instance to be used in the registry.
+        To be overriden in subclasses."""
         pass
     
     @abstractmethod
@@ -34,10 +44,27 @@ class Node(ABC):
         the instance attributes as opposed to using __init__ directly because __init__ gets
         called every time the __new__ method is invoked, and we use the __new__ method to 
         return existing instances from the registry if they exist, so we need to ensure that
-        the attributes are only set once (via this _initialize method and not __init_)."""
+        the attributes are only set once (via this _initialize method and not __init_).
+        To be overriden in subclasses."""
         pass
 
 class ProgramUnit(Node):
+    """Base class for program units: modules, programs, and subprograms.
+    
+    Attributes
+    ----------
+    name : str
+        The name of the program unit.
+    used_modules : dict
+        A dictionary where keys are module objects and values are lists of names used from the module.
+    subroutines : set
+        A set of Subroutine instances defined in this program unit.
+    functions : set
+        A set of Function instances defined in this program unit.
+    ptree_path : Path
+        The path to the parse tree file from which this program unit was read.
+    """
+
     def _initialize(self, name):
         self.name = name
         self.used_modules = {} # Keys are module objects and values are lists of names used from the module
@@ -49,23 +76,69 @@ class ProgramUnit(Node):
     def _make_key(cls, name):
         return name
 
-class Module(ProgramUnit): pass
-class Program(ProgramUnit): pass
-class Subprogram(ProgramUnit): pass
+class Module(ProgramUnit):
+    """Class representing a Fortran module."""
+    pass
+
+class Program(ProgramUnit):
+    """Class representing a Fortran program."""
+    pass
+
+class Subprogram(ProgramUnit):
+    """Class representing a Fortran subprogram, i.e., a source file with no module or program statement."""
+    pass
 
 class Callable(Node):
+    """Base class for subroutines and functions.
+    
+    Attributes
+    ----------
+    name : str
+        The name of the subroutine or function.
+    program_unit : ProgramUnit
+        The program unit (module, program, or subprogram) that contains this callable.
+    used_modules : dict
+        A dictionary where keys are module objects and values are lists of names used from the module.
+    parent : Callable or None
+        The parent callable if this is a nested subroutine/function, otherwise None.
+    callees : set
+        A set of Callable instances that are called by this callable.
+    callers : set
+        A set of Callable instances that call this callable.
+    """
     def _initialize(self, name, program_unit, parent=None):
+        """Initializes a Callable instance.
+
+        Parameters
+        ----------
+        name : str
+            The name of the subroutine or function.
+        program_unit : ProgramUnit
+            The program unit (module, program, or subprogram) that contains this callable.
+        parent : Callable, optional
+            The parent callable if this is a nested subroutine/function, by default None.
+        """
+
         self.name = name
         self.program_unit = program_unit
         self.used_modules = {} # Keys are module objects and values are lists of names used from the module
-        self.parent = parent
+        self.parent = parent # Parent callable if nested, else None
+        self.callees = set()
+        self.callers = set()
 
     @classmethod
     def _make_key(cls, name, program_unit, parent=None):
-        return f"{program_unit.name}::{name}"
+        if parent is None:
+            return f"{program_unit.name}::{name}"
+        return f"{program_unit.name}::{parent.name}::{name}"
 
-class Subroutine(Callable): pass
-class Function(Callable): pass
+class Subroutine(Callable):
+    """Class representing a Fortran subroutine."""
+    pass
+
+class Function(Callable):
+    """Class representing a Fortran function."""
+    pass
 
 
 def read_ptree_file(file_path, sweep=0):
@@ -77,6 +150,8 @@ def read_ptree_file(file_path, sweep=0):
         The path to the parse tree file.
     sweep : int, optional
         The sweep number to determine the type of information to extract.
+        Sweep 0 extracts module dependencies and subroutine ownership.
+        Sweep 1 extracts subroutine/function call relationships.
 
     Returns:
     --------
@@ -91,7 +166,7 @@ def read_ptree_file(file_path, sweep=0):
 
     modules = []
     program = None  # Current program. Is None if we are not in a program unit.
-    module = None   # Current module or subprogram (i.e., a source file with no module or program statement).
+    module = None   # Current module or subprogram (subprogram: a source file with no module|program statement).
     routine = None  # Current subroutine or function.
     outer_routine = None  # Outer routine is the one that contains the current subroutine/function.
     used_module = None  # Name of the last used module.
@@ -109,6 +184,69 @@ def read_ptree_file(file_path, sweep=0):
 
         for line in f:
             line = line.strip()
+
+            if sweep == 1:
+                if "CallStmt" in line:
+                    assert line.endswith("ActionStmt -> CallStmt"), f"CallStmt syntax not recognized in {file_path}, line: {line}"
+                    assert program_unit() is not None, f"CallStmt found outside of a program unit in {file_path}, line: {line}"
+
+                    line = f.readline().strip()
+                    assert line.endswith("| Call"), f"CallStmt syntax not recognized in {file_path}, line: {line}"
+                    
+                    line = f.readline().strip()
+                    if line.endswith("ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent"):
+                        continue # todo: handle this case: structure component call, e.g., obj%method()
+                    else:
+                        m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", line)
+                        if not m:
+                            raise ValueError(f"ProcedureDesignator syntax not recognized in {file_path}, line: {line}")
+                        callee = m.group(1)
+
+                    caller = routine
+                    assert caller, f"CallStmt found without a preceding SubroutineStmt in {file_path} at line: {line}"
+                    assert callee, f"CallStmt found without a subroutine name in {file_path} at line: {line}"
+
+                    found_callee = False
+
+                    # first, check if the callee is in the same program unit
+                    for subr in program_unit().subroutines:
+                        if callee == subr.name:
+                            #print(f"Found callee {callee} in program unit {program_unit().name}")
+                            caller.callees.add(subr)
+                            subr.callers.add(caller)
+                            found_callee = True
+                            break
+
+                    for used_module, used_callables in program_unit().used_modules.items():
+                        if found_callee:
+                            break
+                        if used_callables and '*' in used_callables: # entire module is used
+                            for subr in used_module.subroutines:
+                                if callee == subr.name:
+                                    #print(f"Found callee {callee} in module {used_module.name}")
+                                    caller.callees.add(subr)
+                                    subr.callers.add(caller)
+                                    found_callee = True
+                                break
+                        else:
+                            for name in used_callables:
+                                if callee == name:
+                                    for subr in used_module.subroutines:
+                                        if callee == subr.name:
+                                            #print(f"Found callee {callee} in module {used_module.name} via Only clause")
+                                            caller.callees.add(subr)
+                                            subr.callers.add(caller)
+                                            found_callee = True
+                                        break
+                                    break
+
+                    if not found_callee:
+                        print(f"Warning: Could not find callee {callee} in any used module of {program_unit().name} for call in {caller.name} at line: {line}")
+
+                    # Find the subroutine
+                    #print(module.name)
+                    #module = routine.program_unit
+                    #print(module.name)
 
             if (is_function := line.endswith("| FunctionStmt")) or \
                  (line.endswith("| SubroutineStmt")):
@@ -130,10 +268,12 @@ def read_ptree_file(file_path, sweep=0):
 
                 if is_function:
                     routine = Function(name, program_unit(), outer_routine)
-                    program_unit().functions.add(routine)
+                    if outer_routine is None:
+                        program_unit().functions.add(routine)
                 else:
                     routine = Subroutine(name, program_unit(), outer_routine)
-                    program_unit().subroutines.add(routine)
+                    if outer_routine is None:
+                        program_unit().subroutines.add(routine)
 
             elif "| EndFunctionStmt" in line:
                 assert type(routine) is Function, f"EndFunctionStmt found without a preceding FunctionStmt in {file_path}"
