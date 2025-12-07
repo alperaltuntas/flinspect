@@ -29,9 +29,9 @@ def gen_call_graph(paths):
 
     modules = []
     for path in paths:
-        with ParseTreeParser(path) as ptp:
-            ptp.parse()
-            modules.extend(ptp.modules)
+        parser = ParseTreeParser(path)
+        parser.parse()
+        modules.extend(parser.modules)
 
     g_modules = nx.DiGraph()
     for module in modules:
@@ -55,8 +55,8 @@ def gen_call_graph(paths):
     for module in sorted_modules:
         ptree_path = module.ptree_path
         if ptree_path:
-            with ParseTreeParser(ptree_path) as ptp:
-                ptp.parse(sweep=1)
+            parser = ParseTreeParser(ptree_path)
+            parser.parse(sweep=1)
         else:
             skipped_modules.append(module)
 
@@ -96,9 +96,9 @@ def gen_module_dependency_graph(paths):
 
     modules = []
     for path in paths:
-        with ParseTreeParser(path) as ptp:
-            ptp.parse()
-            modules.extend(ptp.modules)
+        ptp = ParseTreeParser(path)
+        ptp.parse()
+        modules.extend(ptp.modules)
 
     g_modules = nx.DiGraph()
     for module in modules:
