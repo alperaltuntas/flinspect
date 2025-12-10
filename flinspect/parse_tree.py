@@ -1,31 +1,56 @@
 import re
 from pathlib import Path
+from dataclasses import dataclass
 from flinspect.utils import level
-from flinspect.parse_tree_node import Module, Program, Subprogram, Subroutine, Function
+from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function
 
-class ParseTreeParser:
 
-    def __init__(self, file_path):
+@dataclass
+class ParseState:
+    """Class to hold the current (changing) state while parsing a parse tree file."""
+    program: Program | None = None
+    subprogram: Subprogram | None = None
+    module: Module | None = None
+    used_module: Module | None = None
+    routine: Subroutine | None = None
+    parent_routine: Subroutine | None = None
 
-        assert isinstance(file_path, (str, Path)), f"Expected a string or Path object, got {type(file_path)}"
-        file_path = Path(file_path)
-        assert file_path.is_file(), f"Expected a file, got {file_path}"
+    @property
+    def program_unit(self):
+        return self.module or self.subprogram or self.program
 
-        self.file_path = file_path
-        self.module = None
-        self.modules = []
-        self.program = None
-        self.used_module = None
-        self.routine = None
-        self.outer_routine = None
-        self._lines = None # iterator over lines
+    @property
+    def scope(self):
+        return self.routine or self.program_unit
+
+class ParseTree:
+    """A class to read and parse a flang parse tree file."""
+
+    def __init__(self, parse_tree_file):
+
+        assert isinstance(parse_tree_file, (str, Path)), f"Expected a string or Path object, got {type(parse_tree_file)}"
+        parse_tree_file = Path(parse_tree_file)
+        assert parse_tree_file.is_file(), f"Expected a file, got {parse_tree_file}"
+
+        self.parse_tree_file = parse_tree_file
+
+        # Internal iterator over lines in the parse tree file
+        self._lines = None 
+
+        # Current line being parsed
         self.line = None
+
+        # Current state variables during parsing that get updated as we read lines
+        self.curr = ParseState()
+
+        # List of Module instances found in the parse tree file
+        self.modules = []
 
     def lines(self):
         """Iterator over lines in the parse tree file."""
         if self._lines is None:
             def _iter_lines():
-                with self.file_path.open('r') as f:
+                with self.parse_tree_file.open('r') as f:
                     for line in f:
                         yield line.strip()
             self._lines = _iter_lines()
@@ -36,28 +61,21 @@ class ParseTreeParser:
         self.line = next(self.lines())
         return self.line
 
-    @property
-    def current_program_unit(self):
-        return self.module or self.program
-
-    @property
-    def current_scope(self):
-        return self.routine or self.current_program_unit
-
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
-        return f"{prefix} in {self.file_path}, line: {self.line}"
+        return f"{prefix} in {self.parse_tree_file}, line: {self.line}"
 
     def parse_header(self):
+        """Parses the header of the parse tree file to ensure it is valid."""
         assert self.line is None, self.msg("parse_header should be called at the beginning before reading any lines.")
         first = next(self.lines())
         if not first.startswith("======"):
-            print(f"Warning: Skipping {self.file_path.name} as it does not start with proper header.")
+            print(f"Warning: Skipping {self.parse_tree_file.name} as it does not start with proper header.")
             return False
         return True
 
     def parse_routine_begin(self):
-        is_function = self.line.endswith("| FunctionStmt") or False
+        is_function = self.line.endswith("| FunctionStmt")
         is_subroutine = self.line.endswith("| SubroutineStmt")
         if not (is_function or is_subroutine):
             return False
@@ -72,43 +90,43 @@ class ParseTreeParser:
             raise ValueError(self.msg("FunctionStmt syntax not recognized"))
         name = res.group(1)
 
-        if self.routine is not None:
-            assert self.outer_routine is None, self.msg("More than one level of routine nesting found")
-        self.outer_routine = self.routine
+        if self.curr.routine is not None:
+            assert self.curr.parent_routine is None, self.msg("More than one level of routine nesting found")
+        self.curr.parent_routine = self.curr.routine
 
-        assert self.current_program_unit is not None, self.msg("Function/Subroutine found without a preceding ModuleStmt or ProgramStmt")
+        assert self.curr.program_unit is not None, self.msg("Function/Subroutine found without a preceding ModuleStmt or ProgramStmt")
 
         if is_function:
-            routine = Function(name, self.current_program_unit, self.outer_routine)
-            self.routine = routine
-            if self.outer_routine is None:
-                self.current_program_unit.functions.add(routine)
+            routine = Function(name, self.curr.program_unit, self.curr.parent_routine)
+            self.curr.routine = routine
+            if self.curr.parent_routine is None:
+                self.curr.program_unit.functions.add(routine)
         else:
-            routine = Subroutine(name, self.current_program_unit, self.outer_routine)
-            self.routine = routine
-            if self.outer_routine is None:
-                self.current_program_unit.subroutines.add(routine)
+            routine = Subroutine(name, self.curr.program_unit, self.curr.parent_routine)
+            self.curr.routine = routine
+            if self.curr.parent_routine is None:
+                self.curr.program_unit.subroutines.add(routine)
         return True
 
     def parse_routine_end(self):
         if "| EndFunctionStmt" in self.line:
-            assert type(self.routine) is Function, self.msg("EndFunctionStmt found without a preceding FunctionStmt")
+            assert type(self.curr.routine) is Function, self.msg("EndFunctionStmt found without a preceding FunctionStmt")
             m = re.search(r"EndFunctionStmt -> Name = '(\w+)'", self.line)
             if m:
                 end_name = m.group(1)
-                assert end_name == self.routine.name, self.msg(f"EndFunctionStmt name {end_name} does not match FunctionStmt name {self.routine.name}")
-            self.routine = self.outer_routine
-            self.outer_routine = None
+                assert end_name == self.curr.routine.name, self.msg(f"EndFunctionStmt name {end_name} does not match FunctionStmt name {self.curr.routine.name}")
+            self.curr.routine = self.curr.parent_routine
+            self.curr.parent_routine = None
             return True
 
         if "| EndSubroutineStmt" in self.line:
-            assert type(self.routine) is Subroutine, self.msg("EndSubroutineStmt found without a preceding SubroutineStmt")
+            assert type(self.curr.routine) is Subroutine, self.msg("EndSubroutineStmt found without a preceding SubroutineStmt")
             m = re.search(r"EndSubroutineStmt -> Name = '(\w+)'", self.line)
             if m:
                 end_name = m.group(1)
-                assert end_name == self.routine.name, self.msg(f"EndSubroutineStmt name {end_name} does not match SubroutineStmt name {self.routine.name}")
-            self.routine = self.outer_routine
-            self.outer_routine = None
+                assert end_name == self.curr.routine.name, self.msg(f"EndSubroutineStmt name {end_name} does not match SubroutineStmt name {self.curr.routine.name}")
+            self.curr.routine = self.curr.parent_routine
+            self.curr.parent_routine = None
             return True
         return False
 
@@ -134,8 +152,8 @@ class ParseTreeParser:
         else:
             raise ValueError(self.msg("Only syntax not recognized"))
 
-        assert self.used_module, self.msg("Only clause found without a preceding UseStmt")
-        used_module_only_list = self.current_scope.used_modules[self.used_module]
+        assert self.curr.used_module, self.msg("Only clause found without a preceding UseStmt")
+        used_module_only_list = self.curr.scope.used_modules[self.curr.used_module]
         if used_module_only_list and used_module_only_list[0] == '*':
             pass
         else:
@@ -153,8 +171,8 @@ class ParseTreeParser:
         m = re.search(r"Name = '(\w+)'", self.line)
         assert m, self.msg("UseStmt Name syntax not recognized")
         used_module_name = m.group(1)
-        self.used_module = Module(used_module_name)
-        self.current_scope.used_modules[self.used_module] = []
+        self.curr.used_module = Module(used_module_name)
+        self.curr.scope.used_modules[self.curr.used_module] = []
         return True
 
     def parse_module_stmt(self):
@@ -162,22 +180,22 @@ class ParseTreeParser:
             return False
         m = re.search(r"ModuleStmt -> Name = '(\w+)'", self.line)
         assert m, self.msg("ModuleStmt syntax not recognized")
-        assert self.module is None, self.msg("ModuleStmt found without a preceding EndModuleStmt")
+        assert self.curr.module is None, self.msg("ModuleStmt found without a preceding EndModuleStmt")
         module_name = m.group(1)
-        self.module = Module(module_name)
-        self.module.ptree_path = self.file_path
-        self.modules.append(self.module)
+        self.curr.module = Module(module_name)
+        self.curr.module.parse_tree_path = self.parse_tree_file
+        self.modules.append(self.curr.module)
         return True
 
     def parse_end_module_stmt(self):
         if "| EndModuleStmt" not in self.line:
             return False
-        assert self.module, self.msg("EndModuleStmt found without a preceding ModuleStmt")
+        assert self.curr.module, self.msg("EndModuleStmt found without a preceding ModuleStmt")
         m = re.search(r"EndModuleStmt -> Name = '(\w+)'", self.line)
         if m:
             end_module_name = m.group(1)
-            assert end_module_name == self.module.name, self.msg(f"EndModuleStmt name {end_module_name} does not match ModuleStmt name {self.module.name}")
-        self.module = None
+            assert end_module_name == self.curr.module.name, self.msg(f"EndModuleStmt name {end_module_name} does not match ModuleStmt name {self.curr.module.name}")
+        self.curr.module = None
         return True
 
     def parse_program_unit(self):
@@ -186,7 +204,7 @@ class ParseTreeParser:
 
         if self.line.startswith("Program -> ProgramUnit -> FunctionSubprogram") or \
            self.line.startswith("Program -> ProgramUnit -> SubroutineSubprogram"):
-            self.module = Subprogram(self.file_path.stem)
+            self.curr.subprogram = Subprogram(self.parse_tree_file.stem)
             return True
 
         if self.line.startswith("Program -> ProgramUnit -> Module"):
@@ -198,8 +216,8 @@ class ParseTreeParser:
             if not m:
                 raise ValueError(self.msg("ProgramStmt syntax not recognized"))
             program_name = m.group(1)
-            self.program = Program(program_name)
-            self.program.ptree_path = self.file_path
+            self.curr.program = Program(program_name)
+            self.curr.program.parse_tree_path = self.parse_tree_file
             return True
 
         raise ValueError(self.msg("ProgramUnit syntax not recognized"))
@@ -207,9 +225,9 @@ class ParseTreeParser:
     def finalize_used_module_on_other_lines(self):
         # If we previously saw a UseStmt and didn't see an Only clause yet, and the current line isn't
         # one of the known handlers, assume whole-module use.
-        if self.used_module:
-            self.current_scope.used_modules[self.used_module] = ['*']
-            self.used_module = None
+        if self.curr.used_module:
+            self.curr.scope.used_modules[self.curr.used_module] = ['*']
+            self.curr.used_module = None
 
 
     def parse_call_stmt(self):
@@ -219,7 +237,7 @@ class ParseTreeParser:
 
         # sweep 1 only
         assert self.line.endswith("ActionStmt -> CallStmt"), self.msg("CallStmt syntax not recognized")
-        assert self.current_program_unit is not None, self.msg("CallStmt found outside of a program unit")
+        assert self.curr.program_unit is not None, self.msg("CallStmt found outside of a program unit")
 
         self.line = self.read_next_line()
         assert self.line.endswith("| Call"), self.msg("CallStmt syntax not recognized.")
@@ -232,7 +250,7 @@ class ParseTreeParser:
             raise ValueError(self.msg("ProcedureDesignator syntax not recognized"))
         callee = m.group(1)
 
-        caller = self.routine
+        caller = self.curr.routine
         assert caller, self.msg("CallStmt found without a preceding SubroutineStmt")
         assert callee, self.msg("CallStmt found without a subroutine name")
 
@@ -240,7 +258,7 @@ class ParseTreeParser:
         found_callee = False
 
         # in same program unit
-        for subr in self.current_program_unit.subroutines:
+        for subr in self.curr.program_unit.subroutines:
             if callee == subr.name:
                 caller.callees.add(subr)
                 subr.callers.add(caller)
@@ -249,7 +267,7 @@ class ParseTreeParser:
 
         # in used modules
         if not found_callee:
-            for used_mod, used_names in self.current_program_unit.used_modules.items():
+            for used_mod, used_names in self.curr.program_unit.used_modules.items():
                 if used_names and '*' in used_names:
                     for subr in used_mod.subroutines:
                         if callee == subr.name:
@@ -269,14 +287,14 @@ class ParseTreeParser:
                     break
 
         if not found_callee:
-            print(self.msg(f"Could not find callee {callee} in any used module of {self.current_program_unit.name} for call in {caller.name}"))
+            print(self.msg(f"Could not find callee {callee} in any used module of {self.curr.program_unit.name} for call in {caller.name}"))
 
     def parse(self, sweep=0):
         """Reads a flang parse tree file and extracts module dependencies.
 
         Parameters:
         -----------
-        file_path : str or Path
+        parse_tree_file : str or Path
             The path to the parse tree file.
         sweep : int, optional
             The sweep number to determine the type of information to extract.

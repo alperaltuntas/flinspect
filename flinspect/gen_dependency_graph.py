@@ -1,7 +1,7 @@
 import networkx as nx
 from pathlib import Path
 
-from flinspect.parse_tree_parser import ParseTreeParser
+from flinspect.parse_tree import ParseTree
 
 def gen_call_graph(paths):
     """Generates a directed graph of subroutine/function call dependencies.
@@ -29,13 +29,13 @@ def gen_call_graph(paths):
 
     modules = []
     for path in paths:
-        parser = ParseTreeParser(path)
+        parser = ParseTree(path)
         parser.parse()
         modules.extend(parser.modules)
 
     g_modules = nx.DiGraph()
     for module in modules:
-        g_modules.add_node(module, source_name=module.ptree_path.stem)
+        g_modules.add_node(module, source_name=module.parse_tree_path.stem)
         # Add edges for for used modules at the module level
         for used_module in module.used_modules:
             g_modules.add_edge(module, used_module)
@@ -53,9 +53,9 @@ def gen_call_graph(paths):
     # Sweep 1: read subroutine/function call relationships in a topological order of modules
     skipped_modules  = []
     for module in sorted_modules:
-        ptree_path = module.ptree_path
-        if ptree_path:
-            parser = ParseTreeParser(ptree_path)
+        parse_tree_path = module.parse_tree_path
+        if parse_tree_path:
+            parser = ParseTree(parse_tree_path)
             parser.parse(sweep=1)
         else:
             skipped_modules.append(module)
@@ -96,13 +96,13 @@ def gen_module_dependency_graph(paths):
 
     modules = []
     for path in paths:
-        ptp = ParseTreeParser(path)
+        ptp = ParseTree(path)
         ptp.parse()
         modules.extend(ptp.modules)
 
     g_modules = nx.DiGraph()
     for module in modules:
-        g_modules.add_node(module, source_name=module.ptree_path.stem)
+        g_modules.add_node(module, source_name=module.parse_tree_path.stem)
         # Add edges for for used modules at the module level
         for used_module in module.used_modules:
             g_modules.add_edge(module, used_module)
