@@ -66,6 +66,7 @@ class ProgramUnit(Node):
         self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.subroutines = set()
         self.functions = set()
+        self.interfaces = set()
         self.ptree_path = ''
 
     @classmethod
@@ -136,3 +137,10 @@ class Function(Callable):
     """Class representing a Fortran function."""
     pass
 
+
+class Interface(Callable):
+    """Class representing a Fortran interface block."""
+
+    def _initialize(self, name, program_unit):
+        super()._initialize(name, program_unit)
+        self.procedures = [] # List of Callable instances declared in this interface

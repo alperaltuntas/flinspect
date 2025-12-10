@@ -1,7 +1,8 @@
 import re
 from pathlib import Path
+from collections import defaultdict
 from flinspect.utils import level
-from flinspect.parse_tree_node import Module, Program, Subprogram, Subroutine, Function
+from flinspect.parse_tree_node import Module, Program, Subprogram, Subroutine, Function, Interface
 
 class ParseTreeParser:
 
@@ -20,6 +21,8 @@ class ParseTreeParser:
         self.outer_routine = None
         self._lines = None # iterator over lines
         self.line = None
+        self.line_ctr = 0
+        self._tmp_interfaces = defaultdict(dict)  # temporary storage for interfaces
 
     def lines(self):
         """Iterator over lines in the parse tree file."""
@@ -27,6 +30,7 @@ class ParseTreeParser:
             def _iter_lines():
                 with self.file_path.open('r') as f:
                     for line in f:
+                        self.line_ctr += 1
                         yield line.strip()
             self._lines = _iter_lines()
         return self._lines
@@ -46,7 +50,7 @@ class ParseTreeParser:
 
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
-        return f"{prefix} in {self.file_path}, line: {self.line}"
+        return f'{prefix}\n  file: {self.file_path}\n  line {self.line_ctr}: "{self.line}"'
 
     def parse_header(self):
         assert self.line is None, self.msg("parse_header should be called at the beginning before reading any lines.")
@@ -54,6 +58,53 @@ class ParseTreeParser:
         if not first.startswith("======"):
             print(f"Warning: Skipping {self.file_path.name} as it does not start with proper header.")
             return False
+        return True
+
+    def parse_interface_block(self):
+        """Parses an interface block from the current line.
+
+        Returns
+        -------
+        bool
+        """
+
+        if "| InterfaceStmt" not in self.line:
+            return False
+        
+        if self.line.endswith("InterfaceStmt ->"):
+            return False # todo: handle these cases
+        if "DefinedOperator" in self.line:
+            return False # todo: operator interface
+        if "Assignment" in self.line:
+            return False # todo: assignment interface
+
+        m = re.search(r"InterfaceStmt -> GenericSpec -> Name = '(\w+)'", self.line)
+        assert m, self.msg("InterfaceStmt syntax not recognized")
+        assert self.current_program_unit is not None, self.msg("InterfaceStmt found outside of a program unit")
+        assert self.routine is None, self.msg("InterfaceStmt found within a routine, nested interfaces are not supported")
+
+        interface_name = m.group(1)
+        self._tmp_interfaces[self.current_program_unit][interface_name] = []
+        procedure_list = self._tmp_interfaces[self.current_program_unit][interface_name]
+
+        # Read lines until EndInterfaceStmt
+        while self.line:
+            self.read_next_line()
+            if "EndInterfaceStmt ->" in self.line:
+                break
+            if self.line.endswith("InterfaceSpecification -> ProcedureStmt"):
+                continue
+            if m := re.search(r"Kind = (\w+)", self.line):
+                kind = m.group(1)
+                if kind == "Procedure":
+                    return False # todo: handle these cases
+                assert kind == "ModuleProcedure", self.msg("Only ModuleProcedure kinds are supported in interface blocks")
+                continue
+            if m := re.search(r"Name = '(\w+)'", self.line):
+                procedure_list.append(m.group(1))
+                continue
+            assert False, self.msg("Interface block syntax not recognized")
+
         return True
 
     def parse_routine_begin(self):
@@ -295,6 +346,8 @@ class ParseTreeParser:
         for self.line in self.lines():
 
             # Sweep 0 - Structure parsing
+            if self.parse_interface_block():
+                continue
             if self.parse_routine_begin():
                 continue
             if self.parse_routine_end():
@@ -317,6 +370,58 @@ class ParseTreeParser:
 
             # Fallback: if a UseStmt was seen and no Only followed, mark entire module used.
             self.finalize_used_module_on_other_lines()
+
+        # At the end of sweep 0, process interfaces
+        if sweep == 0:
+
+            # TODO: fix: this actually needs two sweeps to resolve used modules in interfaces
+            # TODO: fix: this actually needs two sweeps to resolve used modules in interfaces
+            # TODO: fix: this actually needs two sweeps to resolve used modules in interfaces
+            # TODO: fix: this actually needs two sweeps to resolve used modules in interfaces
+
+            for pu, interfaces in self._tmp_interfaces.items():
+                for interface_name, procedure_names in interfaces.items():
+                    interface = Interface(interface_name, pu)
+                    procedures = []
+                    for proc_name in procedure_names:
+                        # Find the procedure in the program unit's subroutines or functions
+                        found_proc = False
+                        for subr in pu.subroutines:
+                            if subr.name == proc_name:
+                                procedures.append(subr)
+                                found_proc = True
+                                break
+                        if not found_proc:
+                            for func in pu.functions:
+                                if func.name == proc_name:
+                                    procedures.append(func)
+                                    found_proc = True
+                                    break
+                        
+                        # Now check if the procedure is from a used module
+                        if not found_proc:
+                            for used_mod, used_names in pu.used_modules.items():
+                                # todo: consider 'only' lists
+                                for subr in used_mod.subroutines:
+                                    if subr.name == proc_name:
+                                        procedures.append(subr)
+                                        found_proc = True
+                                        break
+                                if found_proc:
+                                    break
+                                for func in used_mod.functions:
+                                    if func.name == proc_name:
+                                        procedures.append(func)
+                                        found_proc = True
+                                        break
+                                if found_proc:
+                                    break
+
+                        if not found_proc:
+                            print(f"Warning: Could not find procedure {proc_name} for interface {interface_name} in program unit {pu.name}")
+
+                    interface.procedures = procedures
+                    pu.interfaces.add(interface)
 
         return self.modules
 
