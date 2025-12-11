@@ -38,7 +38,7 @@ class ProgramUnit(Node):
         self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.subroutines = set()
         self.functions = set()
-        self.parse_tree_path = ''
+        self.parse_tree_path = None # To be set when the parse tree is read
 
     @classmethod
     def key(cls, name):

@@ -40,3 +40,7 @@ class NodeRegistry:
 
     def Function(self, *args, **kwargs) -> Function:
         return self._get_or_create(Function, *args, **kwargs)
+    
+    @property
+    def modules(self):
+        return self._store.get(Module, {}).values()

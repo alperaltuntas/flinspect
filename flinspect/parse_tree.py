@@ -28,9 +28,6 @@ class ParseTree:
         # Current state variables during parsing that get updated as we read lines
         self.curr = ParseState()
 
-        # List of Module instances found in the parse tree file
-        self.modules = []
-
     def lines(self):
         """Iterator over lines in the parse tree file."""
         if self._lines is None:
@@ -45,6 +42,12 @@ class ParseTree:
         """Reads the next line from the parse tree file and updates self.line."""
         self.line = next(self.lines())
         return self.line
+    
+    def reset(self):
+        """Resets the internal state for re-parsing."""
+        self._lines = None
+        self.line = None
+        self.curr = ParseState()
 
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
@@ -169,7 +172,6 @@ class ParseTree:
         module_name = m.group(1)
         self.curr.module = self.nr.Module(module_name)
         self.curr.module.parse_tree_path = self.parse_tree_path
-        self.modules.append(self.curr.module)
         return True
 
     def parse_end_module_stmt(self):
@@ -274,30 +276,13 @@ class ParseTree:
         if not found_callee:
             print(self.msg(f"Could not find callee {callee} in any used module of {self.curr.program_unit.name} for call in {caller.name}"))
 
-    def parse(self, sweep=0):
-        """Reads a flang parse tree file and extracts module dependencies.
 
-        Parameters:
-        -----------
-        parse_tree_path : str or Path
-            The path to the parse tree file.
-        sweep : int, optional
-            The sweep number to determine the type of information to extract.
-            Sweep 0 extracts module dependencies and subroutine ownership.
-            Sweep 1 extracts subroutine/function call relationships.
+    def parse_structure(self):
+        """Reads a flang parse tree file and extracts structural information."""
 
-        Returns:
-        --------
-        list
-            A list of Module instances representing the modules found in the file.
-        """
-
-        if not self.parse_header():
-            return []
+        self.parse_header()
 
         for self.line in self.lines():
-
-            # Sweep 0 - Structure parsing
             if self.parse_routine_begin():
                 continue
             if self.parse_routine_end():
@@ -313,13 +298,30 @@ class ParseTree:
             if self.parse_program_unit():
                 continue
 
-            # Sweep 1 - Call relationship parsing
-            if sweep == 1:
-                if self.parse_call_stmt():
-                    continue
-
             # Fallback: if a UseStmt was seen and no Only followed, mark entire module used.
             self.finalize_used_module_on_other_lines()
 
-        return self.modules
+        self.reset()
+
+    def parse_calls(self):
+        """Reads a flang parse tree file and extracts subroutine/function call relationships."""
+
+        self.parse_header()
+
+        for self.line in self.lines():
+            if self.parse_routine_begin():
+                continue
+            if self.parse_routine_end():
+                continue
+            if self.parse_module_stmt():
+                continue
+            if self.parse_end_module_stmt():
+                continue
+            if self.parse_program_unit():
+                continue
+            if self.parse_call_stmt():
+                continue
+
+        self.reset()
+
 
