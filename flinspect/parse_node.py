@@ -1,48 +1,20 @@
 from abc import ABC, abstractmethod
 
 class Node(ABC):
-    """Base class for all nodes in the parse tree representation.
-    The Node class implements a registry to return existing instances
-    if they already exist. Otherwise, a new instance is created and stored
-    in the registry, and returned.
-    """
+    """Base class for all nodes in the parse tree representation."""
 
-    def __new__(cls, *args, **kwargs):
-        """Creates a new instance of the class or returns an existing one from the registry.
-        Do not override in subclasses."""
-
-        key = cls._make_key(*args, **kwargs)
-        if key not in cls._registry:
-            instance = super().__new__(cls)
-            instance._initialize(*args, **kwargs)
-            cls._registry[key] = instance
-        return cls._registry[key]
-
-    def __init_subclass__(cls, **kwargs):
-        """Initializes the registry for each subclass. Do not override in subclasses."""
-
-        super().__init_subclass__(**kwargs)
-        cls._registry = {}
-
+    def __init__(self, name, container=None):
+        self.name = name
+        self.container = container
+    
     def __str__(self):
         return self.name
-
+    
     @classmethod
     @abstractmethod
-    def _make_key(cls, *args, **kwargs):
-        """Generates a unique key for the instance to be used in the registry.
-        To be overriden in subclasses."""
+    def key(cls, *args, **kwargs):
         pass
-    
-    @abstractmethod
-    def _initialize(self, *args, **kwargs):
-        """Initializes the instance with the provided arguments. We use this method to set up
-        the instance attributes as opposed to using __init__ directly because __init__ gets
-        called every time the __new__ method is invoked, and we use the __new__ method to 
-        return existing instances from the registry if they exist, so we need to ensure that
-        the attributes are only set once (via this _initialize method and not __init_).
-        To be overriden in subclasses."""
-        pass
+
 
 class ProgramUnit(Node):
     """Base class for program units: modules, programs, and subprograms.
@@ -57,19 +29,19 @@ class ProgramUnit(Node):
         A set of Subroutine instances defined in this program unit.
     functions : set
         A set of Function instances defined in this program unit.
-    ptree_path : Path
+    parse_tree_path : Path
         The path to the parse tree file from which this program unit was read.
     """
 
-    def _initialize(self, name):
-        self.name = name
+    def __init__(self, name):
+        super().__init__(name)
         self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.subroutines = set()
         self.functions = set()
-        self.ptree_path = ''
+        self.parse_tree_path = ''
 
     @classmethod
-    def _make_key(cls, name):
+    def key(cls, name):
         return name
 
 class Module(ProgramUnit):
@@ -102,7 +74,7 @@ class Callable(Node):
     callers : set
         A set of Callable instances that call this callable.
     """
-    def _initialize(self, name, program_unit, parent=None):
+    def __init__(self, name, program_unit, parent=None):
         """Initializes a Callable instance.
 
         Parameters
@@ -115,7 +87,8 @@ class Callable(Node):
             The parent callable if this is a nested subroutine/function, by default None.
         """
 
-        self.name = name
+        assert '::' not in name, "Callable name should not contain '::'"
+        super().__init__(name)
         self.program_unit = program_unit
         self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.parent = parent # Parent callable if nested, else None
@@ -123,7 +96,7 @@ class Callable(Node):
         self.callers = set()
 
     @classmethod
-    def _make_key(cls, name, program_unit, parent=None):
+    def key(cls, name, program_unit, parent=None):
         if parent is None:
             return f"{program_unit.name}::{name}"
         return f"{program_unit.name}::{parent.name}::{name}"

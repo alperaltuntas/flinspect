@@ -2,6 +2,7 @@ import networkx as nx
 from pathlib import Path
 
 from flinspect.parse_tree import ParseTree
+from flinspect.node_registry import NodeRegistry
 
 def gen_call_graph(paths):
     """Generates a directed graph of subroutine/function call dependencies.
@@ -25,11 +26,13 @@ def gen_call_graph(paths):
     else:
         raise TypeError(f"Expected a list of paths, str, or Path object, got {type(paths)}")
 
+    nr = NodeRegistry()
+
     # Sweep 0: extract module dependencies and subroutine ownership
 
     modules = []
     for path in paths:
-        parser = ParseTree(path)
+        parser = ParseTree(path, nr)
         parser.parse()
         modules.extend(parser.modules)
 
@@ -55,13 +58,15 @@ def gen_call_graph(paths):
     for module in sorted_modules:
         parse_tree_path = module.parse_tree_path
         if parse_tree_path:
-            parser = ParseTree(parse_tree_path)
+            parser = ParseTree(parse_tree_path, nr)
             parser.parse(sweep=1)
         else:
             skipped_modules.append(module)
 
     if skipped_modules:
         print(f"Warning: The following modules were skipped due to missing parse tree paths:\n\t{', '.join(m.name for m in skipped_modules)}")
+    
+    return nr
     
 
 def gen_data_structure_hierarchy(paths):
@@ -94,9 +99,11 @@ def gen_module_dependency_graph(paths):
     else:
         raise TypeError(f"Expected a list of paths, str, or Path object, got {type(paths)}")
 
+    nr = NodeRegistry()
+
     modules = []
     for path in paths:
-        ptp = ParseTree(path)
+        ptp = ParseTree(path, nr)
         ptp.parse()
         modules.extend(ptp.modules)
 
