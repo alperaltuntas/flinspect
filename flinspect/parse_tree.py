@@ -25,6 +25,7 @@ class ParseTree:
         # Current line being parsed
         self.line = None
         self.next_line = None
+        self.line_number = 0
 
         # Set of unfound calls during call resolution
         self.unfound_calls = []
@@ -41,6 +42,7 @@ class ParseTree:
                     for line in f:
                         self.line = self.next_line
                         self.next_line = line.strip()
+                        self.line_number += 1
                         yield self.line
                     self.line = self.next_line
                     self.next_line = None
@@ -62,12 +64,16 @@ class ParseTree:
         self._lines_generator = None
         self.line = None
         self.next_line = None
+        self.line_number = 0
         self.curr = ParseState()
         self.unfound_calls = []
 
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
-        return f"{prefix} in {self.parse_tree_path}, line: {self.line}"
+        return \
+            f"{prefix}\n"\
+            f"  file:{self.parse_tree_path}\n"\
+            f"  line {self.line_number}: {self.line}"
 
     def parse_header(self):
         """Parses the header of the parse tree file to ensure it is valid."""
@@ -178,7 +184,8 @@ class ParseTree:
         self.curr.used_module = self.nr.Module(used_module_name)
         next_line = self.peek_next_line()
         if next_line and "| Only" in next_line:
-            self.curr.scope.used_modules[self.curr.used_module] = []
+            if self.curr.used_module not in self.curr.scope.used_modules:
+                self.curr.scope.used_modules[self.curr.used_module] = []
         else:
             self.curr.scope.used_modules[self.curr.used_module] = ['*']
             self.curr.used_module = None
@@ -231,12 +238,146 @@ class ParseTree:
 
         raise ValueError(self.msg("ProgramUnit syntax not recognized"))
 
+    def parse_interface_stmt(self):
+
+        if "| InterfaceStmt" not in self.line:
+            return False
+        
+        if self.line.endswith("InterfaceStmt ->"):
+            return False # todo: handle this case
+        if "InterfaceStmt -> Abstract" in self.line:
+            return False # todo: abstract interface
+        if "DefinedOperator" in self.line:
+            return False # todo: operator interface
+        if "Assignment" in self.line:
+            return False # todo: assignment interface        
+
+        m = re.search(r"InterfaceStmt -> GenericSpec -> Name = '(\w+)'", self.line)
+        assert m, self.msg("InterfaceStmt syntax not recognized")
+        assert self.curr.program_unit is not None, self.msg("InterfaceStmt found outside of a program unit")
+        assert self.curr.routine is None, self.msg("InterfaceStmt found within a routine, nested interfaces are not supported")
+
+        interface_name = m.group(1)
+        interface = self.nr.Interface(interface_name, self.curr.program_unit)
+
+        def find_module_procedure(procedure_name):
+
+            for subr in self.curr.program_unit.subroutines:
+                if subr.name == procedure_name:
+                    return subr
+            for function in self.curr.program_unit.functions:
+                if function.name == procedure_name:
+                    return function
+            for used_mod, used_names in self.curr.program_unit.used_modules.items():
+                if used_names and '*' in used_names:
+                    for subr in used_mod.subroutines:
+                        if subr.name == procedure_name:
+                            return subr
+                    for function in used_mod.functions:
+                        if function.name == procedure_name:
+                            return function
+                else:
+                    if procedure_name in used_names:
+                        for subr in used_mod.subroutines:
+                            if subr.name == procedure_name:
+                                return subr
+                        for function in used_mod.functions:
+                            if function.name == procedure_name:
+                                return function
+            return None
+
+        # Read until EndInterfaceStmt
+        while self.line:
+            self.read_next_line()
+            if "EndInterfaceStmt ->" in self.line:
+                break
+            if self.line.endswith("InterfaceSpecification -> ProcedureStmt"):
+                continue
+            if m := re.search(r"Kind = (\w+)", self.line):
+                kind = m.group(1)
+                if kind == "Procedure":
+                    return False # todo: handle these cases
+                assert kind == "ModuleProcedure", self.msg("Only ModuleProcedure kinds are supported in interface blocks")
+                continue
+            if m := re.search(r"Name = '(\w+)'", self.line):
+                procedure_name = m.group(1)
+                procedure = find_module_procedure(procedure_name)
+                assert procedure is not None, self.msg(f"Could not find module procedure '{procedure_name}' for interface '{interface_name}'")
+                continue
+            assert False, self.msg("InterfaceSpecification syntax not recognized")
+        
+        return True
+
+
+    def find_subroutine_callee(self, caller_program_unit, callee_name):
+        """Finds the callee subroutine by name for the given caller subroutine.
+
+        Parameters
+        ----------
+        caller_program_unit : Module, Program, or Subprogram
+            The caller program unit.
+        callee_name : str
+            The name of the callee subroutine.
+
+        Returns
+        -------
+        Subroutine or None
+            The callee subroutine if found, otherwise None.
+        """
+
+        # todo: if a certain module is used by a subroutine in the same program unit,
+        # but not used by the subroutine making the call, we should not find the callee in that module.
+
+        # Check subroutines in the same program unit
+        for subr in caller_program_unit.subroutines:
+            if subr.name == callee_name:
+                return subr
+
+        # Check interfaces in the same program unit
+        for intf in caller_program_unit.interfaces:
+            if intf.name == callee_name:
+                return intf
+        
+        # todo: check that callee is public if found in a used module
+
+        # Check subroutines and interfaces from used modules
+        def check_used_module(used_mod, used_names):
+            if used_names and '*' in used_names:
+                for subr in used_mod.subroutines:
+                    if subr.name == callee_name:
+                        return subr
+                for intf in used_mod.interfaces:
+                    if intf.name == callee_name:
+                        return intf
+            else: # only specific names used
+                if callee_name in used_names:
+                    for subr in used_mod.subroutines:
+                        if subr.name == callee_name:
+                            return subr
+                    for intf in used_mod.interfaces:
+                        if intf.name == callee_name:
+                            return intf
+            return None
+
+        for used_mod, used_names in caller_program_unit.used_modules.items():
+            callee = check_used_module(used_mod, used_names)
+            if callee is not None:
+                return callee
+        
+        # Look at used modules of used modules:
+        for used_mod, used_names in caller_program_unit.used_modules.items():
+            for sub_used_mod, sub_used_names in used_mod.used_modules.items():
+                callee = check_used_module(sub_used_mod, sub_used_names)
+                if callee is not None:
+                    return callee
+        
+        return None
+
     def parse_call_stmt(self):
 
         if not "CallStmt" in self.line:
             return False
 
-        # sweep 1 only
         assert self.line.endswith("ActionStmt -> CallStmt"), self.msg("CallStmt syntax not recognized")
         assert self.curr.program_unit is not None, self.msg("CallStmt found outside of a program unit")
 
@@ -245,51 +386,29 @@ class ParseTree:
 
         self.line = self.read_next_line()
         if self.line.endswith("ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent"):
-            return  # structure component call (obj%method), not handled
+            return  # todo: structure component call (obj%method), not handled
         m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", self.line)
         if not m:
             raise ValueError(self.msg("ProcedureDesignator syntax not recognized"))
         callee_name = m.group(1)
-
-        caller = self.curr.routine
-        assert caller, self.msg("CallStmt found without a preceding SubroutineStmt")
         assert callee_name, self.msg("CallStmt found without a subroutine name")
 
-        # resolve callee
-        found_callee = False
+        caller = self.curr.routine
+        if caller: # call from within a subroutine/function
+            callee = self.find_subroutine_callee(caller.program_unit, callee_name)
+        else: # call from within a program
+            caller = self.curr.program_unit
+            assert caller == self.curr.program, self.msg("CallStmt found outside of a routine or program")
+            callee = self.find_subroutine_callee(caller, callee_name)
 
-        # in same program unit
-        for subr in self.curr.program_unit.subroutines:
-            if callee_name == subr.name:
-                caller.callees.add(subr)
-                subr.callers.add(caller)
-                found_callee = True
-                break
-
-        # in used modules
-        if not found_callee:
-            for used_mod, used_names in self.curr.program_unit.used_modules.items():
-                if used_names and '*' in used_names:
-                    for subr in used_mod.subroutines:
-                        if callee_name == subr.name:
-                            caller.callees.add(subr)
-                            subr.callers.add(caller)
-                            found_callee = True
-                            break
-                else: # only specific names used
-                    if callee_name in used_names:
-                        for subr in used_mod.subroutines:
-                            if callee_name == subr.name:
-                                caller.callees.add(subr)
-                                subr.callers.add(caller)
-                                found_callee = True
-                                break
-                if found_callee:
-                    break
-
-        if not found_callee:
+        if callee is None:
             #print(self.msg(f"Could not find callee {callee_name} in any used module of {self.curr.program_unit.name} for call in {caller.name}"))
+            if callee_name.lower().startswith("mpi_"):
+                return  # skip MPI calls
             self.unfound_calls.append((caller.name, callee_name))
+        else:
+            caller.callees.add(callee)
+            callee.callers.add(caller)
 
 
     def parse_structure(self):
@@ -314,6 +433,28 @@ class ParseTree:
                 if self.parse_program_unit():
                     continue
 
+        finally:
+            self.reset()
+
+    def parse_interfaces(self):
+        """Reads a flang parse tree file and extracts interface blocks."""
+
+        try:
+            self.parse_header()
+
+            for self.line in self.lines():
+                if self.parse_routine_begin():
+                    continue
+                if self.parse_routine_end():
+                    continue
+                if self.parse_module_stmt():
+                    continue
+                if self.parse_end_module_stmt():
+                    continue
+                if self.parse_program_unit():
+                    continue
+                if self.parse_interface_stmt():
+                    continue
         finally:
             self.reset()
 

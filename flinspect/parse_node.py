@@ -10,6 +10,9 @@ class Node(ABC):
     def __str__(self):
         return self.name
     
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+    
     @classmethod
     @abstractmethod
     def key(cls, *args, **kwargs):
@@ -38,6 +41,7 @@ class ProgramUnit(Node):
         self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.subroutines = set()
         self.functions = set()
+        self.interfaces = set()
         self.parse_tree_path = None # To be set when the parse tree is read
 
     @classmethod
@@ -50,6 +54,9 @@ class Module(ProgramUnit):
 
 class Program(ProgramUnit):
     """Class representing a Fortran program."""
+    def __init__(self, name):
+        super().__init__(name)
+        self.callees = set()
     pass
 
 class Subprogram(ProgramUnit):
@@ -109,3 +116,15 @@ class Function(Callable):
     """Class representing a Fortran function."""
     pass
 
+class Interface(Node):
+    """Class representing a Fortran interface block."""
+    def __init__(self, name, program_unit):
+        super().__init__(name)
+        self.program_unit = program_unit
+        self.program_unit.interfaces.add(self)
+        self.procedures = set()
+        self.callers = set()
+
+    @classmethod
+    def key(cls, name, program_unit):
+        return f"{program_unit.name}::{name}"

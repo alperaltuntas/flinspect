@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from os import name
 
-from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function
+from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function, Interface
 
 @dataclass
 class NodeRegistry:
@@ -40,7 +40,43 @@ class NodeRegistry:
 
     def Function(self, *args, **kwargs) -> Function:
         return self._get_or_create(Function, *args, **kwargs)
-    
+
+    def Interface(self, *args, **kwargs) -> Interface:
+        return self._get_or_create(Interface, *args, **kwargs)
+
     @property
     def modules(self):
         return self._store.get(Module, {}).values()
+
+    @property
+    def programs(self):
+        return self._store.get(Program, {}).values()
+
+    @property
+    def subprograms(self):
+        return self._store.get(Subprogram, {}).values()
+
+    @property
+    def subroutines(self):
+        return self._store.get(Subroutine, {}).values()
+
+    @property
+    def functions(self):
+        return self._store.get(Function, {}).values()
+
+    @property
+    def interfaces(self):
+        return self._store.get(Interface, {}).values()
+    
+    def get_subroutine_by_name(self, name):
+        # look for keys ending with the given name
+        subroutines = []
+        for key, name in self._store.get(Subroutine, {}).items():
+            if key.endswith(name):
+                subroutines.append((name, key))
+        if len(subroutines) == 1:
+            return subroutines[0][0]
+        elif len(subroutines) > 1:
+            raise ValueError(f"Multiple subroutines found with name ending '{name}': {[s[0] for s in subroutines]}")
+        else:
+            return None

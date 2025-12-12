@@ -70,6 +70,14 @@ class ParseForest:
 
     def get_call_graph(self):
 
-        # Parse call relationships:
         for tree in self.trees:
-            tree.parse_calls()
+            tree.parse_interfaces()
+
+        # Parse call relationships:
+        unfound_calls = []
+        for tree in self.trees:
+            uc = tree.parse_calls()
+            unfound_calls.extend(uc)
+        
+        print(f"Total unfound calls across all parse trees: {len(unfound_calls)}")
+        return unfound_calls
