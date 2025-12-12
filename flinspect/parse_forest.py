@@ -74,10 +74,26 @@ class ParseForest:
             tree.parse_interfaces()
 
         # Parse call relationships:
-        unfound_calls = []
+        self.unfound_subroutine_calls = []
+        self.unfound_function_calls = []
         for tree in self.trees:
-            uc = tree.parse_calls()
-            unfound_calls.extend(uc)
-        
-        print(f"Total unfound calls across all parse trees: {len(unfound_calls)}")
-        return unfound_calls
+            uc, uf = tree.parse_calls()
+            self.unfound_subroutine_calls.extend(uc)
+            self.unfound_function_calls.extend(uf)
+
+        print(f"Total unfound calls across all parse trees: {len(self.unfound_subroutine_calls)}")
+        print(f"Total unfound function calls across all parse trees: {len(self.unfound_function_calls)}")
+
+        g = nx.DiGraph()
+        for subroutine in self.registry.subroutines:
+            g.add_node(subroutine, type='subroutine', program_unit=subroutine.program_unit.name)
+        for function in self.registry.functions:
+            g.add_node(function, type='function', program_unit=function.program_unit.name)
+        for subroutine in self.registry.subroutines:
+            for callee in subroutine.callees:
+                g.add_edge(subroutine, callee)
+        for function in self.registry.functions:
+            for callee in function.callees:
+                g.add_edge(function, callee)
+
+        return g

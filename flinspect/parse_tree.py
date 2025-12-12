@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from flinspect.utils import level
+from flinspect.utils import level, is_fortran_intrinsic
 from flinspect.parse_state import ParseState
 from flinspect.node_registry import NodeRegistry
 
@@ -28,7 +28,8 @@ class ParseTree:
         self.line_number = 0
 
         # Set of unfound calls during call resolution
-        self.unfound_calls = []
+        self.unfound_subroutine_calls = []
+        self.unfound_function_calls = []
 
         # Current state variables during parsing that get updated as we read lines
         self.curr = ParseState()
@@ -66,7 +67,8 @@ class ParseTree:
         self.next_line = None
         self.line_number = 0
         self.curr = ParseState()
-        self.unfound_calls = []
+        self.unfound_subroutine_calls = []
+        self.unfound_function_calls = []
 
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
@@ -452,11 +454,50 @@ class ParseTree:
             #print(self.msg(f"Could not find callee {callee_name} in any used module of {self.curr.program_unit.name} for call in {caller.name}"))
             if callee_name.lower().startswith("mpi_"):
                 return  # skip MPI calls
-            self.unfound_calls.append((caller.name, callee_name))
+            self.unfound_subroutine_calls.append((caller.name, callee_name))
         else:
             caller.callees.add(callee)
             callee.callers.add(caller)
 
+    def parse_function_call_stmt(self):
+
+        # todo: flang parse tree treats array accesses as function calls, need to filter those out
+
+        if "FunctionReference -> Call" not in self.line:
+            return False
+
+        assert self.curr.program_unit is not None, self.msg("FunctionReference found outside of a program unit")
+
+        self.line = self.read_next_line()
+        assert "ProcedureDesignator" in self.line, self.msg("FunctionReference syntax not recognized")
+
+        callee_name = None
+        m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", self.line)
+        if m:
+            callee_name = m.group(1)
+            assert callee_name, self.msg("FunctionReference found without a subroutine name")
+        else:
+            l = level(self.line)
+            while level(self.line) >= l:
+                self.line = self.read_next_line()
+                if level(self.line) == l+1 and '| Name = ' in self.line:
+                    m = re.search(r"Name = '(\w+)'", self.line)
+                    assert m, self.msg("FunctionReference Name syntax not recognized")
+                    callee_name = m.group(1)
+                    break
+            assert callee_name is not None, self.msg("FunctionReference syntax not recognized")
+        
+        if is_fortran_intrinsic(callee_name):
+            return True # skip intrinsic functions
+
+        caller = self.curr.scope
+        callee = self.find_named_entity(caller, callee_name)
+
+        if callee is None:
+            self.unfound_function_calls.append((caller.name, callee_name))
+        else:
+            caller.callees.add(callee)
+            callee.callers.add(caller)
 
     def parse_structure(self):
         """Reads a flang parse tree file and extracts structural information."""
@@ -538,7 +579,9 @@ class ParseTree:
                     continue
                 if self.parse_subroutine_call_stmt():
                     continue
-            return self.unfound_calls
+                if self.parse_function_call_stmt():
+                    continue
+            return self.unfound_subroutine_calls, self.unfound_function_calls
         finally:
             self.reset()
 
