@@ -20,34 +20,50 @@ class ParseTree:
         self.nr = node_registry or NodeRegistry()
 
         # Internal iterator over lines in the parse tree file
-        self._lines = None 
+        self._lines_generator = None 
 
         # Current line being parsed
         self.line = None
+        self.next_line = None
+
+        # Set of unfound calls during call resolution
+        self.unfound_calls = []
 
         # Current state variables during parsing that get updated as we read lines
         self.curr = ParseState()
 
     def lines(self):
         """Iterator over lines in the parse tree file."""
-        if self._lines is None:
+        if self._lines_generator is None:
             def _iter_lines():
                 with self.parse_tree_path.open('r') as f:
+                    self.next_line = f.readline().strip()
                     for line in f:
-                        yield line.strip()
-            self._lines = _iter_lines()
-        return self._lines
+                        self.line = self.next_line
+                        self.next_line = line.strip()
+                        yield self.line
+                    self.line = self.next_line
+                    self.next_line = None
+                    yield self.line
+            self._lines_generator = _iter_lines()
+        return self._lines_generator
 
     def read_next_line(self):
         """Reads the next line from the parse tree file and updates self.line."""
-        self.line = next(self.lines())
+        next(self.lines())
         return self.line
+    
+    def peek_next_line(self):
+        """Peeks at the next line without advancing the iterator."""
+        return self.next_line
     
     def reset(self):
         """Resets the internal state for re-parsing."""
-        self._lines = None
+        self._lines_generator = None
         self.line = None
+        self.next_line = None
         self.curr = ParseState()
+        self.unfound_calls = []
 
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
@@ -160,7 +176,13 @@ class ParseTree:
         assert m, self.msg("UseStmt Name syntax not recognized")
         used_module_name = m.group(1)
         self.curr.used_module = self.nr.Module(used_module_name)
-        self.curr.scope.used_modules[self.curr.used_module] = []
+        next_line = self.peek_next_line()
+        if next_line and "| Only" in next_line:
+            self.curr.scope.used_modules[self.curr.used_module] = []
+        else:
+            self.curr.scope.used_modules[self.curr.used_module] = ['*']
+            self.curr.used_module = None
+
         return True
 
     def parse_module_stmt(self):
@@ -209,14 +231,6 @@ class ParseTree:
 
         raise ValueError(self.msg("ProgramUnit syntax not recognized"))
 
-    def finalize_used_module_on_other_lines(self):
-        # If we previously saw a UseStmt and didn't see an Only clause yet, and the current line isn't
-        # one of the known handlers, assume whole-module use.
-        if self.curr.used_module:
-            self.curr.scope.used_modules[self.curr.used_module] = ['*']
-            self.curr.used_module = None
-
-
     def parse_call_stmt(self):
 
         if not "CallStmt" in self.line:
@@ -235,18 +249,18 @@ class ParseTree:
         m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", self.line)
         if not m:
             raise ValueError(self.msg("ProcedureDesignator syntax not recognized"))
-        callee = m.group(1)
+        callee_name = m.group(1)
 
         caller = self.curr.routine
         assert caller, self.msg("CallStmt found without a preceding SubroutineStmt")
-        assert callee, self.msg("CallStmt found without a subroutine name")
+        assert callee_name, self.msg("CallStmt found without a subroutine name")
 
         # resolve callee
         found_callee = False
 
         # in same program unit
         for subr in self.curr.program_unit.subroutines:
-            if callee == subr.name:
+            if callee_name == subr.name:
                 caller.callees.add(subr)
                 subr.callers.add(caller)
                 found_callee = True
@@ -257,15 +271,15 @@ class ParseTree:
             for used_mod, used_names in self.curr.program_unit.used_modules.items():
                 if used_names and '*' in used_names:
                     for subr in used_mod.subroutines:
-                        if callee == subr.name:
+                        if callee_name == subr.name:
                             caller.callees.add(subr)
                             subr.callers.add(caller)
                             found_callee = True
                             break
-                else:
-                    if callee in used_names:
+                else: # only specific names used
+                    if callee_name in used_names:
                         for subr in used_mod.subroutines:
-                            if callee == subr.name:
+                            if callee_name == subr.name:
                                 caller.callees.add(subr)
                                 subr.callers.add(caller)
                                 found_callee = True
@@ -274,54 +288,56 @@ class ParseTree:
                     break
 
         if not found_callee:
-            print(self.msg(f"Could not find callee {callee} in any used module of {self.curr.program_unit.name} for call in {caller.name}"))
+            #print(self.msg(f"Could not find callee {callee_name} in any used module of {self.curr.program_unit.name} for call in {caller.name}"))
+            self.unfound_calls.append((caller.name, callee_name))
 
 
     def parse_structure(self):
         """Reads a flang parse tree file and extracts structural information."""
 
-        self.parse_header()
+        try:
+            self.parse_header()
 
-        for self.line in self.lines():
-            if self.parse_routine_begin():
-                continue
-            if self.parse_routine_end():
-                continue
-            if self.parse_only_clause():
-                continue
-            if self.parse_use_stmt():
-                continue
-            if self.parse_module_stmt():
-                continue
-            if self.parse_end_module_stmt():
-                continue
-            if self.parse_program_unit():
-                continue
+            for self.line in self.lines():
+                if self.parse_routine_begin():
+                    continue
+                if self.parse_routine_end():
+                    continue
+                if self.parse_only_clause():
+                    continue
+                if self.parse_use_stmt():
+                    continue
+                if self.parse_module_stmt():
+                    continue
+                if self.parse_end_module_stmt():
+                    continue
+                if self.parse_program_unit():
+                    continue
 
-            # Fallback: if a UseStmt was seen and no Only followed, mark entire module used.
-            self.finalize_used_module_on_other_lines()
-
-        self.reset()
+        finally:
+            self.reset()
 
     def parse_calls(self):
         """Reads a flang parse tree file and extracts subroutine/function call relationships."""
 
-        self.parse_header()
+        try:
+            self.parse_header()
 
-        for self.line in self.lines():
-            if self.parse_routine_begin():
-                continue
-            if self.parse_routine_end():
-                continue
-            if self.parse_module_stmt():
-                continue
-            if self.parse_end_module_stmt():
-                continue
-            if self.parse_program_unit():
-                continue
-            if self.parse_call_stmt():
-                continue
-
-        self.reset()
+            for self.line in self.lines():
+                if self.parse_routine_begin():
+                    continue
+                if self.parse_routine_end():
+                    continue
+                if self.parse_module_stmt():
+                    continue
+                if self.parse_end_module_stmt():
+                    continue
+                if self.parse_program_unit():
+                    continue
+                if self.parse_call_stmt():
+                    continue
+            return self.unfound_calls
+        finally:
+            self.reset()
 
 
