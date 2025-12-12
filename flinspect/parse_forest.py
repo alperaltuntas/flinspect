@@ -52,15 +52,15 @@ class ParseForest:
                 skipped_modules.append(module)
                 continue # external module, e.g., netcdf, mpi, etc. so skip
             g.add_node(module, source_name=module.parse_tree_path.stem)
-            # Add edges for for used modules at the module level
-            for used_module in module.used_modules:
+            # Add edges for used modules at the module level
+            for used_module in module.used_module_names:
                 g.add_edge(module, used_module)
             # Add edges for used modules in subroutines and functions
             for subroutine in module.subroutines:
-                for used_module in subroutine.used_modules:
+                for used_module in subroutine.used_module_names:
                     g.add_edge(module, used_module)
             for function in module.functions:
-                for used_module in function.used_modules:
+                for used_module in function.used_module_names:
                     g.add_edge(module, used_module)
 
         print (f"Skipped {len(skipped_modules)} modules with unknown parse tree paths: {[m.name for m in skipped_modules]}")

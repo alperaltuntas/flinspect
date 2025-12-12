@@ -144,30 +144,64 @@ class ParseTree:
         if "| Only" not in self.line:
             return False
 
-        only_name = None
+        used_name = None
+        used_name_alias = None # for rename clauses
         if (m := re.search(r"Only -> GenericSpec -> Name = '(\w+)'", self.line)):
-            only_name = m.group(1)
+            used_name = m.group(1)
         elif (m := re.search(r"Only -> GenericSpec -> DefinedOperator -> IntrinsicOperator = (\w+)", self.line)):
-            only_name = m.group(1)
+            used_name = m.group(1)
         elif re.search(r"Only -> GenericSpec -> Assignment", self.line):
-            only_name = "assignment(=)"
+            used_name = "assignment(=)"
         elif re.search(r"Only -> Rename -> Names", self.line):
             self.line = self.read_next_line()
             m = re.search(r"Name = '(\w+)'", self.line)
             assert m, self.msg("Only Rename syntax not recognized")
+            used_name_alias = m.group(1)
             self.line = self.read_next_line()
             m = re.search(r"Name = '(\w+)'", self.line)
             assert m, self.msg("Only Rename syntax not recognized")
-            only_name = m.group(1)
+            used_name = m.group(1)
         else:
             raise ValueError(self.msg("Only syntax not recognized"))
 
         assert self.curr.used_module, self.msg("Only clause found without a preceding UseStmt")
-        used_module_only_list = self.curr.scope.used_modules[self.curr.used_module]
-        if used_module_only_list and used_module_only_list[0] == '*':
-            pass
+
+        if used_name_alias:
+            # It's a rename in an Only clause
+            used_renames = self.curr.scope.used_renames_lists[self.curr.used_module]
+            used_renames.append((used_name_alias, used_name))
         else:
-            used_module_only_list.append(only_name)
+            # Regular only clause
+            used_names = self.curr.scope.used_names_lists[self.curr.used_module]
+            if used_names and used_names[0] == '*':
+                pass
+            else:
+                used_names.append(used_name)
+
+        return True
+
+    def parse_rename_clause(self):
+        if "| Rename" not in self.line:
+            return False
+        
+        assert self.line.endswith("Rename -> Names"), self.msg("Rename syntax not recognized")
+        assert self.curr.used_module, self.msg("Rename clause found without a preceding UseStmt")
+
+        self.line = self.read_next_line()
+        m = re.search(r"Name = '(\w+)'", self.line)
+        assert m, self.msg("Rename syntax not recognized")
+        used_name_alias = m.group(1)
+        self.line = self.read_next_line()
+        m = re.search(r"Name = '(\w+)'", self.line)
+        assert m, self.msg("Rename syntax not recognized")
+        used_name = m.group(1)
+
+        used_renames = self.curr.scope.used_renames_lists[self.curr.used_module]
+        used_renames.append((used_name_alias, used_name))
+
+        if "| Rename" not in self.peek_next_line():
+            self.curr.used_module = None
+
         return True
 
     def parse_use_stmt(self):
@@ -183,11 +217,20 @@ class ParseTree:
         used_module_name = m.group(1)
         self.curr.used_module = self.nr.Module(used_module_name)
         next_line = self.peek_next_line()
-        if next_line and "| Only" in next_line:
-            if self.curr.used_module not in self.curr.scope.used_modules:
-                self.curr.scope.used_modules[self.curr.used_module] = []
+        assert next_line is not None, self.msg("Unexpected end of file after UseStmt")
+        if "| Only" in next_line:
+            if self.curr.used_module not in self.curr.scope.used_names_lists:
+                self.curr.scope.used_names_lists[self.curr.used_module] = []
+            if self.curr.used_module not in self.curr.scope.used_renames_lists:
+                self.curr.scope.used_renames_lists[self.curr.used_module] = []
+        elif "| Rename" in next_line:
+            if self.curr.used_module not in self.curr.scope.used_names_lists:
+                self.curr.scope.used_names_lists[self.curr.used_module] = ['*']
+            if self.curr.used_module not in self.curr.scope.used_renames_lists:
+                self.curr.scope.used_renames_lists[self.curr.used_module] = []
         else:
-            self.curr.scope.used_modules[self.curr.used_module] = ['*']
+            self.curr.scope.used_names_lists[self.curr.used_module] = ['*']
+            self.curr.scope.used_renames_lists[self.curr.used_module] = []
             self.curr.used_module = None
 
         return True
@@ -260,32 +303,6 @@ class ParseTree:
         interface_name = m.group(1)
         interface = self.nr.Interface(interface_name, self.curr.program_unit)
 
-        def find_module_procedure(procedure_name):
-
-            for subr in self.curr.program_unit.subroutines:
-                if subr.name == procedure_name:
-                    return subr
-            for function in self.curr.program_unit.functions:
-                if function.name == procedure_name:
-                    return function
-            for used_mod, used_names in self.curr.program_unit.used_modules.items():
-                if used_names and '*' in used_names:
-                    for subr in used_mod.subroutines:
-                        if subr.name == procedure_name:
-                            return subr
-                    for function in used_mod.functions:
-                        if function.name == procedure_name:
-                            return function
-                else:
-                    if procedure_name in used_names:
-                        for subr in used_mod.subroutines:
-                            if subr.name == procedure_name:
-                                return subr
-                        for function in used_mod.functions:
-                            if function.name == procedure_name:
-                                return function
-            return None
-
         # Read until EndInterfaceStmt
         while self.line:
             self.read_next_line()
@@ -301,77 +318,83 @@ class ParseTree:
                 continue
             if m := re.search(r"Name = '(\w+)'", self.line):
                 procedure_name = m.group(1)
-                procedure = find_module_procedure(procedure_name)
+                procedure = self.find_named_entity(self.curr.program_unit, procedure_name)
                 assert procedure is not None, self.msg(f"Could not find module procedure '{procedure_name}' for interface '{interface_name}'")
                 continue
             assert False, self.msg("InterfaceSpecification syntax not recognized")
         
         return True
 
-
-    def find_subroutine_callee(self, caller_program_unit, callee_name):
-        """Finds the callee subroutine by name for the given caller subroutine.
+    def find_named_entity(self, origin, name):
+        """Finds a named entity (subroutine, function, or interface) by name in the current parse tree.
 
         Parameters
         ----------
-        caller_program_unit : Module, Program, or Subprogram
-            The caller program unit.
-        callee_name : str
-            The name of the callee subroutine.
+        origin : Routine or ProgramUnit
+            The origin routine or program unit where the search starts.
+        name : str
+            The name of the entity to find.
 
         Returns
         -------
-        Subroutine or None
-            The callee subroutine if found, otherwise None.
+        Node or None
+            The found entity, or None if not found.
         """
 
-        # todo: if a certain module is used by a subroutine in the same program unit,
-        # but not used by the subroutine making the call, we should not find the callee in that module.
+        origin_unit = origin.program_unit if hasattr(origin, 'program_unit') else origin
 
-        # Check subroutines in the same program unit
-        for subr in caller_program_unit.subroutines:
-            if subr.name == callee_name:
-                return subr
+        if origin_unit is None:
+            print(f"Warning: origin_unit is None when searching for {name} from {origin}")
+            raise ValueError("origin_unit is None")
 
-        # Check interfaces in the same program unit
-        for intf in caller_program_unit.interfaces:
-            if intf.name == callee_name:
-                return intf
-        
-        # todo: check that callee is public if found in a used module
+        visited = set() # to avoid repetition
 
-        # Check subroutines and interfaces from used modules
-        def check_used_module(used_mod, used_names):
-            if used_names and '*' in used_names:
-                for subr in used_mod.subroutines:
-                    if subr.name == callee_name:
-                        return subr
-                for intf in used_mod.interfaces:
-                    if intf.name == callee_name:
-                        return intf
-            else: # only specific names used
-                if callee_name in used_names:
-                    for subr in used_mod.subroutines:
-                        if subr.name == callee_name:
-                            return subr
-                    for intf in used_mod.interfaces:
-                        if intf.name == callee_name:
-                            return intf
+        def dfs(current_unit, name):
+
+            if (current_unit, name) in visited:
+                return None
+            visited.add((current_unit, name))
+
+            # Check subroutines
+            for subr in current_unit.subroutines:
+                if subr.name == name:
+                    return subr
+
+            # Check functions
+            for func in current_unit.functions:
+                if func.name == name:
+                    return func
+
+            # Check interfaces
+            for intf in current_unit.interfaces:
+                if intf.name == name:
+                    return intf
+
+            # Recurse on used modules
+            for used_mod in current_unit.used_names_lists.keys():
+                if '*' in current_unit.used_names_lists[used_mod]:
+                    result = dfs(used_mod, name)
+                    if result is not None:
+                        return result
+                if name in current_unit.used_names_lists[used_mod]:
+                    return self.find_named_entity(used_mod, name)
+            
+            # Recurse on used modules via renames
+            found_alias = False
+            for used_mod, renames in current_unit.used_renames_lists.items():
+                for alias, original_name in renames:
+                    if alias == name:
+                        result = self.find_named_entity(used_mod, original_name)
+                        if result is not None:
+                            return result
+                        found_alias = True
+                        break
+                if found_alias:
+                    break
+
             return None
 
-        for used_mod, used_names in caller_program_unit.used_modules.items():
-            callee = check_used_module(used_mod, used_names)
-            if callee is not None:
-                return callee
-        
-        # Look at used modules of used modules:
-        for used_mod, used_names in caller_program_unit.used_modules.items():
-            for sub_used_mod, sub_used_names in used_mod.used_modules.items():
-                callee = check_used_module(sub_used_mod, sub_used_names)
-                if callee is not None:
-                    return callee
-        
-        return None
+        return dfs(origin_unit, name)
 
     def parse_call_stmt(self):
 
@@ -393,13 +416,8 @@ class ParseTree:
         callee_name = m.group(1)
         assert callee_name, self.msg("CallStmt found without a subroutine name")
 
-        caller = self.curr.routine
-        if caller: # call from within a subroutine/function
-            callee = self.find_subroutine_callee(caller.program_unit, callee_name)
-        else: # call from within a program
-            caller = self.curr.program_unit
-            assert caller == self.curr.program, self.msg("CallStmt found outside of a routine or program")
-            callee = self.find_subroutine_callee(caller, callee_name)
+        caller = self.curr.scope
+        callee = self.find_named_entity(caller, callee_name)
 
         if callee is None:
             #print(self.msg(f"Could not find callee {callee_name} in any used module of {self.curr.program_unit.name} for call in {caller.name}"))
@@ -423,6 +441,8 @@ class ParseTree:
                 if self.parse_routine_end():
                     continue
                 if self.parse_only_clause():
+                    continue
+                if self.parse_rename_clause():
                     continue
                 if self.parse_use_stmt():
                     continue

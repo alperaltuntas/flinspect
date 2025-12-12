@@ -23,6 +23,7 @@ class NodeRegistry:
         if cls not in self._store:
             self._store[cls] = {}
         if key not in self._store[cls]:
+            assert isinstance(key, str), f"Expected key to be str, got {type(key)}"
             self._store[cls][key] = cls(*args, **kwargs)
         return self._store[cls][key]
 
@@ -71,11 +72,11 @@ class NodeRegistry:
     def get_subroutine_by_name(self, name):
         # look for keys ending with the given name
         subroutines = []
-        for key, name in self._store.get(Subroutine, {}).items():
-            if key.endswith(name):
-                subroutines.append((name, key))
+        for key, subroutine in self._store[Subroutine].items():
+             if key.endswith(name):
+                subroutines.append((name, subroutine))
         if len(subroutines) == 1:
-            return subroutines[0][0]
+            return subroutines[0][1]
         elif len(subroutines) > 1:
             raise ValueError(f"Multiple subroutines found with name ending '{name}': {[s[0] for s in subroutines]}")
         else:

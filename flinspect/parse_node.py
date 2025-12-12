@@ -3,9 +3,8 @@ from abc import ABC, abstractmethod
 class Node(ABC):
     """Base class for all nodes in the parse tree representation."""
 
-    def __init__(self, name, container=None):
+    def __init__(self, name):
         self.name = name
-        self.container = container
     
     def __str__(self):
         return self.name
@@ -18,16 +17,40 @@ class Node(ABC):
     def key(cls, *args, **kwargs):
         pass
 
+class Scope(Node):
+    """Base class for scopes: modules, programs, subprograms, subroutines, and functions.
 
-class ProgramUnit(Node):
+    Attributes
+    ----------
+    name : str
+        The name of the scope.
+    used_names_lists : dict
+        A dictionary where keys are module objects and values are lists of names used from the module.
+    used_renames_lists : dict
+        A dictionary where keys are module objects and values are lists of (alias, name) tuples
+    """
+    def __init__(self, name):
+        super().__init__(name)
+        self.used_names_lists = {} # Keys are module objects and values are lists of names used from the module
+        self.used_renames_lists = {} # Keys are module objects and values are lists of (alias, name) tuples
+
+    @property
+    def used_module_names(self):
+        """Returns a list of module names used by this scope."""
+        if len(self.used_renames_lists) == 0:
+            return list(self.used_names_lists.keys())
+        # If there are used renames, include them
+        union = set(self.used_names_lists.keys()).union(set(self.used_renames_lists.keys()))
+        return list(union)
+
+
+class ProgramUnit(Scope):
     """Base class for program units: modules, programs, and subprograms.
     
     Attributes
     ----------
     name : str
         The name of the program unit.
-    used_modules : dict
-        A dictionary where keys are module objects and values are lists of names used from the module.
     subroutines : set
         A set of Subroutine instances defined in this program unit.
     functions : set
@@ -38,7 +61,6 @@ class ProgramUnit(Node):
 
     def __init__(self, name):
         super().__init__(name)
-        self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.subroutines = set()
         self.functions = set()
         self.interfaces = set()
@@ -63,7 +85,7 @@ class Subprogram(ProgramUnit):
     """Class representing a Fortran subprogram, i.e., a source file with no module or program statement."""
     pass
 
-class Callable(Node):
+class Callable(Scope):
     """Base class for subroutines and functions.
     
     Attributes
@@ -72,8 +94,6 @@ class Callable(Node):
         The name of the subroutine or function.
     program_unit : ProgramUnit
         The program unit (module, program, or subprogram) that contains this callable.
-    used_modules : dict
-        A dictionary where keys are module objects and values are lists of names used from the module.
     parent : Callable or None
         The parent callable if this is a nested subroutine/function, otherwise None.
     callees : set
@@ -97,7 +117,6 @@ class Callable(Node):
         assert '::' not in name, "Callable name should not contain '::'"
         super().__init__(name)
         self.program_unit = program_unit
-        self.used_modules = {} # Keys are module objects and values are lists of names used from the module
         self.parent = parent # Parent callable if nested, else None
         self.callees = set()
         self.callers = set()
