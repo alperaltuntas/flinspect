@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function
+from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function, DerivedType
 
 @dataclass
 class ParseState:
@@ -10,6 +10,7 @@ class ParseState:
     used_module: Module | None = None
     routine: Subroutine | None = None
     parent_routine: Subroutine | None = None
+    derived_type: DerivedType | None = None
 
     @property
     def program_unit(self):
@@ -26,3 +27,7 @@ class ParseState:
     @property
     def in_subroutine(self):
         return isinstance(self.routine, Subroutine)
+    
+    @property
+    def in_derived_type(self):
+        return self.derived_type is not None

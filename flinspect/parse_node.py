@@ -64,6 +64,7 @@ class ProgramUnit(Scope):
         self.subroutines = set()
         self.functions = set()
         self.interfaces = set()
+        self.derived_types = set()
         self.parse_tree_path = None # To be set when the parse tree is read
 
     @classmethod
@@ -120,6 +121,7 @@ class Callable(Scope):
         self.parent = parent # Parent callable if nested, else None
         self.callees = set()
         self.callers = set()
+        self.derived_types = set()
 
     @classmethod
     def key(cls, name, program_unit, parent=None):
@@ -147,3 +149,16 @@ class Interface(Node):
     @classmethod
     def key(cls, name, program_unit):
         return f"{program_unit.name}::{name}"
+
+class DerivedType(Node):
+    """Class representing a Fortran derived type."""
+    def __init__(self, name, scope):
+        super().__init__(name)
+        assert hasattr(scope, 'derived_types'), self.msg("Current scope cannot hold derived types")
+        self.scope = scope
+        self.scope.derived_types.add(self)
+        self.callees = set()
+
+    @classmethod
+    def key(cls, name, scope):
+        return f"{scope.name}::{name}"

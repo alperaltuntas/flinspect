@@ -72,8 +72,8 @@ class ParseTree:
         """Helper method to format error/warning messages."""
         return \
             f"{prefix}\n"\
-            f"  file:{self.parse_tree_path}\n"\
-            f"  line {self.line_number}: {self.line}"
+            f"  file: {self.parse_tree_path}:{self.line_number}\n"\
+            f"  line: {self.line}"
 
     def parse_header(self):
         """Parses the header of the parse tree file to ensure it is valid."""
@@ -233,6 +233,35 @@ class ParseTree:
             self.curr.scope.used_renames_lists[self.curr.used_module] = []
             self.curr.used_module = None
 
+        return True
+
+    def parse_derived_type_stmt(self):
+
+        if "DerivedTypeDef" not in self.line:
+            return False
+
+        assert not self.curr.in_derived_type, self.msg("Nested DerivedTypeDef not supported")
+        assert self.line.endswith("DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef")
+        self.read_next_line()
+        assert self.line.endswith("| DerivedTypeStmt"), self.msg("DerivedTypeStmt syntax not recognized")
+        self.read_next_line()
+        while "| TypeAttrSpec" in self.line:
+            self.read_next_line()
+        m = re.search(r"Name = '(\w+)'", self.line)
+        assert m, self.msg("DerivedTypeStmt Name syntax not recognized")
+        derived_type_name = m.group(1)
+        self.curr.derived_type = self.nr.DerivedType(derived_type_name, self.curr.scope)
+        return True
+    
+    def parse_end_derived_type_stmt(self):
+        if "| EndTypeStmt" not in self.line:
+            return False
+        assert self.curr.in_derived_type, self.msg("EndTypeStmt found without a preceding DerivedTypeStmt")
+        m = re.search(r"EndTypeStmt -> Name = '(\w+)'", self.line)
+        if m:
+            end_type_name = m.group(1)
+            assert end_type_name == self.curr.derived_type.name, self.msg(f"EndTypeStmt name {end_type_name} does not match DerivedTypeStmt name {self.curr.derived_type.name}")
+        self.curr.derived_type = None
         return True
 
     def parse_module_stmt(self):
@@ -396,7 +425,7 @@ class ParseTree:
 
         return dfs(origin_unit, name)
 
-    def parse_call_stmt(self):
+    def parse_subroutine_call_stmt(self):
 
         if not "CallStmt" in self.line:
             return False
@@ -446,6 +475,10 @@ class ParseTree:
                     continue
                 if self.parse_use_stmt():
                     continue
+                if self.parse_derived_type_stmt():
+                    continue
+                if self.parse_end_derived_type_stmt():
+                    continue
                 if self.parse_module_stmt():
                     continue
                 if self.parse_end_module_stmt():
@@ -466,6 +499,10 @@ class ParseTree:
                 if self.parse_routine_begin():
                     continue
                 if self.parse_routine_end():
+                    continue
+                if self.parse_derived_type_stmt():
+                    continue
+                if self.parse_end_derived_type_stmt():
                     continue
                 if self.parse_module_stmt():
                     continue
@@ -489,13 +526,17 @@ class ParseTree:
                     continue
                 if self.parse_routine_end():
                     continue
+                if self.parse_derived_type_stmt():
+                    continue
+                if self.parse_end_derived_type_stmt():
+                    continue
                 if self.parse_module_stmt():
                     continue
                 if self.parse_end_module_stmt():
                     continue
                 if self.parse_program_unit():
                     continue
-                if self.parse_call_stmt():
+                if self.parse_subroutine_call_stmt():
                     continue
             return self.unfound_calls
         finally:

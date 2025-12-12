@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from os import name
 
-from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function, Interface
+from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function, Interface, DerivedType
 
 @dataclass
 class NodeRegistry:
@@ -45,6 +45,9 @@ class NodeRegistry:
     def Interface(self, *args, **kwargs) -> Interface:
         return self._get_or_create(Interface, *args, **kwargs)
 
+    def DerivedType(self, *args, **kwargs) -> DerivedType:
+        return self._get_or_create(DerivedType, *args, **kwargs)
+
     @property
     def modules(self):
         return self._store.get(Module, {}).values()
@@ -69,6 +72,10 @@ class NodeRegistry:
     def interfaces(self):
         return self._store.get(Interface, {}).values()
     
+    @property
+    def derived_types(self):
+        return self._store.get(DerivedType, {}).values()
+
     def get_subroutine_by_name(self, name):
         # look for keys ending with the given name
         subroutines = []
