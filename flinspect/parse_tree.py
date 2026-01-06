@@ -351,6 +351,7 @@ class ParseTree:
                 procedure_name = m.group(1)
                 procedure = self.find_named_entity(self.curr.program_unit, procedure_name)
                 assert procedure is not None, self.msg(f"Could not find module procedure '{procedure_name}' for interface '{interface_name}'")
+                interface.procedures.add(procedure)
                 continue
             assert False, self.msg("InterfaceSpecification syntax not recognized")
         
