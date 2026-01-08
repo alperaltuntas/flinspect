@@ -1,7 +1,8 @@
 import re
 import networkx as nx
+from collections import defaultdict
 from flinspect.parse_node import Module, Program, Subprogram, Callable, Subroutine, Function, Interface, DerivedType
-from ipywidgets import VBox, HBox, Combobox, Dropdown, Text, Select, Output, HTML, IntSlider, Label, Button
+from ipywidgets import VBox, HBox, Dropdown, Text, Select, Output, HTML, IntSlider, Label, Button
 import ipycytoscape
 
 
@@ -11,29 +12,12 @@ class Explorer(VBox):
     def __init__(self, forest, **kwargs):
 
         super().__init__(**kwargs)
-
         out.clear_output()
 
-        self.forest = forest
+        # Initialize state
         self.store = forest.registry._store
 
-        # Search and category selection widgets
-        self.search_box = Text(
-            placeholder="Type name",
-            description="Search:",
-            layout={'width': '400px'},
-            style={"description_width": "100px"}
-        )
-        self.search_box.observe(self.on_search_box_change, names='value', type='change')
-
-        self.name_selector = Select(
-            options=[],
-            layout={'width': '400px'},
-            rows=10,
-        )
-        self.name_selector.unfiltered_options = []
-        self.name_selector.observe(self.on_name_selection_change, names='value', type='change')
-
+        # Initialize Widgets
         self.category_picker = Dropdown(
             description='Category:',
             value=None,
@@ -47,33 +31,27 @@ class Explorer(VBox):
             layout={'width': '400px'},
             style={"description_width": "100px"}
         )
-        self.category_picker.observe(self.update_category, names='value', type='change')
 
-        # Dependency graph configuration widgets
-        self.depth_slider = IntSlider(
-            value=1,
-            min=1,
-            max=5,
-            step=1,
-            description='Graph Depth:',
-            layout={'width': '400px'},
+        self.search_box = Text(
+            placeholder="Type name",
+            description="Search:",
+            continuous_update=False,
+            layout={'width': '500px'},
             style={"description_width": "100px"}
         )
-        self.depth_slider.observe(self.on_depth_change, names='value', type='change')
 
-        # Graph widget (will be created when requested)
-        self.create_graph_widget()
-        self.graph_visible = True
+        self.name_selector = Select(
+            options=[],
+            layout={'width': '500px'},
+            rows=10,
+        )
+        self.name_selector.unfiltered_options = []
 
-        # Initial layout without graph
-        self.graph_section = VBox([
-            self.graph_widget
-        ])
+        self.graph_widget =self.create_graph_widget()
 
         # Button section for graph controls
-        self.graph_controls = HBox([
-            HTML("<span style='margin-left: 10px; margin-right: 10px;'>|</span>"),
-            Label("Graph Controls:", layout={'width': '100px'}),
+        self.graph_top_bar = HBox([
+            Label("Dependency Graph:", layout={'width': '100px'}),
             HTML("<span style='margin-left: 5px;'></span>")
         ])
 
@@ -83,10 +61,124 @@ class Explorer(VBox):
             self.search_box,
             self.name_selector,
             HTML("<hr>"),
-            self.graph_controls,
-            self.graph_section,
+            self.graph_top_bar,
+            self.graph_widget,
             out
         ]
+
+        # observe widget changes
+        self.category_picker.observe(self.update_category, names='value', type='change')
+        self.search_box.observe(self.on_search_box_change, names='value', type='change')
+        self.name_selector.observe(self.on_name_selection_change, names='value', type='change')
+
+
+    def create_graph_widget(self):
+        """Create and configure the graph widget."""
+        graph_widget = ipycytoscape.CytoscapeWidget()
+        graph_widget.layout = {'width': '800px', 'height': '600px'}
+        graph_widget.on('node', 'click', self.on_node_click)
+
+        # Configure graph appearance
+        graph_widget.set_style([
+            {
+                'selector': 'node',
+                'style': {
+                    'label': 'data(label)',
+                    'width': '60px',
+                    'height': '60px',
+                    'background-color': "#346edb",
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'color': "#000000",
+                    'font-size': '12px',
+                    'text-wrap': 'wrap',
+                    'text-max-width': '80px'
+                }
+            },
+            {
+                'selector': 'node[type="module"]',
+                'style': {
+                    'label': 'data(label)',
+                    'width': '200px',
+                    'height': '150px',
+                    'background-color': "#e8e8e8",
+                    'background-opacity': 0.7,
+                    'border-width': '2px',
+                    'border-color': '#666666',
+                    'border-style': 'dashed',
+                    'text-valign': 'top',
+                    'text-halign': 'center',
+                    'color': "#333333",
+                    'font-size': '14px',
+                    'font-weight': 'bold',
+                    'text-margin-y': '14px',
+                    'shape': 'rectangle'
+                }
+            },
+            {
+                'selector': 'node[type="subroutine"]',
+                'style': {
+                    'background-color': "#ECCBCA"
+                }
+            },
+            {
+                'selector': 'node[type="function"]',
+                'style': {
+                    'background-color': "#c7b7a2"
+                }
+            },
+            {
+                'selector': 'node[type="interface"]',
+                'style': {
+                    'background-color': "#b2c0ca"
+                }
+            },
+            {
+                'selector': 'node.selected',
+                'style': {
+                    'border-width': '4px',
+                    'border-color': '#9b59b6'
+                }
+            },
+            {
+                'selector': 'edge',
+                'style': {
+                    'width': 2,
+                    'line-color': '#95a5a6',
+                    'target-arrow-color': '#95a5a6',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier'
+                }
+            },
+            {
+                'selector': 'edge[direction="incoming"]',
+                'style': {
+                    'line-color': '#3498db',
+                    'target-arrow-color': '#3498db'
+                }
+            },
+            {
+                'selector': 'edge[direction="outgoing"]',
+                'style': {
+                    'line-color': '#e74c3c',
+                    'target-arrow-color': '#e74c3c'
+                }
+            },
+            {
+                'selector': ':parent',
+                'style': {
+                    'text-valign': 'top',
+                    'text-halign': 'center',
+                    'background-color': '#f0f0f0',
+                    'background-opacity': 0.2,
+                    'border-width': '2px',
+                    'border-color': '#888888',
+                    'border-style': 'solid'
+                }
+            }
+        ])
+
+        return graph_widget
 
     def get_options_for_all_categories(self):
         """Get all callable options across all categories."""
@@ -102,7 +194,7 @@ class Explorer(VBox):
                 return self.store[cls][name]
         return None
 
-    def gen_subgraph(self, routine, depth=1):
+    def gen_subgraph(self, routine):
         subgraph = nx.DiGraph()
         subgraph.add_node(routine)
         for caller in routine.callers:
@@ -113,8 +205,6 @@ class Explorer(VBox):
 
     def update_graph_display(self):
         """Update the dependency graph display based on current selection."""
-        if not self.graph_widget or not self.graph_visible:
-            return
             
         selected_name = self.name_selector.value
         if not selected_name:
@@ -128,13 +218,41 @@ class Explorer(VBox):
             return
         
         # Extract subgraph
-        depth = self.depth_slider.value
-        subgraph = self.gen_subgraph(center_node, depth)
+        subgraph = self.gen_subgraph(center_node)
 
         self.graph_widget.graph.clear()
         
-        # Add nodes
+        # Group nodes by program unit
+        program_units = defaultdict(list)
         for node in subgraph.nodes():
+            # Get the program unit name
+            program_unit_name = 'Unknown Module'
+            
+            if hasattr(node, 'program_unit') and node.program_unit:
+                program_unit_name = node.program_unit.name
+            
+            program_units[program_unit_name].append(node)
+        
+        # Add parent nodes for each program unit
+        for program_unit_name, nodes in program_units.items():
+            # Only create parent node if there are multiple nodes or if we want to show modules explicitly
+            if len(nodes) > 1 or len(program_units) > 1:
+                parent_data = {
+                    'id': f'module_{program_unit_name}',
+                    'label': program_unit_name,
+                    'type': 'module'
+                }
+                parent_node = ipycytoscape.Node(data=parent_data)
+                self.graph_widget.graph.add_node(parent_node)
+        
+        # Add child nodes
+        for node in subgraph.nodes():
+            # Get the program unit name 
+            program_unit_name = 'Unknown Module'  # Default fallback
+            
+            if hasattr(node, 'program_unit') and node.program_unit:
+                program_unit_name = node.program_unit.name
+                
             node_data = {
                 'id': node.name,
                 'label': node.name,
@@ -142,6 +260,10 @@ class Explorer(VBox):
                         'function' if isinstance(node, Function) else 
                         'interface' if isinstance(node, Interface) else 'other'
             }
+            
+            # Set parent if there are multiple program units or multiple nodes per unit
+            if len(program_units) > 1 or len(program_units.get(program_unit_name, [])) > 1:
+                node_data['parent'] = f'module_{program_unit_name}'
             
             # Mark the selected node
             if node == center_node:
@@ -156,11 +278,27 @@ class Explorer(VBox):
                 'source': source.name,
                 'target': target.name
             }
+            
+            # Determine edge direction relative to center node
+            if target == center_node:
+                # Edge pointing to center node (incoming)
+                edge_data['direction'] = 'incoming'
+            elif source == center_node:
+                # Edge from center node (outgoing)
+                edge_data['direction'] = 'outgoing'
+            else:
+                # Edge between other nodes
+                edge_data['direction'] = 'other'
+            
             cytoscape_edge = ipycytoscape.Edge(data=edge_data)
             self.graph_widget.graph.add_edge(cytoscape_edge)
         
-        # Apply layout
-        self.graph_widget.set_layout(name='cose', animate=True)
+        # Apply layout - use a layout that works well with compound nodes
+        self.graph_widget.set_layout(name='cose', animate=False, 
+                                   nodeRepulsion=4000,
+                                   idealEdgeLength=100,
+                                   edgeElasticity=100,
+                                   nestingFactor=1.2)
 
     @out.capture()
     def update_category(self, change):
@@ -188,9 +326,8 @@ class Explorer(VBox):
         self.name_selector.unfiltered_options = list(options)
         self.name_selector.options = list(options)
         
-        # Clear graph when category changes (only if visible)
-        if self.graph_visible and self.graph_widget:
-            self.graph_widget.graph.clear()
+        # Clear graph when category changes
+        self.graph_widget.graph.clear()
 
     @out.capture()
     def on_search_box_change(self, change):
@@ -207,74 +344,8 @@ class Explorer(VBox):
     @out.capture()
     def on_name_selection_change(self, change):
         """Handle name selection changes."""
-        if self.graph_visible:
-            self.update_graph_display()
+        self.update_graph_display()
 
-    @out.capture() 
-    def on_depth_change(self, change):
-        """Handle depth slider changes."""
-        if self.graph_visible:
-            self.update_graph_display()
-
-    def create_graph_widget(self):
-        """Create and configure the graph widget."""
-        self.graph_widget = ipycytoscape.CytoscapeWidget()
-        self.graph_widget.layout = {'width': '800px', 'height': '600px'}
-        self.graph_widget.on('node', 'click', self.on_node_click)
-        
-        # Configure graph appearance
-        self.graph_widget.set_style([
-            {
-                'selector': 'node',
-                'style': {
-                    'label': 'data(label)',
-                    'width': '60px',
-                    'height': '60px',
-                    'background-color': "#346edb",
-                    'text-valign': 'center',
-                    'text-halign': 'center',
-                    'color': "#000000",
-                    'font-size': '12px',
-                    'text-wrap': 'wrap',
-                    'text-max-width': '80px'
-                }
-            },
-            {
-                'selector': 'node[type="subroutine"]',
-                'style': {
-                    'background-color': "#ff8f83"
-                }
-            },
-            {
-                'selector': 'node[type="function"]',
-                'style': {
-                    'background-color': "#ffb758"
-                }
-            },
-            {
-                'selector': 'node[type="interface"]',
-                'style': {
-                    'background-color': "#fff756"
-                }
-            },
-            {
-                'selector': 'node.selected',
-                'style': {
-                    'border-width': '4px',
-                    'border-color': '#9b59b6'
-                }
-            },
-            {
-                'selector': 'edge',
-                'style': {
-                    'width': 2,
-                    'line-color': '#95a5a6',
-                    'target-arrow-color': '#95a5a6',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier'
-                }
-            }
-        ])
 
     @out.capture()
     def on_node_click(self, event):
