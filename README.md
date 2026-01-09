@@ -36,6 +36,32 @@ In particular, flinspect is a missing layer between:
 
  since before we verify, refactor, or extend a system, we must *understand* it precisely.
 
+## Working with flinspect:
+
+flinspect is currently a prototype used primarily for the TURBO project. See the notebooks
+directory for examples. To be able to run those notebooks, first install the conda environment:
+
+```bash
+conda env create -f environment.yml
+```
+
+After installing the flinspect conda environment, activate it and also install
+pygraphviz:
+
+```bash
+conda activate flinspect
+conda install -c conda-forge pygraphviz
+```
+
+You are now ready to explore the Jupyter notebooks under `notebooks/`.
+
+**Note**, however, that the notebooks will require flang parse tree files for MOM6
+and its libraries. These are available on NCAR's glade file system and paths are
+specified in all the notebooks.
+
+If you don't have access to NCAR's glade file system, you will need to create
+flang parse trees on your local machine.
+
 ## What does flinspect do?
 Core Functionality:
  1. Parse Tree Analysis: Parses flang-generated parse tree files to extract structural information from Fortran code including:
