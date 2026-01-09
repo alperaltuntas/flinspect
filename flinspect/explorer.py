@@ -197,10 +197,16 @@ class Explorer(VBox):
     def gen_subgraph(self, routine):
         subgraph = nx.DiGraph()
         subgraph.add_node(routine)
-        for caller in routine.callers:
-            subgraph.add_edge(caller, routine)
-        for callee in routine.callees:
-            subgraph.add_edge(routine, callee)
+        if isinstance(routine, (Subroutine, Function)):
+            for caller in routine.callers:
+                subgraph.add_edge(caller, routine)
+            for callee in routine.callees:
+                subgraph.add_edge(routine, callee)
+        elif isinstance(routine, Interface):
+            for caller in routine.callers:
+                subgraph.add_edge(caller, routine)
+            for procedure in routine.procedures:
+                subgraph.add_edge(routine, procedure)
         return subgraph
 
     def update_graph_display(self):
