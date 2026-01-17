@@ -96,11 +96,4 @@ class ParseForest:
             for callee in function.callees:
                 g.add_edge(function, callee)
         
-        # also connect subroutines/functions to (all) subroutines/functions in interfaces that they call:
-        for interface in self.registry.interfaces:
-            for caller in interface.callers:
-                for callee in interface.procedures:
-                    #print(f"Adding edge from {caller.name} to interface procedure {callee.name}")
-                    g.add_edge(caller, callee)
-
         return g

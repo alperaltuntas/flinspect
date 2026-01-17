@@ -101,6 +101,20 @@ class Callable(Scope):
         A set of Callable instances that are called by this callable.
     callers : set
         A set of Callable instances that call this callable.
+    num_args : int or None
+        The total number of arguments in the callable's signature (derived from arg_types).
+        None if arg_types not yet parsed.
+    num_required_args : int or None
+        The number of required (non-optional) arguments. None if not yet parsed.
+    arg_types : list or None
+        List of argument types in order (e.g., ['integer', 'character', 'logical']).
+        None if not yet parsed.
+    arg_ranks : list or None
+        List of argument ranks in order (0 for scalar, 1+ for arrays).
+        None if not yet parsed.
+    arg_kinds : list or None
+        List of argument kind specifiers in order (e.g., ['r8_kind', 'i4_kind', None]).
+        None for the whole list if not yet parsed, or None for individual entries if unknown.
     """
     def __init__(self, name, program_unit, parent=None):
         """Initializes a Callable instance.
@@ -122,6 +136,15 @@ class Callable(Scope):
         self.callees = set()
         self.callers = set()
         self.derived_types = set()
+        self.num_required_args = None  # Number of required (non-optional) arguments
+        self.arg_types = None  # List of argument types in order
+        self.arg_ranks = None  # List of argument ranks in order (0=scalar, 1+=array)
+        self.arg_kinds = None  # List of argument kind specifiers (e.g., 'r8_kind', 'i4_kind')
+
+    @property
+    def num_args(self):
+        """Total number of arguments, derived from arg_types length."""
+        return len(self.arg_types) if self.arg_types is not None else None
 
     @classmethod
     def key(cls, name, program_unit, parent=None):
