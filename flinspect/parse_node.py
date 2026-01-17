@@ -115,6 +115,9 @@ class Callable(Scope):
     arg_kinds : list or None
         List of argument kind specifiers in order (e.g., ['r8_kind', 'i4_kind', None]).
         None for the whole list if not yet parsed, or None for individual entries if unknown.
+    arg_names : list or None
+        List of argument names in order (e.g., ['data', 'len', 'pelist']).
+        None if not yet parsed. Used for keyword argument matching.
     """
     def __init__(self, name, program_unit, parent=None):
         """Initializes a Callable instance.
@@ -140,6 +143,7 @@ class Callable(Scope):
         self.arg_types = None  # List of argument types in order
         self.arg_ranks = None  # List of argument ranks in order (0=scalar, 1+=array)
         self.arg_kinds = None  # List of argument kind specifiers (e.g., 'r8_kind', 'i4_kind')
+        self.arg_names = None  # List of argument names for keyword matching
 
     @property
     def num_args(self):

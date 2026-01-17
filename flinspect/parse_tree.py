@@ -141,7 +141,7 @@ class ParseTree:
             return m.group(1) if m else None
         return None
 
-    def _record_call_dependencies(self, callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, is_function=False):
+    def _record_call_dependencies(self, callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names=None, is_function=False):
         """Record a call relationship between the current scope and the callee."""
         caller = self.curr.scope
         callee = self.find_named_entity(caller, callee_name)
@@ -152,7 +152,7 @@ class ParseTree:
             elif not callee_name.lower().startswith("mpi_"):
                 self.unfound_subroutine_calls.append((caller.name, callee_name))
         elif isinstance(callee, Interface):
-            matching_procs = self.resolve_interface_procedures(callee, call_arg_types, call_arg_ranks, call_arg_kinds)
+            matching_procs = self.resolve_interface_procedures(callee, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names)
             for proc in matching_procs:
                 caller.callees.add(proc)
                 proc.callers.add(caller)
@@ -213,7 +213,7 @@ class ParseTree:
             return True
         return call_kind == proc_kind
 
-    def _procedure_matches(self, proc, call_arg_types, call_arg_ranks=None, call_arg_kinds=None):
+    def _procedure_matches(self, proc, call_arg_types, call_arg_ranks=None, call_arg_kinds=None, call_arg_names=None):
         """Check if a procedure matches the call signature.
         
         Parameters
@@ -226,6 +226,8 @@ class ParseTree:
             Inferred ranks of actual arguments.
         call_arg_kinds : list, optional
             Inferred kinds of actual arguments.
+        call_arg_names : list, optional
+            Keyword names used in the call (None for positional args).
             
         Returns
         -------
@@ -241,6 +243,13 @@ class ParseTree:
         max_args = proc.num_args
         if not (min_args <= num_call_args <= max_args):
             return False
+        
+        # Check keyword argument names - if call uses keywords, they must exist in procedure
+        if call_arg_names and proc.arg_names:
+            proc_arg_names_lower = [n.lower() for n in proc.arg_names]
+            for call_name in call_arg_names:
+                if call_name is not None and call_name.lower() not in proc_arg_names_lower:
+                    return False
         
         # Check types
         if call_arg_types and proc.arg_types:
@@ -430,14 +439,15 @@ class ParseTree:
         return arg_type, arg_rank, arg_kind
 
     def parse_call_arguments(self, call_level):
-        """Parse actual arguments in a call statement, extracting types, ranks, and kinds.
+        """Parse actual arguments in a call statement, extracting types, ranks, kinds, and keyword names.
         
         Returns
         -------
-        tuple (list, list, list)
-            (arg_types, arg_ranks, arg_kinds)
+        tuple (list, list, list, list)
+            (arg_types, arg_ranks, arg_kinds, arg_names)
+            arg_names contains the keyword name if used (e.g., 'data' in data=x), or None for positional args
         """
-        arg_types, arg_ranks, arg_kinds = [], [], []
+        arg_types, arg_ranks, arg_kinds, arg_names = [], [], [], []
         arg_level = call_level + 1
         
         while self.peek_next_line():
@@ -450,21 +460,32 @@ class ParseTree:
             if next_lvl == arg_level and "ActualArgSpec" in next_line:
                 self.read_next_line()
                 arg_lines = self._collect_arg_lines(arg_level)
+                
+                # Check for keyword argument (Keyword -> Name = 'xxx')
+                keyword_name = None
+                for line in arg_lines:
+                    if "Keyword -> Name = " in line:
+                        m = re.search(r"Keyword -> Name = '(\w+)'", line)
+                        if m:
+                            keyword_name = m.group(1)
+                        break
+                
                 arg_type, arg_rank, arg_kind = self._infer_arg_type(arg_lines, arg_level)
                 arg_types.append(arg_type)
                 arg_ranks.append(arg_rank)
                 arg_kinds.append(arg_kind)
+                arg_names.append(keyword_name)
             else:
                 self.read_next_line()
         
-        return arg_types, arg_ranks, arg_kinds
+        return arg_types, arg_ranks, arg_kinds, arg_names
 
-    def resolve_interface_procedures(self, interface, call_arg_types, call_arg_ranks=None, call_arg_kinds=None):
-        """Resolves which interface procedures match a call based on argument types, ranks, and kinds.
+    def resolve_interface_procedures(self, interface, call_arg_types, call_arg_ranks=None, call_arg_kinds=None, call_arg_names=None):
+        """Resolves which interface procedures match a call based on argument types, ranks, kinds, and names.
         
         When a call is made to an interface (generic name), this method determines
         which specific module procedures within the interface could match based on
-        the types, array ranks, and kind specifiers of arguments provided in the call.
+        the types, array ranks, kind specifiers, and keyword argument names provided in the call.
         
         Parameters
         ----------
@@ -476,6 +497,8 @@ class ParseTree:
             The inferred ranks of actual arguments in order (-1 for unknown).
         call_arg_kinds : list, optional
             The inferred kind specifiers of actual arguments in order (None if unknown).
+        call_arg_names : list, optional
+            The keyword names used in the call (None for positional arguments).
             
         Returns
         -------
@@ -493,7 +516,7 @@ class ParseTree:
         # Filter procedures that match the call signature
         return [
             proc for proc in interface.procedures
-            if self._procedure_matches(proc, call_arg_types, call_arg_ranks, call_arg_kinds)
+            if self._procedure_matches(proc, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names)
         ]
 
     def msg(self, prefix):
@@ -653,6 +676,7 @@ class ParseTree:
         """
         if not arg_names:
             routine.num_required_args = 0
+            routine.arg_names = []
             routine.arg_types = []
             routine.arg_ranks = []
             routine.arg_kinds = []
@@ -661,6 +685,7 @@ class ParseTree:
         # Look for SpecificationPart
         if not self.peek_next_line() or "| SpecificationPart" not in self.peek_next_line():
             n = len(arg_names)
+            routine.arg_names = list(arg_names)  # Store names even if types unknown
             routine.arg_types = ["unknown"] * n
             routine.arg_ranks = [0] * n
             routine.arg_kinds = [None] * n
@@ -753,6 +778,7 @@ class ParseTree:
             self.read_next_line()
         
         # Build ordered lists based on arg_names order
+        routine.arg_names = list(arg_names)  # Store the argument names for keyword matching
         routine.arg_types = [arg_type_map.get(name, "unknown") for name in arg_names]
         routine.arg_ranks = [arg_rank_map.get(name, 0) for name in arg_names]
         routine.arg_kinds = [arg_kind_map.get(name, None) for name in arg_names]
@@ -1134,8 +1160,8 @@ class ParseTree:
             raise ValueError(self.msg("ProcedureDesignator syntax not recognized"))
         callee_name = m.group(1)
 
-        call_arg_types, call_arg_ranks, call_arg_kinds = self.parse_call_arguments(call_level)
-        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds)
+        call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names = self.parse_call_arguments(call_level)
+        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names)
 
     def parse_function_call_stmt(self):
 
@@ -1168,8 +1194,8 @@ class ParseTree:
         if is_fortran_intrinsic(callee_name):
             return True
 
-        call_arg_types, call_arg_ranks, call_arg_kinds = self.parse_call_arguments(call_level)
-        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, is_function=True)
+        call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names = self.parse_call_arguments(call_level)
+        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names, is_function=True)
 
     def parse_structure(self):
         """Reads a flang parse tree file and extracts structural information."""
