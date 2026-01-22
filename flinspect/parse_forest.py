@@ -37,10 +37,15 @@ class ParseForest:
     def get_module_dependency_graph(self):
         """Generates a directed graph of module dependencies.
 
+        Edges represent both USE statements and type inheritance (EXTENDS).
+        If a type in module A extends a type from module B, there is an
+        implicit dependency on module B.
+
         Returns
         -------
         networkx.DiGraph
-            A directed graph where nodes are module names and edges represent 'uses' relationships.
+            A directed graph where nodes are module names and edges represent
+            'uses' relationships and type inheritance relationships.
         """
 
 
@@ -62,6 +67,20 @@ class ParseForest:
             for function in module.functions:
                 for used_module in function.used_module_names:
                     g.add_edge(module, used_module)
+            
+            # Add edges for type extension (EXTENDS) relationships
+            # If a type in this module extends a type from another module,
+            # there is an implicit dependency on that module
+            for derived_type in module.derived_types:
+                if derived_type.parent_type_name is not None:
+                    parent_type_name_lower = derived_type.parent_type_name.lower()
+                    # Find which module defines the parent type
+                    for other_module in self.registry.modules:
+                        for other_type in other_module.derived_types:
+                            if other_type.name.lower() == parent_type_name_lower:
+                                # Add edge from current module to the module with parent type
+                                g.add_edge(module, other_module)
+                                break
 
         print (f"Skipped {len(skipped_modules)} modules with unknown parse tree paths: {[m.name for m in skipped_modules]}")
     

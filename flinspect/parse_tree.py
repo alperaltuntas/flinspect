@@ -141,10 +141,104 @@ class ParseTree:
             return m.group(1) if m else None
         return None
 
-    def _record_call_dependencies(self, callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names=None, is_function=False):
+    def _extract_structure_component_name(self, designator_level):
+        """Extract the method name and object name from a ProcComponentRef -> StructureComponent.
+
+        After encountering a line ending with:
+            ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent
+        this method reads the nested lines to find the component (method) name
+        and the object name.
+
+        The parse tree structure is:
+            ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent
+              DataRef -> ...          (the object, possibly nested like obj%field%...)
+                Name = 'obj_name'   (or more DataRef nesting)
+              Name = 'method_name'  (the last Name at StructureComponent level)
+
+        Returns
+        -------
+        tuple of (str or None, str or None)
+            (method_name, object_name) where method_name is the component being
+            called and object_name is the first Name found inside the DataRef
+            (the root object). Either may be None if not found.
+        """
+        callee_name = None
+        object_name = None
+        found_dataref = False
+
+        while self.peek_next_line():
+            next_line = self.peek_next_line()
+            next_lvl = level(next_line)
+
+            if next_lvl <= designator_level:
+                break
+
+            if next_lvl == designator_level + 1:
+                m = re.search(r"Name = '(\w+)'", next_line)
+                if m:
+                    if 'DataRef' in next_line and object_name is None:
+                        # DataRef -> Name = 'obj_name' (simple case)
+                        object_name = m.group(1)
+                    callee_name = m.group(1)
+                elif 'DataRef' in next_line:
+                    found_dataref = True
+            elif next_lvl == designator_level + 2 and found_dataref and object_name is None:
+                # Nested DataRef: the first Name child is the root object
+                m = re.search(r"Name = '(\w+)'", next_line)
+                if m:
+                    object_name = m.group(1)
+
+            self.read_next_line()
+
+        return callee_name, object_name
+
+    def _resolve_binding_name(self, binding_name, type_name):
+        """Resolve a type-bound procedure binding name to its implementation name.
+
+        When a derived type has:
+            procedure :: reset => reset_bounds
+        a call like 'obj%reset()' should resolve to 'reset_bounds'.
+
+        Only the bindings of the derived type identified by *type_name* are
+        searched, so there is no ambiguity when multiple types share the same
+        binding name.
+
+        Parameters
+        ----------
+        binding_name : str
+            The binding name used in the call (e.g., 'reset').
+        type_name : str
+            The declared derived-type name of the calling object (e.g.,
+            'fmsdiagibounds_type').
+
+        Returns
+        -------
+        tuple of (str, Scope or None)
+            A tuple (impl_name, defining_scope) where impl_name is the
+            implementation name (e.g., 'reset_bounds') and defining_scope is
+            the scope that defines the derived type. If no matching binding
+            is found, returns (binding_name, None).
+        """
+        binding_lower = binding_name.lower()
+        type_name_lower = type_name.lower()
+
+        for dt in self.nr.derived_types:
+            if dt.name.lower() == type_name_lower:
+                for bname, iname in dt.bindings.items():
+                    if bname.lower() == binding_lower:
+                        return iname, dt.scope
+
+        return binding_name, None
+
+    def _record_call_dependencies(self, callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names=None, is_function=False, defining_scope=None):
         """Record a call relationship between the current scope and the callee."""
         caller = self.curr.scope
         callee = self.find_named_entity(caller, callee_name)
+
+        # If not found through normal USE chains, try the defining scope directly
+        # (for type-bound procedure calls where the routine is not explicitly USE'd)
+        if callee is None and defining_scope is not None:
+            callee = self.find_named_entity(defining_scope, callee_name)
 
         if callee is None:
             if is_function:
@@ -911,12 +1005,21 @@ class ParseTree:
         self.read_next_line()
         assert self.line.endswith("| DerivedTypeStmt"), self.msg("DerivedTypeStmt syntax not recognized")
         self.read_next_line()
+
+        # Check for EXTENDS and other TypeAttrSpec
+        parent_type_name = None
         while "| TypeAttrSpec" in self.line:
+            m = re.search(r"TypeAttrSpec -> Extends -> Name = '(\w+)'", self.line)
+            if m:
+                parent_type_name = m.group(1)
             self.read_next_line()
+
         m = re.search(r"Name = '(\w+)'", self.line)
         assert m, self.msg("DerivedTypeStmt Name syntax not recognized")
         derived_type_name = m.group(1)
         self.curr.derived_type = self.nr.DerivedType(derived_type_name, self.curr.scope)
+        if parent_type_name:
+            self.curr.derived_type.parent_type_name = parent_type_name
         return True
     
     def parse_end_derived_type_stmt(self):
@@ -928,6 +1031,56 @@ class ParseTree:
             end_type_name = m.group(1)
             assert end_type_name == self.curr.derived_type.name, self.msg(f"EndTypeStmt name {end_type_name} does not match DerivedTypeStmt name {self.curr.derived_type.name}")
         self.curr.derived_type = None
+        return True
+
+
+    def parse_type_bound_proc_binding(self):
+        """Parse TypeBoundProcBinding to record binding_name -> impl_name mappings.
+
+        In Fortran, derived types can have type-bound procedures:
+            procedure :: reset => reset_bounds   ! binding_name=reset, impl_name=reset_bounds
+            procedure :: get_imin                 ! binding_name=impl_name=get_imin
+
+        In the parse tree these appear as:
+            TypeBoundProcBinding -> TypeBoundProcedureStmt -> WithoutInterface
+              TypeBoundProcDecl
+                Name = 'binding_name'
+                Name = 'impl_name'       (only present when => is used)
+        """
+        if "TypeBoundProcBinding" not in self.line:
+            return False
+
+        if not self.curr.in_derived_type:
+            return False
+
+        binding_level = level(self.line)
+        binding_name = None
+        impl_name = None
+
+        # Read through nested lines to find the name(s)
+        while self.peek_next_line():
+            next_line = self.peek_next_line()
+            next_lvl = level(next_line)
+
+            if next_lvl <= binding_level:
+                break
+
+            m = re.search(r"Name = '(\w+)'", next_line)
+            if m:
+                if binding_name is None:
+                    binding_name = m.group(1)
+                else:
+                    impl_name = m.group(1)
+
+            self.read_next_line()
+
+        # If no impl_name, the binding name IS the impl name
+        if binding_name and not impl_name:
+            impl_name = binding_name
+
+        if binding_name and impl_name:
+            self.curr.derived_type.bindings[binding_name] = impl_name
+
         return True
 
     def parse_variable_declaration(self):
@@ -1154,7 +1307,24 @@ class ParseTree:
 
         self.line = self.read_next_line()
         if self.line.endswith("ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent"):
-            return  # todo: structure component call (obj%method), not handled
+            designator_level = level(self.line)
+            binding_name, object_name = self._extract_structure_component_name(designator_level)
+            if binding_name is None:
+                return
+            # Look up the object's declared type so we resolve the correct binding
+            obj_type_name = None
+            if object_name:
+                var_info = self.get_variable(object_name)
+                if var_info and var_info.type.startswith('derived:'):
+                    obj_type_name = var_info.type[len('derived:'):]
+            if obj_type_name is not None:
+                callee_name, defining_scope = self._resolve_binding_name(binding_name, obj_type_name)
+            else:
+                callee_name, defining_scope = binding_name, None
+            call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names = self.parse_call_arguments(call_level)
+            self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names,
+                                           defining_scope=defining_scope)
+            return
         m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", self.line)
         if not m:
             raise ValueError(self.msg("ProcedureDesignator syntax not recognized"))
@@ -1177,9 +1347,25 @@ class ParseTree:
         assert "ProcedureDesignator" in self.line, self.msg("FunctionReference syntax not recognized")
 
         callee_name = None
+        defining_scope = None
         m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", self.line)
         if m:
             callee_name = m.group(1)
+        elif "ProcComponentRef" in self.line:
+            designator_level = level(self.line)
+            binding_name, object_name = self._extract_structure_component_name(designator_level)
+            if binding_name is None:
+                return True
+            # Look up the object's declared type so we resolve the correct binding
+            obj_type_name = None
+            if object_name:
+                var_info = self.get_variable(object_name)
+                if var_info and var_info.type.startswith('derived:'):
+                    obj_type_name = var_info.type[len('derived:'):]
+            if obj_type_name is not None:
+                callee_name, defining_scope = self._resolve_binding_name(binding_name, obj_type_name)
+            else:
+                callee_name, defining_scope = binding_name, None
         else:
             l = level(self.line)
             while level(self.line) >= l:
@@ -1195,7 +1381,7 @@ class ParseTree:
             return True
 
         call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names = self.parse_call_arguments(call_level)
-        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names, is_function=True)
+        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names, is_function=True, defining_scope=defining_scope)
 
     def parse_structure(self):
         """Reads a flang parse tree file and extracts structural information."""
@@ -1215,6 +1401,8 @@ class ParseTree:
                 if self.parse_use_stmt():
                     continue
                 if self.parse_derived_type_stmt():
+                    continue
+                if self.parse_type_bound_proc_binding():
                     continue
                 if self.parse_end_derived_type_stmt():
                     continue
@@ -1242,6 +1430,8 @@ class ParseTree:
                 if self.parse_routine_end():
                     continue
                 if self.parse_derived_type_stmt():
+                    continue
+                if self.parse_type_bound_proc_binding():
                     continue
                 if self.parse_end_derived_type_stmt():
                     continue

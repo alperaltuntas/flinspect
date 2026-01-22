@@ -185,6 +185,8 @@ class DerivedType(Node):
         self.scope = scope
         self.scope.derived_types.add(self)
         self.callees = set()
+        self.bindings = {}  # Maps binding_name -> impl_name (e.g., 'reset' -> 'reset_bounds')
+        self.parent_type_name = None  # Name of parent type if EXTENDS is used
 
     @classmethod
     def key(cls, name, scope):
