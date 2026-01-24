@@ -124,6 +124,8 @@ class ParseTree:
         if "AssumedShapeSpec -> int = " in line:
             m = re.search(r"AssumedShapeSpec -> int = '(\d+)'", line)
             return int(m.group(1)) if m else 1
+        if "AssumedShapeSpec" in line:
+            return 1  # At least 1 assumed-shape dimension (e.g., array(lo:))
         if "AssumedRankSpec" in line:
             return -1  # Assumed rank (..) - could be any rank
         if "ImpliedShapeSpec" in line:
@@ -338,32 +340,47 @@ class ParseTree:
         if not (min_args <= num_call_args <= max_args):
             return False
         
-        # Check keyword argument names - if call uses keywords, they must exist in procedure
-        if call_arg_names and proc.arg_names:
-            proc_arg_names_lower = [n.lower() for n in proc.arg_names]
-            for call_name in call_arg_names:
-                if call_name is not None and call_name.lower() not in proc_arg_names_lower:
-                    return False
-        
+        # Build a mapping from call argument index to the corresponding
+        # procedure parameter index.  Positional arguments map 1-to-1;
+        # keyword arguments must be resolved by name.
+        proc_arg_names_lower = (
+            [n.lower() for n in proc.arg_names] if proc.arg_names else None
+        )
+
+        call_to_proc_idx = []
+        for i in range(len(call_arg_types)):
+            kw_name = call_arg_names[i] if call_arg_names else None
+            if kw_name is not None and proc_arg_names_lower is not None:
+                kw_lower = kw_name.lower()
+                if kw_lower in proc_arg_names_lower:
+                    call_to_proc_idx.append(proc_arg_names_lower.index(kw_lower))
+                else:
+                    return False  # keyword not in procedure → no match
+            else:
+                call_to_proc_idx.append(i)  # positional
+
         # Check types
         if call_arg_types and proc.arg_types:
             for i, call_type in enumerate(call_arg_types):
-                if i < len(proc.arg_types):
-                    if not self._types_compatible(call_type, proc.arg_types[i]):
+                pi = call_to_proc_idx[i]
+                if pi < len(proc.arg_types):
+                    if not self._types_compatible(call_type, proc.arg_types[pi]):
                         return False
         
         # Check ranks
         if call_arg_ranks and proc.arg_ranks:
             for i, call_rank in enumerate(call_arg_ranks):
-                if i < len(proc.arg_ranks):
-                    if not self._ranks_compatible(call_rank, proc.arg_ranks[i]):
+                pi = call_to_proc_idx[i]
+                if pi < len(proc.arg_ranks):
+                    if not self._ranks_compatible(call_rank, proc.arg_ranks[pi]):
                         return False
         
         # Check kinds
         if call_arg_kinds and proc.arg_kinds:
             for i, call_kind in enumerate(call_arg_kinds):
-                if i < len(proc.arg_kinds):
-                    if not self._kinds_compatible(call_kind, proc.arg_kinds[i]):
+                pi = call_to_proc_idx[i]
+                if pi < len(proc.arg_kinds):
+                    if not self._kinds_compatible(call_kind, proc.arg_kinds[pi]):
                         return False
         
         return True
@@ -447,11 +464,36 @@ class ParseTree:
         has_subscripts = False
         subscript_count = 0
         has_triplet = False
-        
+
+        # Detect StructureComponent access (e.g., CS%data_field).  We can only
+        # resolve the parent object's type, not the component's, so we must
+        # return unknown to avoid false type/rank mismatches.
+        has_structure_component = any("StructureComponent" in l for l in lines)
+
+        func_ref_name = None  # Name from ProcedureDesignator (array-as-FunctionReference)
+        func_ref_level = None  # Level of the FunctionReference -> Call line
+
         for line in lines:
-            if level(line) <= start_level:
+            lvl = level(line)
+            if lvl <= start_level:
                 break
-            
+
+            # flang parses array element access (e.g., fields(i)) as
+            # FunctionReference -> Call with ProcedureDesignator -> Name.
+            # Capture this name so we can look it up as a variable.
+            if "ProcedureDesignator -> Name = '" in line and func_ref_name is None:
+                m = re.search(r"Name = '(\w+)'", line)
+                if m:
+                    func_ref_name = m.group(1)
+                    func_ref_level = lvl
+                continue
+
+            # If we are inside a FunctionReference's ActualArgSpec (subscript),
+            # skip DataRef -> Name lines – they are subscript indices, not the
+            # variable being referenced.
+            if func_ref_level is not None and lvl > func_ref_level:
+                continue
+
             # Look for variable name in DataRef -> Name pattern
             if "DataRef -> Name = '" in line:
                 m = re.search(r"Name = '(\w+)'", line)
@@ -464,15 +506,32 @@ class ParseTree:
                 subscript_count += 1
             elif "SubscriptTriplet" in line:
                 has_triplet = True  # Triplet means dimension is preserved
-        
+
+        # If no DataRef name was found but we have a FunctionReference name,
+        # it may be an array element access.  Try looking it up as a variable.
+        if var_name is None and func_ref_name is not None:
+            var_info = self.get_variable(func_ref_name)
+            if var_info is not None:
+                var_name = func_ref_name
+                # Array element access: rank is reduced by 1 (scalar subscript)
+                has_subscripts = True
+                subscript_count = max(subscript_count, 1)
+
         if var_name:
             # Look up the variable type
             var_info = self.get_variable(var_name)
             if var_info:
+                # For StructureComponent access (e.g., CS%data_field) we resolved
+                # the parent object (CS) but not the component (data_field).
+                # Return unknown so that the wildcard doesn't falsely reject
+                # matching procedures.
+                if has_structure_component:
+                    return "unknown", -1, None
+
                 var_type = var_info.type
                 var_rank = var_info.rank
                 var_kind = var_info.kind
-                
+
                 # Adjust rank based on subscripts
                 if has_subscripts and subscript_count > 0:
                     # If using subscript triplets (:), dimensions are preserved
@@ -487,7 +546,7 @@ class ParseTree:
                         new_rank = max(0, var_rank - subscript_count)
                         return var_type, new_rank, var_kind
                 return var_type, var_rank, var_kind
-        
+
         return "unknown", -1, None
 
     def _collect_arg_lines(self, arg_level):
@@ -608,10 +667,19 @@ class ParseTree:
             return list(interface.procedures)
         
         # Filter procedures that match the call signature
-        return [
+        matching = [
             proc for proc in interface.procedures
             if self._procedure_matches(proc, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names)
         ]
+
+        # If no procedures matched, fall back to returning all procedures.
+        # In Fortran, a call to a generic interface must resolve to at least one
+        # module procedure at runtime, so an empty result means our type inference
+        # was too imprecise — not that no procedure matches.
+        if not matching:
+            return list(interface.procedures)
+
+        return matching
 
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
@@ -722,12 +790,28 @@ class ParseTree:
         return "unknown"
 
     def _count_explicit_dimensions(self, first_line):
-        """Count additional ExplicitShapeSpec dimensions after the first."""
+        """Count additional dimension specifications after the first.
+
+        Handles ExplicitShapeSpec, AssumedShapeSpec, and DeferredShapeSpecList
+        continuation lines that follow the initial ArraySpec line.
+        Skips child lines (e.g., SpecificationExpr) that are deeper than the
+        array spec level.
+        """
         count = 0
-        if "ExplicitShapeSpec" in first_line:
-            while self.peek_next_line() and "ExplicitShapeSpec" in self.peek_next_line():
-                count += 1
-                self.read_next_line()
+        if "ExplicitShapeSpec" in first_line or "AssumedShapeSpec" in first_line:
+            spec_level = level(first_line)
+            while self.peek_next_line():
+                nxt = self.peek_next_line()
+                nxt_level = level(nxt)
+                if nxt_level > spec_level:
+                    # Skip child lines (e.g., SpecificationExpr bounds)
+                    self.read_next_line()
+                    continue
+                if nxt_level == spec_level and ("ExplicitShapeSpec" in nxt or "AssumedShapeSpec" in nxt):
+                    count += 1
+                    self.read_next_line()
+                else:
+                    break
         return count
 
     def _parse_entity_decl(self, base_rank):
