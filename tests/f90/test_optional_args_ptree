@@ -1,0 +1,128 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'optional_args_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> InterfaceBlock
+| | | InterfaceStmt -> GenericSpec -> Name = 'init'
+| | | InterfaceSpecification -> ProcedureStmt
+| | | | Kind = ModuleProcedure
+| | | | Name = 'init_simple'
+| | | | Name = 'init_advanced'
+| | | EndInterfaceStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'init_simple'
+| | | | DummyArg -> Name = 'x'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = Out
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'init_advanced'
+| | | | DummyArg -> Name = 'x'
+| | | | DummyArg -> Name = 'n'
+| | | | DummyArg -> Name = 'tol'
+| | | | DummyArg -> Name = 'debug'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = Out
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> Optional
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'tol'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Logical
+| | | | | AttrSpec -> Optional
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'debug'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'caller_optional_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'optional_args_mod'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_optional_calls'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | EntityDecl
+| | | | | | Name = 'val'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'init'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'init'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
+| | | | | | | | Real = '1.0e-6'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'init'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
+| | | | | | | | Real = '1.0e-6'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> LogicalLiteralConstant
+| | | | | | | | bool = 'true'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'init'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | ActualArgSpec
+| | | | | | | Keyword -> Name = 'debug'
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> LogicalLiteralConstant
+| | | | | | | | bool = 'true'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

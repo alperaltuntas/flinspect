@@ -1,0 +1,106 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'func_ref_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> InterfaceBlock
+| | | InterfaceStmt -> GenericSpec -> Name = 'send_data'
+| | | InterfaceSpecification -> ProcedureStmt
+| | | | Kind = ModuleProcedure
+| | | | Name = 'send_data_2d'
+| | | | Name = 'send_data_3d'
+| | | EndInterfaceStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'send_data_2d'
+| | | | DummyArg -> Name = 'field'
+| | | | DummyArg -> Name = 'time'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'field'
+| | | | | | ArraySpec -> DeferredShapeSpecList -> int = '2'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'time'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'send_data_3d'
+| | | | DummyArg -> Name = 'field'
+| | | | DummyArg -> Name = 'time'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'field'
+| | | | | | ArraySpec -> DeferredShapeSpecList -> int = '3'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'time'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'caller_func_ref_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'func_ref_mod'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_func_ref_calls'
+| | | | DummyArg -> Name = 'fields'
+| | | | DummyArg -> Name = 'nfields'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'fields'
+| | | | | | ArraySpec -> DeferredShapeSpecList -> int = '3'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'nfields'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'send_data'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'fields'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '2'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'send_data'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> ArrayElement
+| | | | | | | | DataRef -> Name = 'fields'
+| | | | | | | | SectionSubscript -> Integer -> Expr -> Designator -> DataRef -> Name = 'i'
+| | | | | | | | SectionSubscript -> SubscriptTriplet
+| | | | | | | | SectionSubscript -> SubscriptTriplet
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

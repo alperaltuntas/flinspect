@@ -17,24 +17,11 @@ At a high level, flinspect:
  - Exposes that model interactively via Jupyter (Explorer + widgets)
  - Scales to multi-project / multi-tree analysis (ParseForest)
  
-flinspect is NOT:
+flinspect is :
 
- - a linter
- - a formatter
- - a compiler frontend
- - a documentation generator
-
-It is:
  - a structural reasoning substrate
  - a code comprehension accelerator
  - a foundation for correctness and modernization tooling
-
-In particular, flinspect is a missing layer between:
-
- - raw compiler output
- - and higher-level reasoning tools (testing, verification, refactoring, GPU porting)
-
- since before we verify, refactor, or extend a system, we must *understand* it precisely.
 
 ## Working with flinspect:
 

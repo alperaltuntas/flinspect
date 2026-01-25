@@ -1,0 +1,147 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'assumed_shape_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | Name = 'index_type'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'isd'
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'jsd'
+| | | EndTypeStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> InterfaceBlock
+| | | InterfaceStmt -> GenericSpec -> Name = 'fill_data'
+| | | InterfaceSpecification -> ProcedureStmt
+| | | | Kind = ModuleProcedure
+| | | | Name = 'fill_data_1d'
+| | | | Name = 'fill_data_2d'
+| | | | Name = 'fill_data_3d'
+| | | EndInterfaceStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'fill_data_1d'
+| | | | DummyArg -> Name = 'arr'
+| | | | DummyArg -> Name = 'val'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = Out
+| | | | | EntityDecl
+| | | | | | Name = 'arr'
+| | | | | | ArraySpec -> DeferredShapeSpecList -> int = '1'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'val'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'fill_data_2d'
+| | | | DummyArg -> Name = 'arr'
+| | | | DummyArg -> Name = 'val'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = Out
+| | | | | EntityDecl
+| | | | | | Name = 'arr'
+| | | | | | ArraySpec -> DeferredShapeSpecList -> int = '2'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'val'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'fill_data_3d'
+| | | | DummyArg -> Name = 'arr'
+| | | | DummyArg -> Name = 'val'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = Out
+| | | | | EntityDecl
+| | | | | | Name = 'arr'
+| | | | | | ArraySpec -> DeferredShapeSpecList -> int = '3'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'val'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'caller_assumed_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'assumed_shape_mod'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_assumed_calls'
+| | | | DummyArg -> Name = 'hi'
+| | | | DummyArg -> Name = 'data2d'
+| | | | DummyArg -> Name = 'data1d'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Type
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'index_type'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'hi'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr -> Designator -> DataRef -> StructureComponent
+| | | | | | DataRef -> Name = 'hi'
+| | | | | | Name = 'isd'
+| | | | | AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr -> Designator -> DataRef -> StructureComponent
+| | | | | | DataRef -> Name = 'hi'
+| | | | | | Name = 'jsd'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'data2d'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr -> Designator -> DataRef -> StructureComponent
+| | | | | | DataRef -> Name = 'hi'
+| | | | | | Name = 'isd'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'data1d'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'fill_data'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data1d'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
+| | | | | | | | Real = '0.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'fill_data'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data2d'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
+| | | | | | | | Real = '1.0'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

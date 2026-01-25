@@ -1,0 +1,129 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'struct_comp_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | Name = 'data_container'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'scalar_val'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | ComponentAttrSpec -> Allocatable
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'array_1d'
+| | | | | ComponentArraySpec -> DeferredShapeSpecList -> int = '1'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'count'
+| | | EndTypeStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | Name = 'control_struct'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> Type
+| | | | | DerivedTypeSpec
+| | | | | | Name = 'data_container'
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'data'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'mode'
+| | | EndTypeStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> InterfaceBlock
+| | | InterfaceStmt -> GenericSpec -> Name = 'update'
+| | | InterfaceSpecification -> ProcedureStmt
+| | | | Kind = ModuleProcedure
+| | | | Name = 'update_real'
+| | | | Name = 'update_int'
+| | | EndInterfaceStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'update_real'
+| | | | DummyArg -> Name = 'val'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'val'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'update_int'
+| | | | DummyArg -> Name = 'val'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'val'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'caller_struct_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'struct_comp_mod'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_struct_calls'
+| | | | DummyArg -> Name = 'cs'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Type
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'control_struct'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'cs'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'update'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> StructureComponent
+| | | | | | | | DataRef -> StructureComponent
+| | | | | | | | | DataRef -> Name = 'cs'
+| | | | | | | | | Name = 'data'
+| | | | | | | | Name = 'scalar_val'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'update'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> StructureComponent
+| | | | | | | | DataRef -> Name = 'cs'
+| | | | | | | | Name = 'mode'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '2'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
