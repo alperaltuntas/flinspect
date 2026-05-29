@@ -37,10 +37,12 @@ From the review of the current codebase. Ordered by impact on the vision.
 │                       │   │  (the contract)        │   │                            │
 │ A. flang sema dump    │──▶│  Entities + Relations  │──▶│  Graph build (ParseForest) │
 │ B. LFortran ASR  (TBD)│   │  + confidence (D3)     │   │  Explorer (Jupyter)        │
-│ C. flang FIR/API (TBD)│   │  flinspect-owned       │   │  Relational query + Z3     │
+│ C. flang FIR/API (TBD)│   │  flinspect-owned       │   │  Relational query layer    │
 └──────────────────────┘   └────────────────────────┘   └───────────────────────────┘
         leaks here              the seam — nothing            never imports flang
-        stay here               flang-specific lives here
+        stay here               flang-specific lives here    query evals the ground
+                                                              graph; SMT only over
+                                                              D3 unknowns
 ```
 
 **The one rule that gives the plan its value:** nothing on the consumer side
@@ -84,20 +86,39 @@ class Frontend(Protocol):
 
 ---
 
-## 3. Principles & guardrails
+## 3. Design principles
 
-1. **Depend on an abstraction we own, not on flang's format.** (D2)
-2. **The IR is domain-shaped, not flang-shaped.** Apply the §2 litmus test.
-3. **Never silently drop or silently invent facts.** Tag confidence; surface
-   `unresolved`. (D3)
-4. **Scope-qualified identity everywhere.** No bare-name lookups or `endswith`
-   matching, in the model *or* the Explorer. (W4, W5)
-5. **Per-file fault isolation.** One unparseable file skips-and-reports; it must
-   not abort the forest.
-6. **Pragmatism everywhere except the IR boundary.** That one line is the entire
-   value of the plan; don't let flang-isms leak across it to save time. Elsewhere,
-   ship.
-7. **Keep `VISION.md` and `README.md` honest.** Mark roadmap as roadmap.
+These principles are ordered roughly from most to least
+load-bearing.
+
+1. **Get the IR right first.** Design its state and invariants before any behavior;
+   the frontend and consumers exist only to establish or rely on them. A reasoning
+   layer built on the wrong abstraction can't be rescued by good code. (D2)
+2. **Deep modules, narrow interfaces.** The frontend is one method —
+   `extract(sources) -> IR` — hiding all of flang's text format, depth-counting,
+   regex, and resolution. The interface stays far smaller than the body; we avoid a
+   crowd of shallow helpers.
+3. **Pull complexity down to the frontend.** Consumers (forest, Explorer, future
+   query layer) never learn that flang exists. Litmus test for every IR field:
+   *could a non-flang adapter populate this without contortion?* If not, it leaks.
+4. **One layer, one vocabulary.** flang parse-tree terms live below the seam; the
+   domain (modules, calls, types) lives at it; graph/relation terms live above. A
+   flang node-string above the seam — or a NetworkX detail below it — is a bug.
+5. **Partial knowledge is a value, not an error.** Incomplete resolution is the
+   normal case, so it is a first-class fact: every relation carries
+   `resolved | assumed | unresolved`. We never silently drop or invent. (D3, W2)
+6. **Identity is scope-qualified, never a bare name.** No name-only lookups or
+   `endswith` matching, in the model or the Explorer. (W4, W5)
+7. **Domain-shaped, not codebase-shaped.** The IR models Fortran-the-language, not
+   MOM6-the-codebase — no `DoublePrecision -> 'r8_kind'` MOM-isms baked in; such
+   mappings, if needed, live in a consumer. General enough for any Fortran program,
+   not for speculative non-Fortran inputs. (W6)
+8. **Isolate faults.** One unparseable file reports and is skipped; it must not
+   abort the forest.
+9. **Invest at the seam, ship everywhere else.** The IR boundary is the one line
+   worth perfecting because everything compounds on it; elsewhere (rendering, CLI),
+   be pragmatic.
+10. **Keep `VISION.md` and `README.md` honest.** Mark roadmap as roadmap.
 
 ---
 
@@ -133,9 +154,12 @@ confidence (e.g., assumed edges dashed).
 and exits non-zero on violation — the minimum for the README's "CI-enforceable"
 claim (W8).
 
-**Phase 5+ — The vision proper.** Relational query layer over the IR, then the
-Z3 checker, then the GPU-porting frontier tooling. (Out of scope for detailed
-planning until Phases 1–2 land; the IR + confidence model is the prerequisite.)
+**Phase 5+ — The vision proper.** The relational query layer over the IR is the
+core (ground-graph evaluation: closure, difference, reachability), then the
+GPU-porting frontier tooling on top of it. An SMT (Z3) layer is an *optional*
+add-on scoped to reasoning over D3 unknowns (∃/∀ over `assumed`/`unresolved`
+edges), not the main checker — see Q4. (Out of scope for detailed planning until
+Phases 1–2 land; the IR + confidence model is the prerequisite.)
 
 **Deferred — Frontend upgrade exploration (much later, optional).** Evaluate an
 alternative frontend — LFortran ASR / fparser2 ("Option B"), or flang's own more
@@ -161,8 +185,22 @@ the dump can't give. Resolves D5.
 - **Q3 (deferred, gates D5):** Does LFortran's ASR — or fparser2 — actually ingest
   FMS+MOM6 at current maturity? Only relevant if/when we pursue the deferred
   frontend-upgrade exploration; not near-term.
-- **Q4:** Is a relational-query layer best home-grown, or can we reuse an existing
-  engine (e.g., a Datalog/Soufflé backend) feeding Z3? Affects Phase 5 design.
+- **Q4:** The reasoning split. The facts are *one fixed ground graph*, so invariant
+  checking is query *evaluation* (reachability, closure, set difference), not Alloy's
+  search over a space of small models — a recursive relational engine (home-grown, or
+  a Datalog/Soufflé backend) is the natural core and scales to a whole codebase. An
+  SMT solver (Z3) is *not* the workhorse here and encodes the ground graph poorly;
+  it earns its place only over the D3 *unknowns* — "does some / every resolution of
+  the `assumed`/`unresolved` edges violate the invariant?" Open: is that residual
+  SMT layer worth building, and where exactly is the Datalog↔SMT handoff? Affects
+  Phase 5 design. **Sequencing:** start the query layer in-process with NetworkX +
+  Python set ops (the README's relational operators map onto it almost one-to-one,
+  and the facts are a single fixed graph); adopt a real Datalog engine — CozoDB
+  (embedded, Python bindings) first, Soufflé (standalone, compiles to C++) only if
+  scale demands — as a *localized* upgrade once invariant rules outgrow hand-written
+  traversals. If the query layer consumes the IR through a thin interface, that swap
+  is contained, exactly like the frontend swap (D2). So none of this needs deciding
+  before Phase 1.
 
 ---
 

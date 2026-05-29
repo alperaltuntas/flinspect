@@ -11,8 +11,6 @@
 >   conclusion graduates here (or into DESIGN) as a clean statement; the devlog
 >   keeps the narrative of how we got there.
 >
-> Keep this honest — it is most useful when it describes reality, not aspiration
-> dressed as reality.
 
 ---
 
@@ -23,8 +21,8 @@ flinspect has two faces today:
 - **What it is:** a prototype that scrapes flang's textual parse-tree dump to build
   a structural/call graph of Fortran code, viewable in Jupyter.
 - **What it wants to be (per `README.md`):** a *relational reasoning system* over
-  Fortran programs — Alloy-like queries plus Z3-backed checks — used to make GPU
-  modernization of MOM6 (and similar HPC codes) provably safe and CI-enforceable.
+  Fortran programs — Alloy-like queries used to make GPU modernization of MOM6
+  (and similar HPC codes) provably safe and CI-enforceable.
 
 This document reconciles those two faces: it states the destination and records the
 strategic decisions we've made about how to reach it. The architecture and the
@@ -35,7 +33,7 @@ up work, so it errs toward making implicit reasoning explicit.
 
 ---
 
-## 2. What flinspect is today (honest baseline)
+## 2. What flinspect is today
 
 Pipeline:
 
@@ -72,10 +70,21 @@ over sound, compiler-derived facts** about Fortran programs.
   `imports`.
 - **Query layer:** a declarative relational algebra (join `.`, intersection `&`,
   union `+`, difference `-`, transitive closure `*`, inverse `~`) with
-  quantification — the Alloy-flavored sketch in `README.md`.
-- **Reasoning layer:** Z3-backed checking of architectural invariants, returning
-  **counterexamples** (e.g., exact call chains that violate host/device
-  separation).
+  quantification — the Alloy-flavored sketch in `README.md`. This is the workhorse:
+  the facts form **one fixed, ground graph**, so checking an invariant is *query
+  evaluation* over that graph (reachability, closure, set difference), not search
+  over a space of models. A recursive relational engine (Datalog-style) is the
+  natural fit and scales to a whole codebase; counterexamples (e.g., the exact call
+  chain that violates host/device separation) fall out as the witnessing tuples.
+- **Reasoning under partial knowledge (optional SMT layer):** the place — and the
+  *only* place — that actually resembles Alloy's model-finding is the confidence
+  model (D3). Where edges are `assumed`/`unresolved`, those unknowns become free
+  variables, and one can ask genuine satisfiability questions: "is there *some*
+  resolution of the unknowns that violates the invariant?" (∃, a bug hiding behind a
+  guess) or "does *every* resolution satisfy it?" (∀, provably safe regardless). An
+  SMT solver (Z3) earns its place here, over the small residual frontier of unknowns
+  — not over the ground graph, which the query layer already settles. We ground the
+  known part relationally and hand only the residual unknowns to the solver.
 - **Headline use case:** incremental, *provably monotonic* GPU porting of MOM6 —
   computing the porting frontier, classifying blockers, and enforcing "no new
   HostOnly edge crosses into GPU_Port" as a CI gate.
@@ -159,3 +168,81 @@ So this is a **much-later, optional exploration**, not a parallel spike. Revisit
 only if dump-format churn actually bites (Q1 in `DESIGN.md`) or we want a precision
 upgrade the dump can't provide — and prefer the in-ecosystem hedge
 (`-fdebug-dump-symbols`, Q2) before any non-flang frontend, consistent with D1.
+
+---
+
+## 5. Prior art — comparable tools, and where the gap is
+
+flinspect's vision is an *intersection* of three established ideas: (a) treat code
+as a queryable database of entities + relations, (b) check architectural invariants
+declaratively and enforce them in CI, and (c) do source-level GPU porting of Fortran
+HPC code. Each of those exists in mature tools — but, as far as we know, **no single
+tool sits in their intersection for Fortran**, which is the niche flinspect claims.
+
+### Code-as-relational-facts + queries (the query/CI half)
+
+- **CodeQL** (GitHub/Semmle) — the closest spiritual match. Compiles code into a
+  relational database and exposes **QL**, an object-oriented, Datalog-descended query
+  language; queries run in CI and gate merges. This is almost exactly flinspect's
+  "query + CI gate" face — except CodeQL **has no Fortran frontend** (C/C++, Java,
+  C#, Python, JS, Go, Ruby, Swift). The architectural template is proven; the
+  language coverage is the gap.
+- **Glean** (Meta) and **Kythe** (Google) — store facts about code against a
+  language-agnostic schema and query them (Glean's **Angle** is Datalog-flavored).
+  Built for code-indexing/cross-reference at scale; no reasoning/verification layer
+  and no Fortran.
+- **Soufflé + Doop** — Doop expresses Java points-to analysis as Datalog rules over
+  Soufflé. The canonical demonstration that serious whole-program analysis *is* a
+  Datalog query problem — direct evidence for our Q4 framing. Java-only.
+- **Semgrep** — multi-language pattern matching with CI gates, but pattern/AST-based
+  rather than relational whole-program reasoning, and no real Fortran support.
+
+### Architectural-invariant enforcement (the "fail CI on a bad edge" half)
+
+- **ArchUnit** (Java), **import-linter** (Python) — assert layering/dependency rules
+  as tests; the "no edge from X into Y" check, which is our host/device-separation
+  invariant in miniature. Single-language, no recursion-heavy reasoning, no
+  confidence model.
+- **Lattix / Structure101 / Sonargraph / NDepend** — dependency-structure-matrix and
+  layering tools; commercial, GUI-centric, weak/no Fortran, not programmable as a
+  query substrate.
+
+### Fortran-specific analysis & GPU porting (the domain half)
+
+- **SciTools Understand** — commercial; builds a queryable database of entities and
+  relations across many languages **including Fortran**, with a Python API and
+  dependency graphs. This is the closest tool to flinspect's *today-state* (queryable
+  entities + relations for Fortran) — but it stops at exploration/metrics; there is no
+  invariant-checking/verification layer and no GPU-porting model.
+- **PSyclone** (STFC) — source-to-source transformation for Fortran HPC, generating
+  OpenACC/OpenMP **GPU offload** code; built on **fparser2**. It directly addresses
+  our headline *goal* (GPU-porting Fortran), but by *transforming* code under a DSL/
+  PSyKAl separation, not by *proving* a porting frontier safe over arbitrary existing
+  code. Complementary, not overlapping: PSyclone could be the actor flinspect's
+  analysis informs.
+- **CamFort** (Cambridge/Imperial) — research tool for Fortran analysis and
+  **verification** (units-of-measure, array-stencil specifications). The closest match
+  to flinspect's *verification spirit* for Fortran, but targets numerical/stencil
+  properties, not architectural/call-graph invariants for GPU readiness.
+- **LFortran** (ASR), **fparser2**, **fortls** — frontends/infrastructure, not
+  reasoning tools; relevant as potential *backends* (see D5), not competitors.
+
+### Formal modeling (the inspiration)
+
+- **Alloy** — the relational-modeling lineage flinspect's query syntax borrows from.
+  As established in `DESIGN.md` (Q4), Alloy does bounded *model-finding* over small
+  universes; flinspect does *query evaluation* over one large fixed graph — same
+  relational vocabulary, opposite computational shape.
+
+### The gap flinspect targets
+
+Put together: CodeQL nails relational-query-plus-CI but not Fortran; Understand has
+Fortran entities + relations but no reasoning/verification; PSyclone ports Fortran to
+GPU but by transformation, not by provable-safety gating of existing code; CamFort
+verifies Fortran but different properties. **The unoccupied intersection — sound,
+confidence-aware relational reasoning over real Fortran HPC code, in service of
+provably-monotonic GPU porting enforced in CI — is flinspect's niche.** The honest
+risk is that this niche is narrow and the nearest neighbors (especially CodeQL gaining
+Fortran, or Understand gaining a query/verification layer) could encroach; the
+differentiators we must keep sharp are the **confidence model (D3)** and the
+**GPU-porting frontier semantics**, which none of the above offer.
