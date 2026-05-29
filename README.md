@@ -176,16 +176,22 @@ Example:
 
 ## Reasoning
 
-A Z3-based constraint solver will be integrated to support these queries and
-reasoning tasks over the program graph:
+The facts form **one fixed graph** (the program), so the workhorse is a **relational
+query layer** that *evaluates* properties over that graph — reachability, transitive
+closure, set difference — and returns the witnessing tuples (the exact subroutine /
+call chain) as the counterexample. This is query evaluation, not search over a space
+of models; a recursive relational engine (Datalog-style; see `docs/DESIGN.md` Q4) is
+the natural fit and scales to a whole codebase.
 
- - translate quantified relational constraints
- - ask:
-   - Is this property violated?
-   - Show me a counterexample subroutine/call chain
+An SMT solver (**Z3**) is an *optional* add-on, not the main engine. It earns its
+place only where facts are uncertain — the `assumed` / `unresolved` edges of the
+confidence model — turning those unknowns into the questions "is there *some*
+resolution that violates the property?" or "does *every* resolution satisfy it?".
+That residual partial-knowledge reasoning is the only part that resembles Alloy's
+model-finding; the bulk is settled by the query layer.
 
-This will turn flinspect into a bounded program-logic checker for Fortran
-architecture, enabling:
+Together this makes flinspect a program-logic checker for Fortran architecture,
+enabling:
 
  - architectural invariants
  - modernization safety checks

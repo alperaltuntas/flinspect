@@ -54,22 +54,50 @@ without contortion?"* If no, the field is leaking flang and must be reshaped.
 
 ### 2.1 IR contract (sketch — to be refined in Phase 1)
 
-Entities (interned, scope-qualified identity — never bare names):
+**Ontology — everything is a set or a relation.** The IR is a small collection of
+**named, typed relations over interned atoms**, in the spirit of Alloy. Atoms are
+scope-qualified entity identities (never bare names). Entity *kinds* are unary
+relations (sets) of atoms; structural facts are binary/n-ary relations between them.
+Querying is then one closed algebra (join `.`, `&`, `+`, `-`, closure `*`, inverse
+`~`) over that schema — every operation takes relations and returns a relation, so
+results compose. We borrow Alloy's **ontology and algebra**, *not* its solver: we
+evaluate queries over one given instance, we do not enumerate models over a bounded
+scope (see Q4). This keeps the IR's interface as narrow-and-deep as it gets — "a set
+of relations plus a fixed operator set" — and is engine-neutral: a relation is a
+predicate in Datalog and an edge set in NetworkX, so the Q4 backend choice never
+touches the model.
+
+Entity sets (unary relations of interned, scope-qualified atoms):
 - `Module`, `Program`, `Subprogram`
 - `Subroutine`, `Function` (with signature: ordered args of name/type/rank/kind/optional)
 - `Interface` (generic name → set of specific procedures)
 - `DerivedType` (parent type, type-bound bindings)
 
-Relations (each edge tagged with confidence per D3):
+Relations:
 - `calls(caller, callee)`
 - `uses(scope, module)` — with only-list / rename info
 - `defined_in(entity, scope)` / `contains(scope, entity)`
 - `exports(module, entity)` (requires public/private — W4)
 - inverse/derived (`called_by`, `imports`) computed, not stored
 
-Confidence enum: `resolved` (frontend proved it) | `assumed` (heuristic
-over-approximation, e.g. generic fan-out) | `unresolved` (target not found — kept
-as a first-class fact, **not** silently dropped).
+**Confidence is modeled by stratified relations, not by a tuple attribute (D3).**
+Rather than attach a `resolved|assumed|unresolved` tag to each tuple (which makes
+every relation n+1-ary and clutters every join), each confidence-bearing relation is
+split into strata — e.g. `calls_resolved` / `calls_assumed` / `calls_unresolved` —
+each a *pure* relation. This keeps "everything is a relation" literally true and,
+more importantly, hands us the standard sound-analysis lattice for free:
+- **must** = `calls_resolved` — the under-approximation; a violation here is a
+  *definite* finding.
+- **may** = `calls_resolved + calls_assumed + calls_unresolved` — the
+  over-approximation; a violation only here is *possible*, and is exactly what the
+  optional SMT layer reasons over (∃/∀ across the unknowns; VISION §3, Q4).
+
+`unresolved` targets are kept as first-class atoms, **not** silently dropped. The one
+genuinely awkward case for a flat-relational model is the ordered, typed **signature**
+(a sequence of records); model it with explicit positional relations
+(`arg_at(sub, i, param)`, `param_type(param, type)`, …) at the IR boundary, while
+letting the frontend keep signatures record-shaped internally (principle #10 — be
+pragmatic below the seam).
 
 ### 2.2 Frontend interface (sketch)
 
@@ -94,31 +122,39 @@ load-bearing.
 1. **Get the IR right first.** Design its state and invariants before any behavior;
    the frontend and consumers exist only to establish or rely on them. A reasoning
    layer built on the wrong abstraction can't be rescued by good code. (D2)
-2. **Deep modules, narrow interfaces.** The frontend is one method —
+2. **Everything is a set or a relation.** Model facts as named, typed relations over
+   interned atoms — entity kinds are sets, structure is relations, one closed algebra
+   queries them (§2.1). This is Alloy's *ontology*, not its solver: we evaluate over
+   one given instance, not enumerate models over a bounded scope (Q4). Encode
+   confidence as stratified must/may relations, not tuple attributes. Payoff: a tiny,
+   engine-neutral interface, and the sound over-/under-approximation lattice for free.
+   (D3, Q4)
+3. **Deep modules, narrow interfaces.** The frontend is one method —
    `extract(sources) -> IR` — hiding all of flang's text format, depth-counting,
    regex, and resolution. The interface stays far smaller than the body; we avoid a
    crowd of shallow helpers.
-3. **Pull complexity down to the frontend.** Consumers (forest, Explorer, future
+4. **Pull complexity down to the frontend.** Consumers (forest, Explorer, future
    query layer) never learn that flang exists. Litmus test for every IR field:
    *could a non-flang adapter populate this without contortion?* If not, it leaks.
-4. **One layer, one vocabulary.** flang parse-tree terms live below the seam; the
+5. **One layer, one vocabulary.** flang parse-tree terms live below the seam; the
    domain (modules, calls, types) lives at it; graph/relation terms live above. A
    flang node-string above the seam — or a NetworkX detail below it — is a bug.
-5. **Partial knowledge is a value, not an error.** Incomplete resolution is the
-   normal case, so it is a first-class fact: every relation carries
-   `resolved | assumed | unresolved`. We never silently drop or invent. (D3, W2)
-6. **Identity is scope-qualified, never a bare name.** No name-only lookups or
+6. **Partial knowledge is a value, not an error.** Incomplete resolution is the
+   normal case, so it is a first-class fact: confidence
+   (`resolved | assumed | unresolved`) is part of the model — stratified per #2, never
+   silently dropped or invented. (D3, W2)
+7. **Identity is scope-qualified, never a bare name.** No name-only lookups or
    `endswith` matching, in the model or the Explorer. (W4, W5)
-7. **Domain-shaped, not codebase-shaped.** The IR models Fortran-the-language, not
+8. **Domain-shaped, not codebase-shaped.** The IR models Fortran-the-language, not
    MOM6-the-codebase — no `DoublePrecision -> 'r8_kind'` MOM-isms baked in; such
    mappings, if needed, live in a consumer. General enough for any Fortran program,
    not for speculative non-Fortran inputs. (W6)
-8. **Isolate faults.** One unparseable file reports and is skipped; it must not
+9. **Isolate faults.** One unparseable file reports and is skipped; it must not
    abort the forest.
-9. **Invest at the seam, ship everywhere else.** The IR boundary is the one line
+10. **Invest at the seam, ship everywhere else.** The IR boundary is the one line
    worth perfecting because everything compounds on it; elsewhere (rendering, CLI),
    be pragmatic.
-10. **Keep `VISION.md` and `README.md` honest.** Mark roadmap as roadmap.
+11. **Keep `VISION.md` and `README.md` honest.** Mark roadmap as roadmap.
 
 ---
 
