@@ -166,15 +166,33 @@ Each phase is independently shippable and leaves the tool working.
 relational/Z3/GPU material under an explicit "Roadmap / Vision" heading. Land the
 docs. *(docs only)* — **DONE 2026-05-28.**
 
-**Phase 1 — Carve the seam (the core refactor).**
-- Define the IR (§2.1) as flinspect-owned types.
-- Create `frontend/` package + `Frontend` protocol; move all flang-text logic into
-  `frontend/flang_dump.py`.
-- Make `ParseForest`/`Explorer` consume the IR only.
-- Add the `lfortran_asr.py` stub.
-- Switch fixtures to the with-sema dump (D4); make tests assert on the IR, not on
-  flang strings.
-- Add per-file fault isolation (W3).
+**Phase 1 — Carve the seam (the core refactor).** Decided 2026-05-29: build the
+**relational IR now** (entities + relation tuple-sets per §2.1, realizing principle
+#2 — not a minimal node-graph seam), and **split into 1a/1b** so each step is
+independently green and the one risky step is isolated.
+
+*Phase 1a — structural seam (pure refactor, fixtures stay no-sema):*
+- Define the IR (§2.1) as flinspect-owned types in `flinspect/ir.py` — entities as
+  frozen value objects keyed by scope-qualified `EntityId`; relations as tuple-sets;
+  `callees`/`callers` computed, not stored. Single `calls` relation (no confidence
+  strata yet — that's Phase 2); `unresolved_calls` kept first-class.
+- Create `frontend/` package + `Frontend` protocol (`extract(sources) -> IR`); move
+  all of `parse_tree.py` into `frontend/flang_dump.py`. The frontend may keep the
+  existing node/registry rep *internally* and project to IR at the boundary
+  (principle #10 — pragmatic below the seam).
+- Add the `lfortran_asr.py` stub (raises `NotImplementedError`).
+- Make `ParseForest`/`Explorer` consume the IR only (graph nodes become IR entities).
+- Add per-file fault isolation (W3): `extract()` collects `FileError`s, never aborts.
+- Tests assert on the IR; the direct `resolve_interface_procedures`/
+  `_procedure_matches` tests move to `tests/frontend/` (below-seam concerns).
+
+*Phase 1b — with-sema switch (the one non-relocation step):*
+- **Spike first** — regenerate one fixture (e.g. `test_interface_basic`) with-sema and
+  run the relocated parser against it; D4 validated dump *generation*, not that the
+  string-matching parser *consumes* with-sema output (resolved-symbol annotations
+  change line strings; cross-module fixtures need `.mod` ordering).
+- Adapt the frontend parsing as the spike reveals, then switch fixtures to
+  `-fdebug-dump-parse-tree` (D4) so tests and production parse the same variant.
 
 **Phase 2 — Soundness & resolution quality.**
 - Consume *resolved* names/types from sema (and/or `-fdebug-dump-symbols`), retiring

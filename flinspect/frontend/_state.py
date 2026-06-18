@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from flinspect.parse_node import Module, Subprogram, Subroutine, Function, DerivedType
+from flinspect.frontend._nodes import Module, Subprogram, Subroutine, Function, DerivedType
 
 
 @dataclass

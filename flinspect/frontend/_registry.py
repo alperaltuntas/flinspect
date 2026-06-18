@@ -1,7 +1,6 @@
 from dataclasses import dataclass
-from os import name
 
-from flinspect.parse_node import Module, Program, Subprogram, Subroutine, Function, Interface, DerivedType
+from flinspect.frontend._nodes import Module, Program, Subprogram, Subroutine, Function, Interface, DerivedType
 
 @dataclass
 class NodeRegistry:

@@ -1,118 +1,125 @@
+"""ParseForest — a flang-agnostic consumer that builds graphs from the IR.
+
+ParseForest no longer parses anything itself: it asks a frontend for an
+:class:`~flinspect.ir.IR` and builds NetworkX graphs purely from the IR's
+relations. Nothing here imports flang-specific machinery (principle #4 — graph
+vocabulary lives above the seam).
+"""
+
 import networkx as nx
 from pathlib import Path
 
-from flinspect.parse_tree import ParseTree
-from flinspect.node_registry import NodeRegistry
+from flinspect.ir import IR, MODULE
+from flinspect.frontend import FlangDumpFrontend
+
 
 class ParseForest:
-    """A class representing a collection of parse trees for program units (source files).
-    """
+    """A collection of parsed program units, as a queryable :class:`IR` + graphs."""
 
-    def __init__(self, parse_tree_paths):
-        """Initializes the ParseForest by parsing the given parse tree files.
-        
+    def __init__(self, parse_tree_paths=None, *, ir=None, frontend=None):
+        """Build a forest from parse-tree paths (default flang frontend) or an IR.
+
         Parameters
         ----------
-        parse_tree_paths : list of str or Path
-            List of paths to parse tree files or directories containing parse tree files.
+        parse_tree_paths : str | Path | list, optional
+            Paths to parse-tree dump files (or directories of them).
+        ir : IR, optional
+            A pre-built IR to consume directly (skips extraction).
+        frontend : Frontend, optional
+            Frontend to extract with; defaults to :class:`FlangDumpFrontend`.
         """
-
-        if isinstance(parse_tree_paths, (str, Path)):
-            parse_tree_paths = [parse_tree_paths]
-        elif isinstance(parse_tree_paths, list):
-            assert all(isinstance(p, (str, Path)) for p in parse_tree_paths), \
-                f"Expected a list of str or Path objects, got {type(parse_tree_paths)}"
+        if ir is not None:
+            self.ir = ir
         else:
-            raise TypeError(f"Expected a list of paths, str, or Path object, got {type(parse_tree_paths)}")
-       
-        self.registry = NodeRegistry()
-        self.trees = []
+            if parse_tree_paths is None:
+                raise ValueError("Provide either parse_tree_paths or ir.")
+            frontend = frontend or FlangDumpFrontend()
+            self.ir = frontend.extract(parse_tree_paths)
 
-        # Parse structure:
-        for path in parse_tree_paths:
-            tree = ParseTree(path, self.registry)
-            tree.parse_structure()
-            self.trees.append(tree)
+        if self.ir.file_errors:
+            print(f"Skipped {len(self.ir.file_errors)} unparseable file(s): "
+                  f"{[fe.path.name for fe in self.ir.file_errors]}")
 
+    # ------------------------------------------------------------------ #
+    # Helpers
+    # ------------------------------------------------------------------ #
+    def _enclosing(self, eid, kind):
+        """Walk up the scope chain to the enclosing entity of the given kind."""
+        seen = set()
+        cur = self.ir.get(eid)
+        while cur is not None and cur.id not in seen:
+            if cur.kind == kind:
+                return cur
+            seen.add(cur.id)
+            cur = self.ir.get(cur.scope) if cur.scope else None
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Graphs
+    # ------------------------------------------------------------------ #
     def get_module_dependency_graph(self):
-        """Generates a directed graph of module dependencies.
+        """Directed graph of module dependencies (USE + type-extension edges).
 
-        Edges represent both USE statements and type inheritance (EXTENDS).
-        If a type in module A extends a type from module B, there is an
-        implicit dependency on module B.
-
-        Returns
-        -------
-        networkx.DiGraph
-            A directed graph where nodes are module names and edges represent
-            'uses' relationships and type inheritance relationships.
+        Nodes are module-name strings. Edges represent ``uses`` relationships
+        (lifted from any contained scope to the enclosing module) and derived-type
+        inheritance (``EXTENDS`` implies a dependency on the defining module).
         """
-
-
-        skipped_modules  = []
-
         g = nx.DiGraph()
-        for module in self.registry.modules:
-            if module.parse_tree_path is None:
-                skipped_modules.append(module)
-                continue # external module, e.g., netcdf, mpi, etc. so skip
-            g.add_node(module, source_name=module.parse_tree_path.stem)
-            # Add edges for used modules at the module level
-            for used_module in module.used_module_names:
-                g.add_edge(module, used_module)
-            # Add edges for used modules in subroutines and functions
-            for subroutine in module.subroutines:
-                for used_module in subroutine.used_module_names:
-                    g.add_edge(module, used_module)
-            for function in module.functions:
-                for used_module in function.used_module_names:
-                    g.add_edge(module, used_module)
-            
-            # Add edges for type extension (EXTENDS) relationships
-            # If a type in this module extends a type from another module,
-            # there is an implicit dependency on that module
-            for derived_type in module.derived_types:
-                if derived_type.parent_type_name is not None:
-                    parent_type_name_lower = derived_type.parent_type_name.lower()
-                    # Find which module defines the parent type
-                    for other_module in self.registry.modules:
-                        for other_type in other_module.derived_types:
-                            if other_type.name.lower() == parent_type_name_lower:
-                                # Add edge from current module to the module with parent type
-                                g.add_edge(module, other_module)
-                                break
+        defined_modules = [m for m in self.ir.modules if m.defined]
+        for m in defined_modules:
+            g.add_node(m.name, source_name=m.name)
 
-        print (f"Skipped {len(skipped_modules)} modules with unknown parse tree paths: {[m.name for m in skipped_modules]}")
-    
+        # USE edges, lifted to the enclosing module.
+        for use in self.ir.uses:
+            mod = self._enclosing(use.scope, MODULE)
+            if mod is None:
+                continue
+            g.add_edge(mod.name, use.module)
+
+        # Type-extension (EXTENDS) edges: a child type depends on the module that
+        # defines its parent type.
+        type_module = {}  # type name (lower) -> set of defining module names
+        for dt in self.ir.derived_types:
+            mod = self._enclosing(dt.id, MODULE)
+            if mod is not None:
+                type_module.setdefault(dt.name.lower(), set()).add(mod.name)
+        for dt in self.ir.derived_types:
+            if not dt.parent_type:
+                continue
+            child_mod = self._enclosing(dt.id, MODULE)
+            if child_mod is None:
+                continue
+            for parent_mod in type_module.get(dt.parent_type.lower(), ()):
+                g.add_edge(child_mod.name, parent_mod)
+
         return g
 
-
     def get_call_graph(self):
+        """Directed call graph over subroutines and functions.
 
-        for tree in self.trees:
-            tree.parse_interfaces()
-
-        # Parse call relationships:
-        self.unfound_subroutine_calls = []
-        self.unfound_function_calls = []
-        for tree in self.trees:
-            uc, uf = tree.parse_calls()
-            self.unfound_subroutine_calls.extend(uc)
-            self.unfound_function_calls.extend(uf)
-
-        print(f"Total unfound calls across all parse trees: {len(self.unfound_subroutine_calls)}")
-        print(f"Total unfound function calls across all parse trees: {len(self.unfound_function_calls)}")
+        Nodes are IR :class:`~flinspect.ir.Entity` objects; edges are the ``calls``
+        relation (a caller may also point at a generic interface, which is added as
+        a node via the edge, matching the legacy behaviour).
+        """
+        n_unresolved = len(self.ir.unresolved_calls)
+        print(f"Total unresolved calls across all parse trees: {n_unresolved}")
 
         g = nx.DiGraph()
-        for subroutine in self.registry.subroutines:
-            g.add_node(subroutine, type='subroutine', program_unit=subroutine.program_unit.name)
-        for function in self.registry.functions:
-            g.add_node(function, type='function', program_unit=function.program_unit.name)
-        for subroutine in self.registry.subroutines:
-            for callee in subroutine.callees:
-                g.add_edge(subroutine, callee)
-        for function in self.registry.functions:
-            for callee in function.callees:
-                g.add_edge(function, callee)
-        
+        callers = {}
+        for s in self.ir.subroutines:
+            pu = self._enclosing(s.id, MODULE)
+            g.add_node(s, type='subroutine', program_unit=pu.name if pu else None)
+            callers[s.id] = s
+        for f in self.ir.functions:
+            pu = self._enclosing(f.id, MODULE)
+            g.add_node(f, type='function', program_unit=pu.name if pu else None)
+            callers[f.id] = f
+
+        for caller_id, callee_id in self.ir.calls:
+            caller = callers.get(caller_id)
+            callee = self.ir.get(callee_id)
+            if caller is None or callee is None:
+                continue
+            g.add_edge(caller, callee)
+
         return g

@@ -1,12 +1,23 @@
 import re
 import networkx as nx
 from collections import defaultdict
-from flinspect.parse_node import Module, Program, Subprogram, Callable, Subroutine, Function, Interface, DerivedType
+from flinspect.ir import (
+    MODULE, SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE, CALLABLE_KINDS,
+)
 from ipywidgets import VBox, HBox, Dropdown, Text, Select, Output, HTML, IntSlider, Label, Button
 import ipycytoscape
 
 
 out = Output()
+
+# Map the UI category labels to IR entity kinds.
+_CATEGORY_KIND = {
+    "Subroutine": SUBROUTINE,
+    "Function": FUNCTION,
+    "Interface": INTERFACE,
+    "Derived Type": DERIVED_TYPE,
+}
+
 
 class Explorer(VBox):
     def __init__(self, forest, **kwargs):
@@ -14,8 +25,8 @@ class Explorer(VBox):
         super().__init__(**kwargs)
         out.clear_output()
 
-        # Initialize state
-        self.store = forest.registry._store
+        # Consume the IR only (no flang/registry internals).
+        self.ir = forest.ir
 
         # Initialize Widgets
         self.category_picker = Dropdown(
@@ -180,68 +191,76 @@ class Explorer(VBox):
 
         return graph_widget
 
+    # ------------------------------------------------------------------ #
+    # IR queries
+    # ------------------------------------------------------------------ #
+    def _ids_of_kind(self, kind):
+        return [e.id for e in self.ir.of_kind(kind)]
+
     def get_options_for_all_categories(self):
-        """Get all callable options across all categories."""
+        """All selectable entity ids across the browsable categories."""
         options = set()
-        for cls in [Subroutine, Function, Interface, DerivedType]:
-            options.update(self.store[cls].keys())
+        for kind in (SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE):
+            options.update(self._ids_of_kind(kind))
         return options
 
-    def find_callable_by_name(self, name):
-        """Find a callable object by name across all categories."""
-        for cls in [Subroutine, Function, Interface]:
-            if name in self.store[cls]:
-                return self.store[cls][name]
+    def find_entity_by_id(self, eid):
+        """Find a browsable entity (subroutine/function/interface) by id."""
+        entity = self.ir.get(eid)
+        if entity is not None and entity.kind in CALLABLE_KINDS:
+            return entity
         return None
 
-    def gen_subgraph(self, routine):
+    def _enclosing_module_name(self, eid):
+        seen = set()
+        cur = self.ir.get(eid)
+        while cur is not None and cur.id not in seen:
+            if cur.kind == MODULE:
+                return cur.name
+            seen.add(cur.id)
+            cur = self.ir.get(cur.scope) if cur.scope else None
+        return 'Unknown Module'
+
+    def gen_subgraph(self, entity):
         subgraph = nx.DiGraph()
-        subgraph.add_node(routine)
-        if isinstance(routine, (Subroutine, Function)):
-            for caller in routine.callers:
-                subgraph.add_edge(caller, routine)
-            for callee in routine.callees:
-                subgraph.add_edge(routine, callee)
-        elif isinstance(routine, Interface):
-            for caller in routine.callers:
-                subgraph.add_edge(caller, routine)
-            for procedure in routine.procedures:
-                subgraph.add_edge(routine, procedure)
+        subgraph.add_node(entity)
+        if entity.kind in (SUBROUTINE, FUNCTION):
+            for caller in self.ir.callers(entity.id):
+                subgraph.add_edge(caller, entity)
+            for callee in self.ir.callees(entity.id):
+                subgraph.add_edge(entity, callee)
+        elif entity.kind == INTERFACE:
+            for caller in self.ir.callers(entity.id):
+                subgraph.add_edge(caller, entity)
+            for procedure in self.ir.members(entity.id):
+                subgraph.add_edge(entity, procedure)
         return subgraph
 
     def update_graph_display(self):
         """Update the dependency graph display based on current selection."""
-            
-        selected_name = self.name_selector.value
-        if not selected_name:
+
+        selected_id = self.name_selector.value
+        if not selected_id:
             self.graph_widget.graph.clear()
             return
-            
-        # Find the selected callable
-        center_node = self.find_callable_by_name(selected_name)
+
+        center_node = self.find_entity_by_id(selected_id)
         if not center_node:
             self.graph_widget.graph.clear()
             return
-        
+
         # Extract subgraph
         subgraph = self.gen_subgraph(center_node)
 
         self.graph_widget.graph.clear()
-        
-        # Group nodes by program unit
+
+        # Group nodes by program unit (enclosing module)
         program_units = defaultdict(list)
         for node in subgraph.nodes():
-            # Get the program unit name
-            program_unit_name = 'Unknown Module'
-            
-            if hasattr(node, 'program_unit') and node.program_unit:
-                program_unit_name = node.program_unit.name
-            
-            program_units[program_unit_name].append(node)
-        
+            program_units[self._enclosing_module_name(node.id)].append(node)
+
         # Add parent nodes for each program unit
         for program_unit_name, nodes in program_units.items():
-            # Only create parent node if there are multiple nodes or if we want to show modules explicitly
             if len(nodes) > 1 or len(program_units) > 1:
                 parent_data = {
                     'id': f'module_{program_unit_name}',
@@ -250,57 +269,47 @@ class Explorer(VBox):
                 }
                 parent_node = ipycytoscape.Node(data=parent_data)
                 self.graph_widget.graph.add_node(parent_node)
-        
+
         # Add child nodes
         for node in subgraph.nodes():
-            # Get the program unit name 
-            program_unit_name = 'Unknown Module'  # Default fallback
-            
-            if hasattr(node, 'program_unit') and node.program_unit:
-                program_unit_name = node.program_unit.name
-                
+            program_unit_name = self._enclosing_module_name(node.id)
+
             node_data = {
-                'id': node.name,
+                'id': node.id,
                 'label': node.name,
-                'type': 'subroutine' if isinstance(node, Subroutine) else 
-                        'function' if isinstance(node, Function) else 
-                        'interface' if isinstance(node, Interface) else 'other'
+                'type': node.kind if node.kind in ('subroutine', 'function', 'interface') else 'other'
             }
-            
+
             # Set parent if there are multiple program units or multiple nodes per unit
             if len(program_units) > 1 or len(program_units.get(program_unit_name, [])) > 1:
                 node_data['parent'] = f'module_{program_unit_name}'
-            
+
             # Mark the selected node
             if node == center_node:
                 node_data['classes'] = 'selected'
-            
+
             cytoscape_node = ipycytoscape.Node(data=node_data)
             self.graph_widget.graph.add_node(cytoscape_node)
-        
+
         # Add edges
         for source, target in subgraph.edges():
             edge_data = {
-                'source': source.name,
-                'target': target.name
+                'source': source.id,
+                'target': target.id
             }
-            
-            # Determine edge direction relative to center node
+
             if target == center_node:
-                # Edge pointing to center node (incoming)
                 edge_data['direction'] = 'incoming'
             elif source == center_node:
-                # Edge from center node (outgoing)
                 edge_data['direction'] = 'outgoing'
             else:
-                # Edge between other nodes
                 edge_data['direction'] = 'other'
-            
+
             cytoscape_edge = ipycytoscape.Edge(data=edge_data)
             self.graph_widget.graph.add_edge(cytoscape_edge)
-        
+
         # Apply layout - use a layout that works well with compound nodes
-        self.graph_widget.set_layout(name='cose', animate=False, 
+        self.graph_widget.set_layout(name='cose', animate=False,
                                    nodeRepulsion=4000,
                                    idealEdgeLength=100,
                                    edgeElasticity=100,
@@ -312,26 +321,19 @@ class Explorer(VBox):
         self.search_box.value = ""
         self.name_selector.value = None
 
-        options = set()
-
         new_category = change['new']
         if new_category == "All":
             options = self.get_options_for_all_categories()
-        elif new_category == "Subroutine":
-            options = set(self.store[Subroutine].keys())
-        elif new_category == "Function":
-            options = set(self.store[Function].keys())
-        elif new_category == "Interface":
-            options = set(self.store[Interface].keys())
-        elif new_category == "Derived Type":
-            options = set(self.store[DerivedType].keys())
+        elif new_category in _CATEGORY_KIND:
+            options = set(self._ids_of_kind(_CATEGORY_KIND[new_category]))
+        elif new_category is None:
+            options = set()
         else:
-            if new_category is not None:
-                raise ValueError(f"Unknown category: {new_category}")
+            raise ValueError(f"Unknown category: {new_category}")
 
         self.name_selector.unfiltered_options = list(options)
         self.name_selector.options = list(options)
-        
+
         # Clear graph when category changes
         self.graph_widget.graph.clear()
 
@@ -341,7 +343,7 @@ class Explorer(VBox):
         search_term = change['new']
         search_term = rf'{search_term}'
         try:
-            filtered_options = [name for name in self.name_selector.unfiltered_options 
+            filtered_options = [name for name in self.name_selector.unfiltered_options
                               if re.search(search_term, name, re.IGNORECASE)]
             self.name_selector.options = filtered_options
         except Exception as e:
@@ -356,26 +358,20 @@ class Explorer(VBox):
     @out.capture()
     def on_node_click(self, event):
         """Handle node clicks in the graph."""
-        # In ipycytoscape, the event structure is: {'data': {...}}
-        # where data contains the node information
         print("Clicked node:", event['data'])
         if 'data' in event and 'id' in event['data']:
-            clicked_node_name = event['data']['id']
-            
-            # Update the name selector to the clicked node
-            if clicked_node_name in self.name_selector.options:
-                self.name_selector.value = clicked_node_name
+            clicked_id = event['data']['id']
+
+            if clicked_id in self.name_selector.options:
+                self.name_selector.value = clicked_id
             else:
-                # If the clicked node is not in current options, we need to update the category
-                # Find which category this node belongs to
-                clicked_node = self.find_callable_by_name(clicked_node_name)
+                clicked_node = self.find_entity_by_id(clicked_id)
                 if clicked_node:
-                    if isinstance(clicked_node, Subroutine):
+                    if clicked_node.kind == SUBROUTINE:
                         self.category_picker.value = "Subroutine"
-                    elif isinstance(clicked_node, Function):
+                    elif clicked_node.kind == FUNCTION:
                         self.category_picker.value = "Function"
-                    elif isinstance(clicked_node, Interface):
+                    elif clicked_node.kind == INTERFACE:
                         self.category_picker.value = "Interface"
-                    
-                    # Wait for category update then set the name
-                    self.name_selector.value = clicked_node_name
+
+                    self.name_selector.value = clicked_id

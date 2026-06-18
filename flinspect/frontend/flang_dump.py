@@ -1,10 +1,17 @@
 import re
 from pathlib import Path
-from flinspect.utils import level, is_fortran_intrinsic
-from flinspect.parse_state import ParseState
-from flinspect.variable_info import VariableInfo
-from flinspect.parse_node import Interface
-from flinspect.node_registry import NodeRegistry
+from flinspect.frontend._flang_text import level, is_fortran_intrinsic
+from flinspect.frontend._state import ParseState
+from flinspect.frontend._variable_info import VariableInfo
+from flinspect.frontend._nodes import (
+    Interface, Callable, Subroutine, Function,
+    Module, Program, Subprogram, DerivedType,
+)
+from flinspect.frontend._registry import NodeRegistry
+from flinspect.ir import (
+    IR, Entity, Signature, Use, FileError,
+    MODULE, PROGRAM, SUBPROGRAM, SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE,
+)
 
 
 class ParseTree:
@@ -1558,5 +1565,186 @@ class ParseTree:
             return self.unfound_subroutine_calls, self.unfound_function_calls
         finally:
             self.reset()
+
+
+# ============================================================================= #
+# Frontend: orchestrate the parse passes and project the node graph onto the IR.
+#
+# Everything above this line is the flang-text working representation (ParseTree +
+# its node/registry helpers). It stays below the seam. The IR projection below is
+# the only thing consumers see (principle #3 — pull complexity down to the
+# frontend; principle #10 — be pragmatic with the internal representation).
+# ============================================================================= #
+
+def _pu_id(pu):
+    """EntityId for a program unit (module / program / subprogram)."""
+    return pu.name
+
+
+def _callable_id(c):
+    """Scope-qualified EntityId for a subroutine or function (handles nesting)."""
+    if getattr(c, "parent", None) is None:
+        return f"{c.program_unit.name}::{c.name}"
+    return f"{c.program_unit.name}::{c.parent.name}::{c.name}"
+
+
+def _iface_id(iface):
+    return f"{iface.program_unit.name}::{iface.name}"
+
+
+def _dt_id(dt):
+    return f"{dt.scope.name}::{dt.name}"
+
+
+def _node_id(node):
+    """EntityId for any interned node (used to resolve call targets)."""
+    if isinstance(node, Interface):
+        return _iface_id(node)
+    if isinstance(node, DerivedType):
+        return _dt_id(node)
+    if isinstance(node, Callable):
+        return _callable_id(node)
+    return _pu_id(node)
+
+
+def _signature(c):
+    """Project a Callable's argument attributes onto an IR Signature (or None)."""
+    if c.arg_types is None and c.arg_names is None:
+        return None
+    return Signature(
+        arg_names=tuple(c.arg_names or ()),
+        arg_types=tuple(c.arg_types or ()),
+        arg_ranks=tuple(c.arg_ranks or ()),
+        arg_kinds=tuple(c.arg_kinds or ()),
+        num_required=c.num_required_args,
+    )
+
+
+def _scope_uses(ir, scope_node, scope_id):
+    """Project a scope's USE clauses onto IR `uses` edges."""
+    names_lists = getattr(scope_node, "used_names_lists", {}) or {}
+    renames_lists = getattr(scope_node, "used_renames_lists", {}) or {}
+    for used_module in set(names_lists) | set(renames_lists):
+        only = tuple(names_lists.get(used_module, []) or [])
+        renames = tuple(tuple(r) for r in (renames_lists.get(used_module, []) or []))
+        ir.uses.add(Use(scope=scope_id, module=used_module.name,
+                        only=only, renames=renames))
+
+
+def project_registry(registry, file_errors, unresolved_subs, unresolved_funcs):
+    """Walk the interned node graph and build the flinspect IR (the seam)."""
+    ir = IR(file_errors=list(file_errors))
+
+    # --- program units (modules / programs / subprograms) ---
+    for pu, kind in (
+        [(m, MODULE) for m in registry.modules]
+        + [(p, PROGRAM) for p in registry.programs]
+        + [(s, SUBPROGRAM) for s in registry.subprograms]
+    ):
+        pid = _pu_id(pu)
+        ir.entities[pid] = Entity(
+            id=pid, kind=kind, name=pu.name, scope=None,
+            defined=getattr(pu, "parse_tree_path", None) is not None,
+        )
+        _scope_uses(ir, pu, pid)
+
+    # --- subroutines & functions ---
+    for c, kind in (
+        [(s, SUBROUTINE) for s in registry.subroutines]
+        + [(f, FUNCTION) for f in registry.functions]
+    ):
+        cid = _callable_id(c)
+        scope_id = _callable_id(c.parent) if getattr(c, "parent", None) else _pu_id(c.program_unit)
+        ir.entities[cid] = Entity(
+            id=cid, kind=kind, name=c.name, scope=scope_id, signature=_signature(c),
+        )
+        ir.contains.add((scope_id, cid))
+        _scope_uses(ir, c, cid)
+        for callee in c.callees:
+            ir.calls.add((cid, _node_id(callee)))
+
+    # --- interfaces ---
+    for iface in registry.interfaces:
+        iid = _iface_id(iface)
+        pid = _pu_id(iface.program_unit)
+        ir.entities[iid] = Entity(id=iid, kind=INTERFACE, name=iface.name, scope=pid)
+        ir.contains.add((pid, iid))
+        for proc in iface.procedures:
+            ir.interface_members.add((iid, _node_id(proc)))
+
+    # --- derived types ---
+    for dt in registry.derived_types:
+        did = _dt_id(dt)
+        scope_id = _pu_id(dt.scope) if hasattr(dt.scope, "parse_tree_path") else _node_id(dt.scope)
+        ir.entities[did] = Entity(
+            id=did, kind=DERIVED_TYPE, name=dt.name, scope=scope_id,
+            parent_type=dt.parent_type_name,
+            bindings=tuple(sorted(dt.bindings.items())),
+        )
+        ir.contains.add((scope_id, did))
+
+    # --- unresolved calls (first-class partial knowledge, D3 / principle #6) ---
+    for caller_name, callee_name in list(unresolved_subs) + list(unresolved_funcs):
+        ir.unresolved_calls.add((caller_name, callee_name))
+
+    return ir
+
+
+class FlangDumpFrontend:
+    """Frontend that scrapes flang's textual parse-tree dump into an :class:`IR`.
+
+    Orchestrates the three parse passes across all sources (structure, then
+    interfaces, then calls — the order cross-file resolution requires), with
+    per-file fault isolation (W3), then projects the interned node graph onto the
+    IR. Implements the :class:`~flinspect.frontend.base.Frontend` protocol.
+    """
+
+    @staticmethod
+    def _expand(sources):
+        if isinstance(sources, (str, Path)):
+            sources = [sources]
+        paths = []
+        for s in sources:
+            p = Path(s)
+            if p.is_dir():
+                paths.extend(sorted(f for f in p.iterdir() if f.is_file()))
+            else:
+                paths.append(p)
+        return paths
+
+    def extract(self, sources):
+        paths = self._expand(sources)
+        registry = NodeRegistry()
+        trees = []
+        file_errors = []
+
+        # Pass 1: structure (must complete for all files before cross-file resolution)
+        for path in paths:
+            tree = ParseTree(path, registry)
+            try:
+                tree.parse_structure()
+            except Exception as e:  # fault isolation: skip the file, keep going
+                file_errors.append(FileError(path, f"parse_structure: {e}"))
+                continue
+            trees.append(tree)
+
+        # Pass 2: interfaces
+        for tree in trees:
+            try:
+                tree.parse_interfaces()
+            except Exception as e:
+                file_errors.append(FileError(tree.parse_tree_path, f"parse_interfaces: {e}"))
+
+        # Pass 3: calls
+        unresolved_subs, unresolved_funcs = [], []
+        for tree in trees:
+            try:
+                uc, uf = tree.parse_calls()
+                unresolved_subs.extend(uc)
+                unresolved_funcs.extend(uf)
+            except Exception as e:
+                file_errors.append(FileError(tree.parse_tree_path, f"parse_calls: {e}"))
+
+        return project_registry(registry, file_errors, unresolved_subs, unresolved_funcs)
 
 
