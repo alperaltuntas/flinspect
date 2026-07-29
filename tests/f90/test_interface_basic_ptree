@@ -97,27 +97,33 @@ ProgramUnit -> Module
 | | | | | EntityDecl
 | | | | | | Name = 'flag'
 | | | ExecutionPart -> Block
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'compute'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'r'
+| | | | | | | ActualArg -> Expr = 'r'
+| | | | | | | | Designator -> DataRef -> Name = 'r'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '1_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL compute_int(i,2_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'compute'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'i'
+| | | | | | | ActualArg -> Expr = 'i'
+| | | | | | | | Designator -> DataRef -> Name = 'i'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '2'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '2_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '2'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL compute_logical(flag,.true._4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'compute'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'flag'
+| | | | | | | ActualArg -> Expr = 'flag'
+| | | | | | | | Designator -> DataRef -> Name = 'flag'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> LogicalLiteralConstant
-| | | | | | | | bool = 'true'
+| | | | | | | ActualArg -> Expr = '.true._4'
+| | | | | | | | LiteralConstant -> LogicalLiteralConstant
+| | | | | | | | | bool = 'true'
 | | | EndSubroutineStmt -> 
 | EndModuleStmt -> 

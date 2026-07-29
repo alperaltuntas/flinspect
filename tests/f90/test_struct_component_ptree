@@ -105,25 +105,29 @@ ProgramUnit -> Module
 | | | | | EntityDecl
 | | | | | | Name = 'cs'
 | | | ExecutionPart -> Block
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL update_real(cs%data%scalar_val,1_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'update'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> StructureComponent
-| | | | | | | | DataRef -> StructureComponent
+| | | | | | | ActualArg -> Expr = 'cs%data%scalar_val'
+| | | | | | | | Designator -> DataRef -> StructureComponent
+| | | | | | | | | DataRef -> StructureComponent
+| | | | | | | | | | DataRef -> Name = 'cs'
+| | | | | | | | | | Name = 'data'
+| | | | | | | | | Name = 'scalar_val'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = '1_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL update_int(cs%mode,2_4)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'update'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = 'cs%mode'
+| | | | | | | | Designator -> DataRef -> StructureComponent
 | | | | | | | | | DataRef -> Name = 'cs'
-| | | | | | | | | Name = 'data'
-| | | | | | | | Name = 'scalar_val'
+| | | | | | | | | Name = 'mode'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
-| | | | | Call
-| | | | | | ProcedureDesignator -> Name = 'update'
-| | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> StructureComponent
-| | | | | | | | DataRef -> Name = 'cs'
-| | | | | | | | Name = 'mode'
-| | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '2'
+| | | | | | | ActualArg -> Expr = '2_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '2'
 | | | EndSubroutineStmt -> 
 | EndModuleStmt -> 
