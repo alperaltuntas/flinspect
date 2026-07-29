@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 def level(line):
@@ -12,8 +13,63 @@ def level(line):
             continue
         else:
             break
-    
+
     return res
+
+
+# ---------------------------------------------------------------------------
+# with-sema vs no-sema line shapes
+#
+# `-fdebug-dump-parse-tree` (with sema) differs from `-...-no-sema` in two ways
+# that matter to a line matcher:
+#
+#   1. Statement and expression nodes gain an *unparse annotation* — the source
+#      they unparse to after semantic analysis:
+#          ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'
+#          ActualArg -> Expr = '1_4'
+#      Only `CallStmt`, `AssignmentStmt`, `Expr` and `Variable` carry one; other
+#      nodes (`SubroutineStmt`, `UseStmt`, …) are unchanged.
+#   2. Because an annotated `Expr` occupies the line by itself, its structural
+#      child is pushed one level deeper:
+#          no-sema:  ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'
+#          sema:     ActualArg -> Expr = '1_4'
+#                      LiteralConstant -> IntLiteralConstant = '1'
+#
+# The two helpers below let the matchers accept either variant: `node_path`
+# ignores the annotation, and `splice_annotated_child` collapses (2) back into
+# the single line a no-sema dump would have produced.
+# ---------------------------------------------------------------------------
+
+_PAYLOAD_RE = re.compile(r" = '(.*)'\s*$")
+
+
+def node_path(line):
+    """The node path of a dump line, with any trailing ``= '...'`` payload removed.
+
+    Strips both kinds of payload — a with-sema unparse annotation and a
+    value-carrying leaf (``Name = 'foo'``) — which is what we want when matching
+    on structure alone.
+    """
+    return _PAYLOAD_RE.sub("", line).rstrip()
+
+
+def unparse_text(line):
+    """The with-sema unparse annotation on *line*, or None if it has none.
+
+    Only meaningful for nodes that carry an annotation rather than a leaf value
+    (see the note above); asked of e.g. a ``Name`` line it would return the name.
+    """
+    m = _PAYLOAD_RE.search(line)
+    return m.group(1) if m else None
+
+
+def splice_annotated_child(line, child):
+    """Collapse an annotated node and its structural child onto one line.
+
+    Reproduces the single line a no-sema dump would have emitted, so structural
+    matchers keep working unchanged on with-sema input.
+    """
+    return f"{node_path(line)} -> {child.lstrip('| ').rstrip()}"
 
 
 _fortran_intrinsics = {

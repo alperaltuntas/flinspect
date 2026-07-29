@@ -1,15 +1,19 @@
 """Frontend-internal tests for the flang-dump parser.
 
 These reach *below the seam* on purpose: they test the flang-dump frontend's
-resolution engine (``resolve_interface_procedures``, ``_procedure_matches``) and its
-variable tracking — implementation details that consumers never see. IR-observable
-behaviour is tested in ``tests/test_ir.py``.
+resolution engine (``resolve_interface_procedures``, ``_procedure_matches``), its
+variable tracking, and its handling of the with-sema dump's line shapes —
+implementation details that consumers never see. IR-observable behaviour is tested
+in ``tests/test_ir.py``.
 """
 
 import pytest
 from pathlib import Path
 
 from flinspect.frontend.flang_dump import ParseTree
+from flinspect.frontend._flang_text import (
+    node_path, unparse_text, splice_annotated_child,
+)
 from flinspect.frontend._nodes import Interface, Subroutine, Module
 from flinspect.frontend._registry import NodeRegistry
 
@@ -189,3 +193,53 @@ class TestAssumedShapeVariables:
         scope_key = Subroutine.key("test_assumed_calls", mod)
         scope_vars = self.pt.variables.get(scope_key, {})
         assert scope_vars["data2d"].rank == 2
+
+
+# =============================================================================
+# with-sema dump line shapes (Phase 1b)
+#
+# The fixtures are with-sema dumps, so the matchers must cope with unparse
+# annotations and the extra `Expr` nesting they introduce. These pin the two
+# helpers that absorb the difference, using real lines from both dump variants.
+# =============================================================================
+
+class TestSemaLineShapes:
+
+    # the same CALL, as each dump variant renders it
+    SEMA_CALL = "| | | | ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'"
+    NOSEMA_CALL = "| | | | ActionStmt -> CallStmt"
+
+    def test_node_path_ignores_unparse_annotation(self):
+        assert node_path(self.SEMA_CALL) == self.NOSEMA_CALL
+        assert node_path(self.NOSEMA_CALL) == self.NOSEMA_CALL
+
+    def test_node_path_strips_leaf_values_too(self):
+        assert node_path("| | Name = 'compute'") == "| | Name"
+
+    def test_unparse_text(self):
+        assert unparse_text(self.SEMA_CALL) == "CALL compute_real(r,1_4)"
+        assert unparse_text(self.NOSEMA_CALL) is None
+
+    def test_splice_reproduces_the_nosema_line(self):
+        # An annotated Expr pushes its structure one level down; splicing the two
+        # back together must yield exactly what -no-sema would have emitted.
+        sema_expr = "| | | | | | | ActualArg -> Expr = '1_4'"
+        sema_child = "| | | | | | | | LiteralConstant -> IntLiteralConstant = '1'"
+        assert splice_annotated_child(sema_expr, sema_child) == (
+            "| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'"
+        )
+
+    def test_expr_structure_line_collapses_annotated_expr(self):
+        lines = [
+            "| | | | | | | ActualArg -> Expr = 'j+1_4'",
+            "| | | | | | | | Add",
+            "| | | | | | | | | Expr = 'j'",
+        ]
+        # the operator sits on the child line, so type inference only sees it
+        # after the splice
+        assert ParseTree._expr_structure_line(lines, 0).endswith("Expr -> Add")
+
+    def test_expr_structure_line_passes_nosema_through(self):
+        lines = ["| | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'"]
+        assert ParseTree._expr_structure_line(lines, 0) == lines[0]
+
