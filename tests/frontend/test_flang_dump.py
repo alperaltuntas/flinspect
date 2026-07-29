@@ -243,3 +243,33 @@ class TestSemaLineShapes:
         lines = ["| | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'"]
         assert ParseTree._expr_structure_line(lines, 0) == lines[0]
 
+
+# =============================================================================
+# Phase 2 hook: sema's resolved call text recorded alongside each call
+#
+# Answers DESIGN Q2 as an executable fact — the structured tree still names the
+# generic, while the statement's unparse annotation names the specific procedure
+# sema picked. Nothing consumes this yet.
+# =============================================================================
+
+class TestResolvedCallUnparse:
+
+    def test_generic_subroutine_call_carries_the_specific(self):
+        pt, _ = parse_all_passes(F90_DIR / "test_interface_basic_ptree")
+        # every call is written as the generic `compute` ...
+        assert {callee for _, callee, _ in pt.call_unparse} == {"compute"}
+        # ... while sema's text names the specific it resolved to
+        assert sorted(unparse for _, _, unparse in pt.call_unparse) == [
+            "CALL compute_int(i,2_4)",
+            "CALL compute_logical(flag,.true._4)",
+            "CALL compute_real(r,1_4)",
+        ]
+
+    def test_generic_function_reference_carries_the_specifics(self):
+        pt, _ = parse_all_passes(F90_DIR / "test_generic_function_ptree")
+        # both references are written as the generic `area`, and both are recorded
+        # against the enclosing statement, whose text resolves each one
+        assert [callee for _, callee, _ in pt.call_unparse] == ["area", "area"]
+        assert {unparse for _, _, unparse in pt.call_unparse} == {
+            "a=area_r(y)+area_i(k)"
+        }
