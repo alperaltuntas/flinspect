@@ -1,0 +1,119 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'area_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> InterfaceBlock
+| | | InterfaceStmt -> GenericSpec -> Name = 'area'
+| | | InterfaceSpecification -> ProcedureStmt
+| | | | Kind = ModuleProcedure
+| | | | Name = 'area_r'
+| | | | Name = 'area_i'
+| | | EndInterfaceStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> FunctionSubprogram
+| | | FunctionStmt
+| | | | PrefixSpec -> DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | Name = 'area_r'
+| | | | Name = 'y'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'y'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'area_r=y*y'
+| | | | | Variable = 'area_r'
+| | | | | | Designator -> DataRef -> Name = 'area_r'
+| | | | | Expr = 'y*y'
+| | | | | | Multiply
+| | | | | | | Expr = 'y'
+| | | | | | | | Designator -> DataRef -> Name = 'y'
+| | | | | | | Expr = 'y'
+| | | | | | | | Designator -> DataRef -> Name = 'y'
+| | | EndFunctionStmt -> 
+| | ModuleSubprogram -> FunctionSubprogram
+| | | FunctionStmt
+| | | | PrefixSpec -> DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | Name = 'area_i'
+| | | | Name = 'k'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'k'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'area_i=real(k*k,kind=4)'
+| | | | | Variable = 'area_i'
+| | | | | | Designator -> DataRef -> Name = 'area_i'
+| | | | | Expr = 'real(k*k,kind=4)'
+| | | | | | FunctionReference -> Call
+| | | | | | | ProcedureDesignator -> Name = 'real'
+| | | | | | | ActualArgSpec
+| | | | | | | | ActualArg -> Expr = 'k*k'
+| | | | | | | | | Multiply
+| | | | | | | | | | Expr = 'k'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'k'
+| | | | | | | | | | Expr = 'k'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'k'
+| | | EndFunctionStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'caller_area_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'area_mod'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_generic_function_calls'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | EntityDecl
+| | | | | | Name = 'a'
+| | | | | EntityDecl
+| | | | | | Name = 'y'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'k'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'y=2._4'
+| | | | | Variable = 'y'
+| | | | | | Designator -> DataRef -> Name = 'y'
+| | | | | Expr = '2._4'
+| | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | Real = '2.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'k=3_4'
+| | | | | Variable = 'k'
+| | | | | | Designator -> DataRef -> Name = 'k'
+| | | | | Expr = '3_4'
+| | | | | | LiteralConstant -> IntLiteralConstant = '3'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'a=area_r(y)+area_i(k)'
+| | | | | Variable = 'a'
+| | | | | | Designator -> DataRef -> Name = 'a'
+| | | | | Expr = 'area_r(y)+area_i(k)'
+| | | | | | Add
+| | | | | | | Expr = 'area_r(y)'
+| | | | | | | | FunctionReference -> Call
+| | | | | | | | | ProcedureDesignator -> Name = 'area'
+| | | | | | | | | ActualArgSpec
+| | | | | | | | | | ActualArg -> Expr = 'y'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'y'
+| | | | | | | Expr = 'area_i(k)'
+| | | | | | | | FunctionReference -> Call
+| | | | | | | | | ProcedureDesignator -> Name = 'area'
+| | | | | | | | | ActualArgSpec
+| | | | | | | | | | ActualArg -> Expr = 'k'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'k'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

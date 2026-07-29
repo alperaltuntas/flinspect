@@ -37,6 +37,13 @@ def get_subroutine(ir, mod, name):
     raise ValueError(f"Subroutine '{name}' not found in module '{mod}'")
 
 
+def get_function(ir, mod, name):
+    for f in ir.functions:
+        if f.name == name and f.scope == mod:
+            return f
+    raise ValueError(f"Function '{name}' not found in module '{mod}'")
+
+
 def member_names(ir, iface):
     return sorted(m.name for m in ir.members(iface.id))
 
@@ -160,7 +167,50 @@ class TestStructureComponent:
 
 
 # =============================================================================
-# FunctionReference-as-array pattern
+# Generic FUNCTION reference inside an expression
+#
+# Every other fixture calls generics through CALL statements; this one is the only
+# coverage of the FunctionReference path. Note what sema does here: the dump's
+# structure still names the generic (`ProcedureDesignator -> Name = 'area'`) while
+# the statement's unparse annotation reads `a=area_r(y)+area_i(k)` — already
+# resolved. The frontend's own heuristic is coarser: it treats real and integer as
+# mutually compatible, so both specifics show up as callees. Consuming sema's
+# resolution instead (and dropping to one edge per reference) is Phase 2.
+# =============================================================================
+
+class TestGenericFunction:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ir = extract("test_generic_function_ptree")
+
+    def test_interface_created(self):
+        iface = get_interface(self.ir, "area_mod", "area")
+        assert member_names(self.ir, iface) == ["area_i", "area_r"]
+
+    def test_function_signatures(self):
+        assert get_function(self.ir, "area_mod", "area_r").signature.arg_types == ("real",)
+        assert get_function(self.ir, "area_mod", "area_i").signature.arg_types == ("integer",)
+
+    def test_function_reference_is_a_call(self):
+        caller = get_subroutine(self.ir, "caller_area_mod", "test_generic_function_calls")
+        callees = callee_names(self.ir, caller)
+        assert "area_r" in callees
+        assert "area_i" in callees
+
+    def test_generic_recorded_as_callee(self):
+        caller = get_subroutine(self.ir, "caller_area_mod", "test_generic_function_calls")
+        assert "area" in callee_names(self.ir, caller, with_interfaces=True)
+
+
+# =============================================================================
+# Rank reduction by scalar subscript in an actual argument
+#
+# Named for flang's habit of parsing `fields(i)` as a FunctionReference; in this
+# fixture flang (either dump variant) resolves it to an ArrayElement, so what is
+# actually covered here is rank reduction by a scalar subscript — `fields(i,:,:)`
+# passed to a 2-d specific. Genuine FunctionReference coverage is
+# TestGenericFunction above.
 # =============================================================================
 
 class TestFunctionReferenceArray:
@@ -211,6 +261,12 @@ class TestAssumedShape:
 
 # =============================================================================
 # Optional arguments and argument count matching
+#
+# The fixture's two specifics differ in their first argument's type — `init` would
+# otherwise be an ambiguous generic, which sema rejects outright (Phase 1b: the
+# fixture only ever compiled under -no-sema). The 3-/4-argument and keyword calls
+# therefore still exercise argument-count and keyword matching against the optional
+# dummies, while the 2-argument call exercises the fan-out below.
 # =============================================================================
 
 class TestOptionalArgs:

@@ -25,7 +25,7 @@ From the review of the current codebase. Ordered by impact on the vision.
 | W7 | Three full re-parse passes per file | `parse_structure/interfaces/calls` | Phase 1 (revisit) |
 | W8 | No CLI; notebook-only despite "CI-enforceable" claim | — | Phase 4 |
 | W9 | README oversells; ~90% aspiration | `README.md` | Phase 0 |
-| W10 | Python 3.14 hard pin | `pyproject.toml` | low priority |
+| W10 | Python 3.14 hard pin | `pyproject.toml` | **fixed in Phase 1b** (floor `>=3.11`) |
 
 ---
 
@@ -112,6 +112,22 @@ class Frontend(Protocol):
   `NotImplementedError`. Its existence is a *forcing function*: it keeps the IR
   honest. The day we fill it in is the day we learn whether the seam was real.
 
+### 2.3 A second IR for Track B (sketch — gated on the pilot)
+
+The equivalence track (VISION D6) consumes a *different projection* of the same
+dumps: a per-procedure **kernel IR** — typed expression/statement trees and loop
+nests, deep exactly where the relational IR is deliberately shallow. Its only
+consumer is a Lean printer. Two rules, stated now so they hold later:
+
+- **Do not bloat the relational IR.** The two IRs share the frontend layer and
+  nothing else; a field that only the Lean printer needs never appears in
+  `flinspect/ir.py`.
+- **The kernel-IR → Lean path is trusted-base code** (VISION D6): deterministic,
+  small, auditable; no LLM anywhere in it.
+
+The concrete shape is designed *after* the Track B pilot (§4) proves the endeavor
+cheap enough — hand-written Lean models come first, the printer second.
+
 ---
 
 ## 3. Design principles
@@ -171,7 +187,8 @@ docs. *(docs only)* — **DONE 2026-05-28.**
 #2 — not a minimal node-graph seam), and **split into 1a/1b** so each step is
 independently green and the one risky step is isolated.
 
-*Phase 1a — structural seam (pure refactor, fixtures stay no-sema):*
+*Phase 1a — structural seam (pure refactor, fixtures stay no-sema):* — **DONE
+2026-06-18.**
 - Define the IR (§2.1) as flinspect-owned types in `flinspect/ir.py` — entities as
   frozen value objects keyed by scope-qualified `EntityId`; relations as tuple-sets;
   `callees`/`callers` computed, not stored. Single `calls` relation (no confidence
@@ -186,7 +203,14 @@ independently green and the one risky step is isolated.
 - Tests assert on the IR; the direct `resolve_interface_procedures`/
   `_procedure_matches` tests move to `tests/frontend/` (below-seam concerns).
 
-*Phase 1b — with-sema switch (the one non-relocation step):*
+*Phase 1b — with-sema switch (the one non-relocation step):* — **DONE 2026-07-29.**
+Scope note: a *format adaptation only* — the frontend now accepts with-sema line
+shapes (unparse annotations, the extra `Expr` nesting) and all fixtures are
+regenerated with `-fdebug-dump-parse-tree`, while the hand-rolled resolution engine
+and the IR's call semantics are left intact for Phase 2. Sema's resolved call text
+is *recorded* below the seam and unused. Equivalence was checked both ways: the six
+sema-clean fixtures project onto a byte-identical IR from either dump variant, and
+the real MOM6+FMS2 corpus went from 346 unparseable files to 0. See `DEVLOG.md`.
 - **Spike first** — regenerate one fixture (e.g. `test_interface_basic`) with-sema and
   run the relocated parser against it; D4 validated dump *generation*, not that the
   string-matching parser *consumes* with-sema output (resolved-symbol annotations
@@ -215,6 +239,30 @@ add-on scoped to reasoning over D3 unknowns (∃/∀ over `assumed`/`unresolved`
 edges), not the main checker — see Q4. (Out of scope for detailed planning until
 Phases 1–2 land; the IR + confidence model is the prerequisite.)
 
+**Track B — kernel equivalence by proof (parallel, gated on a pilot; VISION D6).**
+Independent of Phases 2–4 — its only input is the dumps, so it can run alongside
+them — but it must not displace them (Phase 2's confidence model is what makes the
+frontier-and-gate story real).
+- *Pilot (timeboxed, no tooling):* hand-write Lean 4 / Mathlib models of one
+  already-ported kernel pair — `PPM_limit_pos`
+  (Fortran: `submodules/MOM6/src/core/MOM_continuity_PPM.F90`;
+  C++: `submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp`) — and prove
+  the point lemma and the `do concurrent` ≡ `ParallelFor` iteration schema over ℝ.
+  Success = a machine-checked `theorem`; failure or blow-up = the track stays
+  aspirational and we record why in `DEVLOG.md`. Either way the pilot surfaces the
+  Q5 modeling questions concretely.
+- *Then:* automate the printer (deterministic dump → kernel IR → Lean; §2.3), one
+  construct at a time in the D7 corpus style (construct → golden Lean model).
+- *Later:* kernels with cross-iteration structure (k-recurrences → induction),
+  masks/wet-dry logic, and the clang-side ingestion (`-ast-dump=json` or libclang).
+
+**Ongoing — conformance corpus (D7).** Formalize `tests/f90/` into the corpus: a
+manifest (construct → fixture → parser code path), a coverage rule (every parse
+branch in the frontend has ≥1 fixture), and the two assertion tiers (dump
+snapshots = early warning; IR assertions = the contract). Partially in place since
+Phase 1b (`PROVENANCE` version stamping, regenerable fixtures); finish alongside
+Phase 2.
+
 **Deferred — Frontend upgrade exploration (much later, optional).** Evaluate an
 alternative frontend — LFortran ASR / fparser2 ("Option B"), or flang's own more
 structured outputs / programmatic API ("Option C") — and swap it in behind the
@@ -231,11 +279,23 @@ the dump can't give. Resolves D5.
 - **Q1 (live):** How stable has flang's dump format been across recent LLVM
   releases? This is now the *most* relevant resilience question — it sizes how much
   fixture/format-version defense we need within Option A, and is the trigger that
-  would reopen the deferred frontend-upgrade exploration.
-- **Q2:** Does the with-sema dump fully resolve generics and type-bound bindings in
-  the textual output, or do we need `-fdebug-dump-symbols` for that? Determines how
-  much of `_infer_*`/`resolve_*` can be deleted vs. retained in Phase 2. (The
-  in-ecosystem hedge against Q1, ahead of any non-flang frontend.)
+  would reopen the deferred frontend-upgrade exploration. *Phase 1b sharpened this
+  rather than answering it:* one dump-variant change moved resolution into an
+  unparse *string*, so the facts Phase 2 will depend on are carried by a
+  pretty-printer with no stability contract — including its name mangling
+  (`module$module$specific`). Fixtures now record the generating `flang --version`
+  (`tests/f90/PROVENANCE`) so a format shift shows up as a version delta; that is
+  detection, not defense. The defense is the conformance corpus (D7): per-construct
+  minimal examples that turn an LLVM upgrade into a bounded list of localized,
+  independently fixable breaks.
+- **Q2: ANSWERED (2026-07-29) — yes, in the textual output.** The with-sema dump's
+  unparse annotation on each statement carries the *resolved* specific procedure —
+  for generic subroutine calls, generic function references, and type-bound
+  generics alike — while the structured child still shows the generic name. So
+  `-fdebug-dump-symbols` is not needed for this, and most of `_infer_*`/`resolve_*`
+  becomes deletable in Phase 2. Two caveats for that work: the resolved name may be
+  mangled (see Q1), and the annotation is per-*statement*, so a statement
+  containing several calls yields one string to attribute across them.
 - **Q3 (deferred, gates D5):** Does LFortran's ASR — or fparser2 — actually ingest
   FMS+MOM6 at current maturity? Only relevant if/when we pursue the deferred
   frontend-upgrade exploration; not near-term.
@@ -255,6 +315,15 @@ the dump can't give. Resolves D5.
   traversals. If the query layer consumes the IR through a thin interface, that swap
   is contained, exactly like the frontend swap (D2). So none of this needs deciding
   before Phase 1.
+- **Q5 (Track B; the pilot exists to surface these):** the kernel-IR / Lean
+  modeling choices. How to model `intent(inout)` scalars (state-passing vs.
+  functional returns — Logos proved fold ≡ mutating loop, so both shapes are
+  known-provable); whether one iteration schema covers `do concurrent` variants
+  (masks, non-unit strides) or each needs its own lemma; how array arguments and
+  index ranges are represented so the schema composes with the point lemma; and on
+  the C++ side, `clang -ast-dump=json` vs. libclang as the ingestion route. None
+  of these needs deciding before the pilot — hand-writing the `PPM_limit_pos`
+  models *is* how they get answered concretely.
 
 ---
 
@@ -270,3 +339,10 @@ the dump can't give. Resolves D5.
 - **confidence** — `resolved | assumed | unresolved` tag on a relation (D3).
 - **frontier** (vision) — `calls*(GPU_Port) − GPU_Port`; the minimal interface to
   port next.
+- **Track A / Track B** — the top-down structural/relational track (Phases 0–5)
+  / the bottom-up kernel-equivalence-by-proof track (D6, gated on its pilot).
+- **kernel IR** — the per-procedure semantic IR (typed expression/statement
+  trees) consumed only by the Track B Lean printer (§2.3); distinct from *the*
+  IR, which is relational and whole-codebase.
+- **conformance corpus** — per-construct minimal examples + version-stamped dump
+  snapshots + IR assertions (D7); the format-stability defense for Q1.

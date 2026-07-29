@@ -11,6 +11,131 @@
 
 ---
 
+## 2026-07-29 — Phase 1b landed: fixtures and production now parse the same dump
+
+**What:** completed Phase 1b (DESIGN §4) — tests and production consume the *same*
+dump variant at last, closing the mismatch Phase 0 flagged (and W1/W3's fixture
+half). Deliberately a **format adaptation only**: the hand-rolled resolution engine
+and the IR's call semantics are untouched, so the diff stays reviewable. Retiring
+the engine in favour of sema's answers is Phase 2.
+
+- **Packaging first** (W10, plus a bug): `requires-python` relaxed from the
+  `>=3.14,<3.15` hard pin to `>=3.11`, and `packages = ["flinspect"]` replaced with
+  setuptools *discovery* — the explicit list silently omitted `flinspect.frontend`
+  after the Phase 1a split, so the installed package was broken. Added a `dev`
+  extra (pytest). W10 is closed.
+- **Three helpers absorb the format difference** (`frontend/_flang_text.py`):
+  `node_path` (match structure while ignoring an unparse annotation),
+  `unparse_text`, and `splice_annotated_child` — which collapses an annotated
+  `Expr` and its child back into *exactly* the single line a no-sema dump emits, so
+  the existing structural matchers keep working verbatim. Three call sites changed:
+  the `CallStmt` assert, argument type inference, and kind extraction (which would
+  otherwise have gone silently `None` on every kind-selected declaration in real
+  code — the failure mode no fixture would have caught, since none uses a kind).
+- **Fixtures regenerated with-sema.** `gen_ptree_files.sh` drops `-no-sema`, writes
+  through a temp file so a sema failure leaves the previous fixture intact and
+  reports flang's diagnostics, cleans up the `.mod` files the dump emits as a side
+  effect, and stamps `tests/f90/PROVENANCE` with `flang --version` (Q1: the format
+  has no stability contract, so a format change should show up as a version delta).
+- **`test_optional_args.f90` redesigned** — see the spike entry below; its two
+  specifics now differ in their first argument's type, which is what makes the
+  generic legal, while the optional dummies and the 3-/4-argument and keyword calls
+  still exercise argument-count and keyword matching.
+- **New fixture `test_generic_function`** — a generic *function* in an assignment.
+  It is the only fixture exercising the `FunctionReference` path at all: the one
+  named for it (`test_func_ref_array`) never contained a `FunctionReference` under
+  either dump variant, since flang resolves `fields(i,:,:)` to an `ArrayElement`.
+  What that fixture actually covers is rank reduction by a scalar subscript; its
+  test section now says so instead of implying coverage we didn't have.
+
+**Evidence it worked, twice over:**
+- *Equivalence on fixtures* — for all six fixtures that survive sema unchanged, the
+  no-sema and with-sema dumps project onto a **byte-identical IR** (entities,
+  signatures, `calls`, `contains`, `uses`, `interface_members`, unresolved calls).
+  The adaptation adds no facts and loses none; only the input shape changed.
+- *The production corpus* — replaying the 458 surviving with-sema dumps from the D4
+  run (`bin/flang_ptree/MOM6_using_FMS2`, MOM6+FMS2): **346 file errors → 0**, and
+  **177 → 28,931 call edges** (1,707 unresolved, first-class per D3). The
+  pre-Phase-1b frontend failed on every file containing a `CALL`, so before this
+  change the production input was effectively unparseable while the tests were
+  green — the exact hazard of tests and production disagreeing. Entity counts are
+  identical before and after, confirming the change is confined to the call pass.
+
+Suite: 49 tests green (37 pre-existing, unchanged in intent, + 12 new).
+
+---
+
+## 2026-07-29 — Phase 1b spike: what with-sema actually changes
+
+**Context:** DESIGN §4 required spiking before switching fixtures — D4 validated
+dump *generation*, not that the string-matching parser could *consume* with-sema
+output.
+
+**Findings.** Structure and interface parsing pass unchanged; `parse_calls` failed
+on **every** file. Only four node types gain an unparse annotation — `CallStmt`,
+`AssignmentStmt`, `Expr`, `Variable` — which is why the blast radius was small:
+`SubroutineStmt`, `UseStmt`, `ModuleStmt` and friends are untouched. Two shapes to
+absorb:
+
+1. Statements carry the source they unparse to *after* resolution:
+   `ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'`. The old
+   `line.endswith("ActionStmt -> CallStmt")` assert fails on all of them.
+2. An annotated `Expr` occupies its line, pushing its structural child one level
+   deeper — so an operator that used to sit on the `Expr` line (`-> Add`) now sits
+   on the child, and literals gain kind suffixes (`1_4`, `.true._4`).
+
+**Q2 answered — yes, positively.** The unparse annotation carries the
+sema-**resolved** specific procedure while the structured child still shows the
+generic (`ProcedureDesignator -> Name = 'compute'`). Verified for generic
+subroutine calls, generic function references, and type-bound generics. So the
+textual dump is enough; `-fdebug-dump-symbols` is not needed for this.
+
+**Caveat found later, not in the original spike:** the resolved name is *not*
+always a plain identifier. Where only the generic is USE-imported (so the specific
+isn't accessible by name in that scope), flang emits a mangled, fully-qualified
+form — `mpp_mod$mpp_mod$mpp_error_basic`, seen throughout the FMS corpus. Phase 2
+must demangle `module$module$specific` rather than assume an identifier. Phase 1b
+therefore only *records* the raw text (`ParseTree.call_unparse`, below the seam,
+unused) as a hook, and leaves callee extraction on the structured tree.
+
+**`test_optional_args.f90` was invalid Fortran all along.** Sema rejects it:
+"Generic 'init' may not have specific procedures 'init_simple' and 'init_advanced'
+as their interfaces are not distinguishable" — `init_simple(x, n)` and
+`init_advanced(x, n, tol, debug)` are ambiguous for a 2-argument call, because the
+extra dummies are optional. It only ever compiled because `-no-sema` never checked.
+A lesson about no-sema fixtures generally: they can encode Fortran that no compiler
+would accept, so the facts derived from them can describe programs that cannot
+exist.
+
+---
+
+## 2026-06-18 — Phase 1a landed: the IR seam
+
+**What:** completed Phase 1a (DESIGN §4) — the structural half of the seam, as a
+pure refactor with fixtures still on no-sema.
+
+- `flinspect/ir.py`: the relational IR per DESIGN §2.1 — entities as frozen value
+  objects keyed by scope-qualified `EntityId`, relations as tuple sets,
+  `callees`/`callers` derived rather than stored, `unresolved_calls` first-class.
+- `flinspect/frontend/` package with the `Frontend` protocol
+  (`extract(sources) -> IR`); `parse_tree.py` became `frontend/flang_dump.py` and
+  the node/registry/state helpers became its privates (`_nodes`, `_registry`,
+  `_state`, `_flang_text`, `_variable_info`). The frontend keeps the interned node
+  graph *internally* and projects onto the IR at the boundary (principle #10).
+- `lfortran_asr.py` stub raising `NotImplementedError` — the forcing function that
+  keeps the IR honest.
+- `ParseForest`/`Explorer` rewritten to consume the IR only; per-file fault
+  isolation, so one unparseable file is collected as a `FileError` instead of
+  aborting the forest (W3, principle #9).
+- Tests split along the seam: `tests/test_ir.py` asserts on the IR,
+  `tests/frontend/test_flang_dump.py` keeps the below-seam resolution-engine tests.
+  `tests/test_parse_tree.py` retired.
+
+**Why it matters:** consumers no longer know flang exists, which is what made
+Phase 1b a change to one file's line matching rather than a change everywhere.
+
+---
+
 ## 2026-05-28 — Phase 0 landed: docs split + README reset
 
 **What:** completed Phase 0 (DESIGN §4) — "reset expectations."

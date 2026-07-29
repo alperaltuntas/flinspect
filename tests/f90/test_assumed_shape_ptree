@@ -109,39 +109,46 @@ ProgramUnit -> Module
 | | | | | | Name = 'hi'
 | | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
 | | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
-| | | | | AttrSpec -> ArraySpec -> AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr -> Designator -> DataRef -> StructureComponent
-| | | | | | DataRef -> Name = 'hi'
-| | | | | | Name = 'isd'
-| | | | | AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr -> Designator -> DataRef -> StructureComponent
-| | | | | | DataRef -> Name = 'hi'
-| | | | | | Name = 'jsd'
+| | | | | AttrSpec -> ArraySpec -> AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr = 'hi%isd'
+| | | | | | Designator -> DataRef -> StructureComponent
+| | | | | | | DataRef -> Name = 'hi'
+| | | | | | | Name = 'isd'
+| | | | | AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr = 'hi%jsd'
+| | | | | | Designator -> DataRef -> StructureComponent
+| | | | | | | DataRef -> Name = 'hi'
+| | | | | | | Name = 'jsd'
 | | | | | AttrSpec -> IntentSpec -> Intent = InOut
 | | | | | EntityDecl
 | | | | | | Name = 'data2d'
 | | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
 | | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
-| | | | | AttrSpec -> ArraySpec -> AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr -> Designator -> DataRef -> StructureComponent
-| | | | | | DataRef -> Name = 'hi'
-| | | | | | Name = 'isd'
+| | | | | AttrSpec -> ArraySpec -> AssumedShapeSpec -> SpecificationExpr -> Scalar -> Integer -> Expr = 'hi%isd'
+| | | | | | Designator -> DataRef -> StructureComponent
+| | | | | | | DataRef -> Name = 'hi'
+| | | | | | | Name = 'isd'
 | | | | | AttrSpec -> IntentSpec -> Intent = InOut
 | | | | | EntityDecl
 | | | | | | Name = 'data1d'
 | | | ExecutionPart -> Block
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL fill_data_1d(data1d,0._4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'fill_data'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data1d'
+| | | | | | | ActualArg -> Expr = 'data1d'
+| | | | | | | | Designator -> DataRef -> Name = 'data1d'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '0.0'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '0._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '0.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL fill_data_2d(data2d,1._4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'fill_data'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data2d'
+| | | | | | | ActualArg -> Expr = 'data2d'
+| | | | | | | | Designator -> DataRef -> Name = 'data2d'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '1.0'
+| | | | | | | ActualArg -> Expr = '1._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0'
 | | | EndSubroutineStmt -> 
 | EndModuleStmt -> 

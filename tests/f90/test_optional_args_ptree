@@ -34,17 +34,17 @@ Program -> ProgramUnit -> Module
 | | ModuleSubprogram -> SubroutineSubprogram
 | | | SubroutineStmt
 | | | | Name = 'init_advanced'
-| | | | DummyArg -> Name = 'x'
+| | | | DummyArg -> Name = 'k'
 | | | | DummyArg -> Name = 'n'
 | | | | DummyArg -> Name = 'tol'
 | | | | DummyArg -> Name = 'debug'
 | | | SpecificationPart
 | | | | ImplicitPart -> 
 | | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
-| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
 | | | | | AttrSpec -> IntentSpec -> Intent = Out
 | | | | | EntityDecl
-| | | | | | Name = 'x'
+| | | | | | Name = 'k'
 | | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
 | | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
 | | | | | AttrSpec -> IntentSpec -> Intent = In
@@ -82,47 +82,63 @@ ProgramUnit -> Module
 | | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
 | | | | | EntityDecl
 | | | | | | Name = 'val'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'idx'
 | | | ExecutionPart -> Block
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL init_simple(val,10_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'init'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | | ActualArg -> Expr = 'val'
+| | | | | | | | Designator -> DataRef -> Name = 'val'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL init_advanced(idx,10_4,9.999999974752427078783512115478515625e-7_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'init'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | | ActualArg -> Expr = 'idx'
+| | | | | | | | Designator -> DataRef -> Name = 'idx'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | | ActualArg -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '1.0e-6'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '9.999999974752427078783512115478515625e-7_4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0e-6'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL init_advanced(idx,10_4,9.999999974752427078783512115478515625e-7_4,.true._4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'init'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | | ActualArg -> Expr = 'idx'
+| | | | | | | | Designator -> DataRef -> Name = 'idx'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | | ActualArg -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '1.0e-6'
+| | | | | | | ActualArg -> Expr = '9.999999974752427078783512115478515625e-7_4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0e-6'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> LogicalLiteralConstant
-| | | | | | | | bool = 'true'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '.true._4'
+| | | | | | | | LiteralConstant -> LogicalLiteralConstant
+| | | | | | | | | bool = 'true'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL init_advanced(idx,10_4,debug=.true._4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'init'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'val'
+| | | | | | | ActualArg -> Expr = 'idx'
+| | | | | | | | Designator -> DataRef -> Name = 'idx'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | | ActualArg -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
 | | | | | | ActualArgSpec
 | | | | | | | Keyword -> Name = 'debug'
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> LogicalLiteralConstant
-| | | | | | | | bool = 'true'
+| | | | | | | ActualArg -> Expr = '.true._4'
+| | | | | | | | LiteralConstant -> LogicalLiteralConstant
+| | | | | | | | | bool = 'true'
 | | | EndSubroutineStmt -> 
 | EndModuleStmt -> 

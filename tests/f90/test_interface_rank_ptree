@@ -92,46 +92,58 @@ ProgramUnit -> Module
 | | | | | EntityDecl
 | | | | | | Name = 'vec'
 | | | | | | ArraySpec -> ExplicitShapeSpec
-| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
 | | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
 | | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
 | | | | | EntityDecl
 | | | | | | Name = 'mat'
 | | | | | | ArraySpec -> ExplicitShapeSpec
-| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr -> LiteralConstant -> IntLiteralConstant = '5'
+| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '5_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '5'
 | | | | | | ExplicitShapeSpec
-| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr -> LiteralConstant -> IntLiteralConstant = '5'
+| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '5_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '5'
 | | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
 | | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
 | | | | | EntityDecl
 | | | | | | Name = 'cube'
 | | | | | | ArraySpec -> ExplicitShapeSpec
-| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr -> LiteralConstant -> IntLiteralConstant = '3'
+| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '3_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '3'
 | | | | | | ExplicitShapeSpec
-| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr -> LiteralConstant -> IntLiteralConstant = '3'
+| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '3_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '3'
 | | | | | | ExplicitShapeSpec
-| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr -> LiteralConstant -> IntLiteralConstant = '3'
+| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '3_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '3'
 | | | ExecutionPart -> Block
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL process_1d(vec,10_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'process'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'vec'
+| | | | | | | ActualArg -> Expr = 'vec'
+| | | | | | | | Designator -> DataRef -> Name = 'vec'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL process_2d(mat,5_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'process'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'mat'
+| | | | | | | ActualArg -> Expr = 'mat'
+| | | | | | | | Designator -> DataRef -> Name = 'mat'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '5'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '5_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '5'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL process_3d(cube,3_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'process'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'cube'
+| | | | | | | ActualArg -> Expr = 'cube'
+| | | | | | | | Designator -> DataRef -> Name = 'cube'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '3'
+| | | | | | | ActualArg -> Expr = '3_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '3'
 | | | EndSubroutineStmt -> 
 | EndModuleStmt -> 

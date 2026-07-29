@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
-from flinspect.frontend._flang_text import level, is_fortran_intrinsic
+from flinspect.frontend._flang_text import (
+    level, is_fortran_intrinsic, node_path, unparse_text, splice_annotated_child,
+)
 from flinspect.frontend._state import ParseState
 from flinspect.frontend._variable_info import VariableInfo
 from flinspect.frontend._nodes import (
@@ -39,6 +41,15 @@ class ParseTree:
         # Set of unfound calls during call resolution
         self.unfound_subroutine_calls = []
         self.unfound_function_calls = []
+
+        # Phase 2 hook (below the seam, unused today): the with-sema unparse text
+        # of the statement enclosing each recorded call, as
+        # (caller_name, callee_name_as_written, stmt_unparse).  Sema resolves
+        # generics in that text (`CALL compute_real(...)` where the structured
+        # tree still says the generic `compute`), so Phase 2 can consume it
+        # instead of re-deriving resolution.  None for a no-sema dump.
+        self.call_unparse = []
+        self.stmt_unparse = None
 
         # Variable type tracking: maps (scope_key, var_name) -> VariableInfo
         # Persists across parsing passes (structure, interfaces, calls)
@@ -82,6 +93,7 @@ class ParseTree:
         self.curr = ParseState()
         self.unfound_subroutine_calls = []
         self.unfound_function_calls = []
+        self.stmt_unparse = None
 
     # -------------------------------------------------------------------------
     # Variable tracking methods
@@ -141,14 +153,32 @@ class ParseTree:
             return 1  # At least 1 dimension, caller may need to count more
         return None
 
-    def _extract_kind_from_line(self, line):
-        """Extract kind specifier from a line containing KindSelector.
-        Returns the kind specifier (e.g., 'r8_kind', 'i4_kind') or None if not found."""
+    def _kind_selector_name(self, line):
+        """Extract the kind name from a KindSelector line (e.g. 'r8_kind'), or None.
 
-        if "KindSelector" in line:
-            m = re.search(r"Name = '(\w+)'", line)
-            return m.group(1) if m else None
-        return None
+        A no-sema dump carries the whole path — kind designator included — on the
+        KindSelector line.  With sema the annotated ``Expr`` node ends the line
+        (``KindSelector -> ... -> Expr = '8_4'``, holding sema's *folded* kind
+        value) and the designator moves to the child line, so read the name from
+        there.  We deliberately keep using the kind *name* as the token, leaving
+        resolution semantics unchanged — consuming sema's folded value instead is
+        Phase 2 (W6).
+
+        Must be called with *line* already consumed: it may read the child line.
+        """
+        if "KindSelector" not in line:
+            return None
+        m = re.search(r"Name = '(\w+)'", line)
+        if m:
+            return m.group(1)
+        if not node_path(line).endswith("Expr"):
+            return None
+        child = self.peek_next_line()
+        if child is None or level(child) <= level(line):
+            return None
+        self.read_next_line()
+        m = re.search(r"Name = '(\w+)'", child)
+        return m.group(1) if m else None
 
     def _extract_structure_component_name(self, designator_level):
         """Extract the method name and object name from a ProcComponentRef -> StructureComponent.
@@ -243,6 +273,10 @@ class ParseTree:
         """Record a call relationship between the current scope and the callee."""
         caller = self.curr.scope
         callee = self.find_named_entity(caller, callee_name)
+
+        # Phase 2 hook: keep the enclosing statement's with-sema unparse text
+        # alongside the call as written.  Recorded, never read (see __init__).
+        self.call_unparse.append((caller.name, callee_name, self.stmt_unparse))
 
         # If not found through normal USE chains, try the defining scope directly
         # (for type-bound procedure calls where the routine is not explicitly USE'd)
@@ -570,20 +604,42 @@ class ParseTree:
             self.read_next_line()
         return arg_lines
 
+    @staticmethod
+    def _expr_structure_line(lines, i):
+        """The line whose *structure* describes the expression at ``lines[i]``.
+
+        A no-sema dump carries the whole expression path on the ``Expr`` line
+        itself (``ActualArg -> Expr -> LiteralConstant -> ...``).  With sema the
+        ``Expr`` node ends the line (it holds the unparsed text) and its structure
+        is the child one level deeper, so splice the two back into the single line
+        the structural matchers expect.
+        """
+        line = lines[i]
+        if not node_path(line).endswith("Expr"):
+            return line
+        expr_level = level(line)
+        for child in lines[i + 1:]:
+            if level(child) <= expr_level:
+                break
+            if level(child) == expr_level + 1:
+                return splice_annotated_child(line, child)
+        return line
+
     def _infer_arg_type(self, arg_lines, arg_level):
         """Infer type, rank, and kind for a single argument from its expression lines.
-        
+
         Returns
         -------
         tuple (str, int, str or None)
             Inferred (type, rank, kind).
         """
         arg_type, arg_rank, arg_kind = "unknown", -1, None
-        
+
         # First pass: check for expression-level type inference
-        for line in arg_lines:
+        for i, line in enumerate(arg_lines):
             if "ActualArg -> Expr" in line:
-                arg_type, arg_rank, arg_kind = self._infer_expr_type(line)
+                arg_type, arg_rank, arg_kind = self._infer_expr_type(
+                    self._expr_structure_line(arg_lines, i))
                 if arg_type != "unknown" and arg_rank != -1:
                     return arg_type, arg_rank, arg_kind
                 break
@@ -910,7 +966,6 @@ class ParseTree:
             # Extract type from DeclarationTypeSpec
             if "DeclarationTypeSpec" in next_line:
                 decl_type = self._extract_type_from_decl(next_line)
-                decl_kind = self._extract_kind_from_line(next_line) or decl_kind
                 if decl_type == "derived":
                     self.read_next_line()
                     if self.peek_next_line() and "DerivedTypeSpec" in self.peek_next_line():
@@ -921,13 +976,14 @@ class ParseTree:
                                 decl_type = f"derived:{m.group(1)}"
                     continue
                 self.read_next_line()
+                decl_kind = self._kind_selector_name(next_line) or decl_kind
                 continue
-            
-            # Kind selector
-            kind = self._extract_kind_from_line(next_line)
-            if kind:
-                decl_kind = kind
+
+            # Kind selector on its own line (e.g. `real(kind=r8_kind)`, where the
+            # KindSelector is a child of the type spec rather than part of it)
+            if "KindSelector" in next_line:
                 self.read_next_line()
+                decl_kind = self._kind_selector_name(next_line) or decl_kind
                 continue
             
             # Optional attribute
@@ -1194,10 +1250,10 @@ class ParseTree:
             # Extract type from DeclarationTypeSpec
             if "DeclarationTypeSpec" in next_line:
                 var_type = self._extract_type_from_decl(next_line)
-                var_kind = self._extract_kind_from_line(next_line) or var_kind
+                self.read_next_line()
+                var_kind = self._kind_selector_name(next_line) or var_kind
                 if "DoublePrecision" in next_line:
                     var_kind = "r8_kind"
-                self.read_next_line()
             # Array rank in AttrSpec
             elif "AttrSpec -> ArraySpec" in next_line:
                 rank = self._parse_array_spec(next_line)
@@ -1389,7 +1445,10 @@ class ParseTree:
         if not "CallStmt" in self.line:
             return False
 
-        assert self.line.endswith("ActionStmt -> CallStmt"), self.msg("CallStmt syntax not recognized")
+        # With sema the statement carries an unparse annotation
+        # (`ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'`), so match on the
+        # node path to accept either dump variant.
+        assert node_path(self.line).endswith("ActionStmt -> CallStmt"), self.msg("CallStmt syntax not recognized")
         assert self.curr.program_unit is not None, self.msg("CallStmt found outside of a program unit")
 
         self.line = self.read_next_line()
@@ -1540,10 +1599,18 @@ class ParseTree:
     def parse_calls(self):
         """Reads a flang parse tree file and extracts subroutine/function call relationships."""
 
+        self.call_unparse = []
+
         try:
             self.parse_header()
 
             for self.line in self.lines():
+                # Track the enclosing executable statement's unparse annotation, so
+                # calls nested in an expression (a FunctionReference inside an
+                # AssignmentStmt) can record it too. Phase 2 hook only.
+                if "ActionStmt ->" in self.line:
+                    self.stmt_unparse = unparse_text(self.line)
+
                 if self.parse_routine_begin():
                     continue
                 if self.parse_routine_end():

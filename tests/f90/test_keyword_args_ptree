@@ -83,51 +83,64 @@ ProgramUnit -> Module
 | | | | | EntityDecl
 | | | | | | Name = 'data'
 | | | | | | ArraySpec -> ExplicitShapeSpec
-| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr -> LiteralConstant -> IntLiteralConstant = '100'
+| | | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '100_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '100'
 | | | ExecutionPart -> Block
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL transform_scale(data,2._4,1._4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'transform'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data'
+| | | | | | | ActualArg -> Expr = 'data'
+| | | | | | | | Designator -> DataRef -> Name = 'data'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '2.0'
+| | | | | | | ActualArg -> Expr = '2._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '2.0'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '1.0'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '1._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL transform_index(data,5_4,10_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'transform'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data'
+| | | | | | | ActualArg -> Expr = 'data'
+| | | | | | | | Designator -> DataRef -> Name = 'data'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '5'
+| | | | | | | ActualArg -> Expr = '5_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '5'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL transform_scale(data,scale=2._4,offset=1._4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'transform'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data'
+| | | | | | | ActualArg -> Expr = 'data'
+| | | | | | | | Designator -> DataRef -> Name = 'data'
 | | | | | | ActualArgSpec
 | | | | | | | Keyword -> Name = 'offset'
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '1.0'
+| | | | | | | ActualArg -> Expr = '1._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0'
 | | | | | | ActualArgSpec
 | | | | | | | Keyword -> Name = 'scale'
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> RealLiteralConstant
-| | | | | | | | Real = '2.0'
-| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt
+| | | | | | | ActualArg -> Expr = '2._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '2.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL transform_index(data,idx=5_4,count=10_4)'
 | | | | | Call
 | | | | | | ProcedureDesignator -> Name = 'transform'
 | | | | | | ActualArgSpec
-| | | | | | | ActualArg -> Expr -> Designator -> DataRef -> Name = 'data'
+| | | | | | | ActualArg -> Expr = 'data'
+| | | | | | | | Designator -> DataRef -> Name = 'data'
 | | | | | | ActualArgSpec
 | | | | | | | Keyword -> Name = 'count'
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '10'
+| | | | | | | ActualArg -> Expr = '10_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '10'
 | | | | | | ActualArgSpec
 | | | | | | | Keyword -> Name = 'idx'
-| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '5'
+| | | | | | | ActualArg -> Expr = '5_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '5'
 | | | EndSubroutineStmt -> 
 | EndModuleStmt -> 
