@@ -104,6 +104,12 @@ over sound, compiler-derived facts** about Fortran programs.
 - **Headline use case:** incremental, *provably monotonic* GPU porting of MOM6 —
   computing the porting frontier, classifying blockers, and enforcing "no new
   HostOnly edge crosses into GPU_Port" as a CI gate.
+- **Second face (bottom-up; D6):** the same compiler-syntax-tree substrate, pointed
+  the other way: generate Lean models of legacy Fortran kernels and of their
+  C++/AMReX (TIM) ports, and *prove* them equivalent over ℝ — so the GPU port is
+  not only *structurally* monotonic (the frontier gate above) but *semantically*
+  faithful, kernel by kernel. See D6 for scope, rationale, and how the two tracks
+  compose rather than compete.
 
 The vision is genuinely valuable and differentiated. **The thing that currently
 blocks it is the quality and stability of the underlying facts** — see the
@@ -191,6 +197,98 @@ only if dump-format churn actually bites (Q1 in `DESIGN.md`) or we want a precis
 upgrade the dump can't provide — and prefer the in-ecosystem hedge
 (`-fdebug-dump-symbols`, Q2) before any non-flang frontend, consistent with D1.
 
+### D6 — A second, bottom-up track: kernel equivalence by proof (Lean), unified below the seam
+
+*(Decided 2026-07-29; gated on the Track B pilot in `DESIGN.md` §4.)*
+
+Alongside the top-down structural track, use the same compiler syntax trees (flang
+for Fortran, clang for C++) to **prove** that TURBO's C++/AMReX ports of MOM6
+kernels compute the same mathematics as the legacy Fortran — machine-checked in
+Lean 4 / Mathlib, over the reals — in the style of Logos Research's "migration by
+proof" (see Prior art, §5).
+
+**What the theorem means (and deliberately does not).** Equivalence is proved
+**over ℝ**, not over IEEE floats. It certifies *algorithmic* agreement — no
+transcription error (wrong sign, swapped edge values, off-by-one index, a dropped
+guard branch) — which is the dominant risk of a human/LLM-driven port. Numerical
+drift from reordering, FMA, or reduction order remains the province of the existing
+regression and ensemble-consistency machinery. This division of labor is the
+reals-first philosophy of Altuntas et al. (VSS 2025, EPTCS 432) applied to porting:
+where bitwise reproducibility is unattainable anyway, prove the mathematics and
+test the numerics.
+
+**Why it is tractable here.** The TIM porting style already factors each kernel
+into pure per-point device functions (e.g. `ppm_limit_pos_point` in
+`TIM/mom/cpp/mom_continuity_ppm_kernel.hpp` — scalar `Real`s in, no arrays, no
+AMReX types in the body), while the Fortran original is a `do concurrent` nest
+whose body is the same scalar function. Equivalence therefore decomposes:
+- a **point lemma** — two scalar functions agree over ℝ; for kernels like the PPM
+  limiters this is piecewise-polynomial arithmetic with inequality guards, well
+  within Mathlib automation (`ring`, `nlinarith`, case splits);
+- an **iteration schema** — `do concurrent (k,j,i)` ≡ `amrex::ParallelFor(box)`
+  applying the point function; provable once per loop pattern and reused.
+  `do concurrent` is semantically ideal: it *asserts* iteration independence, so
+  both sides literally mean "∀ (i,j,k) ∈ box, apply f."
+
+Kernels with genuine cross-iteration structure (vertical integrals, k-recurrences)
+need induction rather than a ∀-schema and come later. Keeping ported kernels in
+the point-function shape should be a stated convention of the TURBO port — it is
+what keeps the proofs compositional.
+
+**How it unifies with the structural track — one frontend layer, two IRs.** The
+honest accounting: the relational IR and the semantic modeling this track needs
+are *different artifacts*, and the relational IR must not be bloated to serve
+both. Instead the frontend family grows a second product: a per-procedure
+**kernel IR** (typed expression/statement trees; `DESIGN.md` §2.3) consumed only
+by a Lean printer. The genuine unification is elsewhere:
+- shared frontend infrastructure — dump ingestion, tree parsing, and the D7
+  conformance corpus serve both tracks;
+- **the structural layer generates the semantic layer's proof obligations** —
+  "provable in isolation" (all callees resolved and within the modeled set, no
+  module-state mutation, no unresolved externals) is a *relational query* over
+  Track A's facts;
+- the CI gate becomes a conjunction: no new HostOnly edge crosses into GPU_Port
+  **and** every ported kernel carries a checked equivalence theorem. The frontier
+  says *what* to port; the proof certifies *each* port; the gate enforces *both*.
+
+**Trusted-base rule (adopted from Logos wholesale): no LLM inside the proof
+pipeline.** Agents may write the C++ port and search for proofs; the syntax-tree →
+kernel-IR → Lean translator must be deterministic, small, and auditable, because a
+wrong model makes the proof vacuous. (On the C++ side, `clang -ast-dump=json`
+emits structured JSON — a far friendlier input than flang's text dump.)
+
+**Status — aspiration, gated on a pilot.** The track enters the roadmap only
+through the timeboxed Track B pilot (`DESIGN.md` §4): hand-write the Lean models
+for one already-ported kernel pair and prove the theorem *before* building any
+tooling. It must not displace Phase 2, whose confidence model is what makes the
+frontier-and-gate story real.
+
+### D7 — A conformance corpus is the format-stability defense
+
+Every construct the frontend parses gets a **minimal, standalone example program**
+with three committed artifacts: the source, the generated dump (stamped with the
+generating `flang --version`), and the expected IR facts. Assertions come in two
+tiers:
+- **dump snapshots** — the early-warning tier: on an LLVM upgrade, regenerate and
+  diff; changes localize *which constructs'* format moved;
+- **IR assertions** — the contract tier: what must keep passing regardless of the
+  input format.
+
+**Why:** D2 isolates format fragility behind the seam; D7 is how we *detect and
+localize* it (Q1: the dump is a debugging aid with no stability contract). Porting
+to a new LLVM becomes a bounded, agent-friendly loop: run the corpus → list of
+broken constructs → fix each against its minimal example → whole-corpus and
+production regeneration as the final check. Evidence it works: the 2026-07-29
+Phase 1b spike *was* this workflow, and localized the with-sema format change to a
+single construct (`CallStmt` and annotated `Expr` lines) in minutes.
+
+**Status:** partially in place since Phase 1b (with-sema fixtures regenerated via
+`tests/f90/gen_ptree_files.sh`, version-stamped in `tests/f90/PROVENANCE`). The
+remaining formalization — a manifest mapping construct → fixture → parser code
+path, plus a coverage rule that every parse branch has a fixture — lands alongside
+Phase 2 (`DESIGN.md` §4). The same pattern extends to Track B (construct → golden
+Lean model).
+
 ---
 
 ## 5. Prior art — comparable tools, and where the gap is
@@ -255,6 +353,16 @@ tool sits in their intersection for Fortran**, which is the niche flinspect clai
   As established in `DESIGN.md` (Q4), Alloy does bounded *model-finding* over small
   universes; flinspect does *query evaluation* over one large fixed graph — same
   relational vocabulary, opposite computational shape.
+- **Logos Research — "migration by proof"** — the template for D6 (the bottom-up
+  track). An agent rewrites code in the target language; a *deterministic*
+  translator renders both versions into Lean 4 with floats modeled as ℝ; a
+  machine-checked proof establishes they compute the same function on every input
+  (demonstrated for F#/Python, e.g. a recursive fold vs. a mutating loop). The
+  load-bearing ideas we adopt: no LLM inside the proof pipeline, readable
+  generated Lean auditable line-by-line against the source, and equivalence over
+  ℝ as the honest claim. D6 is this pattern for Fortran → C++/AMReX — plus a
+  structural layer (Track A) that Logos has no analogue of, which scopes *which*
+  kernels are provable in isolation.
 
 ### The gap flinspect targets
 
