@@ -25,7 +25,7 @@ From the review of the current codebase. Ordered by impact on the vision.
 | W7 | Three full re-parse passes per file | `parse_structure/interfaces/calls` | Phase 1 (revisit) |
 | W8 | No CLI; notebook-only despite "CI-enforceable" claim | — | Phase 4 |
 | W9 | README oversells; ~90% aspiration | `README.md` | Phase 0 |
-| W10 | Python 3.14 hard pin | `pyproject.toml` | low priority |
+| W10 | Python 3.14 hard pin | `pyproject.toml` | **fixed in Phase 1b** (floor `>=3.11`) |
 
 ---
 
@@ -171,7 +171,8 @@ docs. *(docs only)* — **DONE 2026-05-28.**
 #2 — not a minimal node-graph seam), and **split into 1a/1b** so each step is
 independently green and the one risky step is isolated.
 
-*Phase 1a — structural seam (pure refactor, fixtures stay no-sema):*
+*Phase 1a — structural seam (pure refactor, fixtures stay no-sema):* — **DONE
+2026-06-18.**
 - Define the IR (§2.1) as flinspect-owned types in `flinspect/ir.py` — entities as
   frozen value objects keyed by scope-qualified `EntityId`; relations as tuple-sets;
   `callees`/`callers` computed, not stored. Single `calls` relation (no confidence
@@ -186,7 +187,14 @@ independently green and the one risky step is isolated.
 - Tests assert on the IR; the direct `resolve_interface_procedures`/
   `_procedure_matches` tests move to `tests/frontend/` (below-seam concerns).
 
-*Phase 1b — with-sema switch (the one non-relocation step):*
+*Phase 1b — with-sema switch (the one non-relocation step):* — **DONE 2026-07-29.**
+Scope note: a *format adaptation only* — the frontend now accepts with-sema line
+shapes (unparse annotations, the extra `Expr` nesting) and all fixtures are
+regenerated with `-fdebug-dump-parse-tree`, while the hand-rolled resolution engine
+and the IR's call semantics are left intact for Phase 2. Sema's resolved call text
+is *recorded* below the seam and unused. Equivalence was checked both ways: the six
+sema-clean fixtures project onto a byte-identical IR from either dump variant, and
+the real MOM6+FMS2 corpus went from 346 unparseable files to 0. See `DEVLOG.md`.
 - **Spike first** — regenerate one fixture (e.g. `test_interface_basic`) with-sema and
   run the relocated parser against it; D4 validated dump *generation*, not that the
   string-matching parser *consumes* with-sema output (resolved-symbol annotations
@@ -231,11 +239,21 @@ the dump can't give. Resolves D5.
 - **Q1 (live):** How stable has flang's dump format been across recent LLVM
   releases? This is now the *most* relevant resilience question — it sizes how much
   fixture/format-version defense we need within Option A, and is the trigger that
-  would reopen the deferred frontend-upgrade exploration.
-- **Q2:** Does the with-sema dump fully resolve generics and type-bound bindings in
-  the textual output, or do we need `-fdebug-dump-symbols` for that? Determines how
-  much of `_infer_*`/`resolve_*` can be deleted vs. retained in Phase 2. (The
-  in-ecosystem hedge against Q1, ahead of any non-flang frontend.)
+  would reopen the deferred frontend-upgrade exploration. *Phase 1b sharpened this
+  rather than answering it:* one dump-variant change moved resolution into an
+  unparse *string*, so the facts Phase 2 will depend on are carried by a
+  pretty-printer with no stability contract — including its name mangling
+  (`module$module$specific`). Fixtures now record the generating `flang --version`
+  (`tests/f90/PROVENANCE`) so a format shift shows up as a version delta; that is
+  detection, not defense.
+- **Q2: ANSWERED (2026-07-29) — yes, in the textual output.** The with-sema dump's
+  unparse annotation on each statement carries the *resolved* specific procedure —
+  for generic subroutine calls, generic function references, and type-bound
+  generics alike — while the structured child still shows the generic name. So
+  `-fdebug-dump-symbols` is not needed for this, and most of `_infer_*`/`resolve_*`
+  becomes deletable in Phase 2. Two caveats for that work: the resolved name may be
+  mangled (see Q1), and the annotation is per-*statement*, so a statement
+  containing several calls yields one string to attribute across them.
 - **Q3 (deferred, gates D5):** Does LFortran's ASR — or fparser2 — actually ingest
   FMS+MOM6 at current maturity? Only relevant if/when we pursue the deferred
   frontend-upgrade exploration; not near-term.
