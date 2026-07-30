@@ -37,6 +37,38 @@ venv populated *without* `PYTHONNOUSERSITE=1` can silently satisfy transitive
 dependencies from the user site and then break when it's excluded — which is
 why the install command above carries the env var too.
 
+## Running on JupyterHub
+
+On a JupyterHub (e.g. NCAR's), the launch section above does not apply: the Hub
+serves a *central* JupyterLab, so neither the venv's kernel nor the widget
+JavaScript is visible to it by default. A widget is two halves — Python in the
+kernel, JS in the Lab frontend — and both must be wired up, once per machine:
+
+```bash
+cd dev-utils/flinspect
+
+# 1. Kernel half: register the venv as a named kernel ...
+PYTHONNOUSERSITE=1 .venv/bin/python -m ipykernel install --user \
+    --name flinspect --display-name "Python (flinspect)"
+# ... and bake PYTHONNOUSERSITE=1 into it (Hub-launched kernels won't inherit
+# your shell env), by adding to ~/.local/share/jupyter/kernels/flinspect/kernel.json:
+#     "env": {"PYTHONNOUSERSITE": "1"}
+
+# 2. Frontend half: expose the cytoscape labextension to the Hub's JupyterLab.
+#    (Static JS only — no Python lands in ~/.local/lib.)
+cp -r .venv/share/jupyter/labextensions/jupyter-cytoscape \
+      ~/.local/share/jupyter/labextensions/
+```
+
+Then **restart your Jupyter server** (Hub Control Panel → Stop My Server →
+relaunch — labextensions are scanned at server start), hard-refresh the browser,
+and open notebooks with the **"Python (flinspect)"** kernel.
+
+Symptoms if a half is missing: `ModuleNotFoundError: flinspect` or a numpy/
+pandas ImportError → wrong kernel or missing `env` entry (half 1); dropdowns
+render but the graph canvas shows *"Failed to load model class 'CytoscapeModel'
+from module 'jupyter-cytoscape'"* → missing labextension (half 2).
+
 ## The corpus
 
 Notebooks 02–04 read a corpus of with-sema parse-tree dumps
