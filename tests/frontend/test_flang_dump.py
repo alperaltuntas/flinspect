@@ -1,10 +1,10 @@
 """Frontend-internal tests for the flang-dump parser.
 
-These reach *below the seam* on purpose: they test the flang-dump frontend's
-resolution engine (``resolve_interface_procedures``, ``_procedure_matches``), its
-variable tracking, and its handling of the with-sema dump's line shapes —
-implementation details that consumers never see. IR-observable behaviour is tested
-in ``tests/test_ir.py``.
+These reach *below the seam* on purpose: they test how the frontend reads sema's
+resolution out of unparse annotations (`demangle`, `call_candidates`, the
+recorded `CallEvent`s), its variable tracking, and its scope/visibility-correct
+name lookup — implementation details that consumers never see. IR-observable
+behaviour (the stratified call relation) is tested in ``tests/test_ir.py``.
 """
 
 import pytest
@@ -12,9 +12,9 @@ from pathlib import Path
 
 from flinspect.frontend.flang_dump import ParseTree
 from flinspect.frontend._flang_text import (
-    node_path, unparse_text, splice_annotated_child,
+    node_path, unparse_text, demangle, call_candidates,
 )
-from flinspect.frontend._nodes import Interface, Subroutine, Module
+from flinspect.frontend._nodes import Subroutine
 from flinspect.frontend._registry import NodeRegistry
 
 
@@ -22,7 +22,7 @@ F90_DIR = Path(__file__).parent.parent / "f90"
 
 
 def parse_all_passes(ptree_path):
-    """Parse a single fixture through all three passes; return (ParseTree, registry)."""
+    """Parse a single fixture through all recording passes; return (ParseTree, registry)."""
     nr = NodeRegistry()
     pt = ParseTree(ptree_path, node_registry=nr)
     pt.parse_structure()
@@ -38,120 +38,185 @@ def get_module(nr, name):
     raise ValueError(f"Module '{name}' not found in registry")
 
 
-def get_interface(nr, mod_name, iface_name):
-    mod = get_module(nr, mod_name)
-    for iface in mod.interfaces:
-        if iface.name == iface_name:
-            return iface
-    raise ValueError(f"Interface '{iface_name}' not found in module '{mod_name}'")
+# =============================================================================
+# with-sema dump line shapes
+#
+# The fixtures are with-sema dumps, so the matchers must cope with unparse
+# annotations. These pin the two line helpers, using real lines from the dump.
+# =============================================================================
 
+class TestSemaLineShapes:
 
-def get_subroutine(nr, mod_name, sub_name):
-    for sub in nr.subroutines:
-        if sub.name == sub_name and sub.program_unit.name == mod_name:
-            return sub
-    raise ValueError(f"Subroutine '{sub_name}' not found in module '{mod_name}'")
+    # the same CALL, with and without its unparse annotation
+    SEMA_CALL = "| | | | ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'"
+    BARE_CALL = "| | | | ActionStmt -> CallStmt"
+
+    def test_node_path_ignores_unparse_annotation(self):
+        assert node_path(self.SEMA_CALL) == self.BARE_CALL
+        assert node_path(self.BARE_CALL) == self.BARE_CALL
+
+    def test_node_path_strips_leaf_values_too(self):
+        assert node_path("| | Name = 'compute'") == "| | Name"
+
+    def test_unparse_text(self):
+        assert unparse_text(self.SEMA_CALL) == "CALL compute_real(r,1_4)"
+        assert unparse_text(self.BARE_CALL) is None
 
 
 # =============================================================================
-# resolve_interface_procedures
+# Reading sema's resolution out of unparse text (Phase 2, DESIGN Q1/Q2)
 # =============================================================================
 
-class TestResolveInterfaceProcedures:
+class TestDemangle:
+
+    def test_plain_name_is_not_mangled(self):
+        assert demangle("compute_real") is None
+
+    def test_doubled_module_form(self):
+        # the common case: imported through the module that defines it
+        assert demangle("mpp_mod$mpp_mod$mpp_error_basic") == (
+            "mpp_mod", "mpp_mod", "mpp_error_basic")
+
+    def test_reexport_form_carries_the_defining_module(self):
+        # fms_mod re-exports mpp_mod's generic; the specific lives in mpp_mod
+        assert demangle("fms_mod$mpp_mod$mpp_error_basic") == (
+            "fms_mod", "mpp_mod", "mpp_error_basic")
+
+
+class TestCallCandidates:
+
+    def test_simple_call(self):
+        assert call_candidates("compute_real(r,1_4)") == [(0, False, "compute_real")]
+
+    def test_keyword_arguments_are_not_candidates(self):
+        assert call_candidates("mpp_send_int8(ptr,pe,tag=1_4)") == [
+            (0, False, "mpp_send_int8")]
+
+    def test_nested_calls_in_order(self):
+        cands = call_candidates("outer(inner(x),y(i))")
+        assert [c[2] for c in cands] == ["outer", "inner", "y"]
+        assert cands[0][0] == 0
+
+    def test_mangled_name(self):
+        assert call_candidates("mpp_mod$mpp_mod$mpp_error_basic(2_4,text)") == [
+            (0, False, "mpp_mod$mpp_mod$mpp_error_basic")]
+
+    def test_type_bound_call_is_flagged(self):
+        cands = call_candidates("time_redux%initialize(dt,out_frequency)")
+        assert (11, True, "initialize") in cands
+
+    def test_parenthesis_inside_string_is_not_a_call(self):
+        # real corpus shape: a diagnostic message that names a procedure
+        text = 'mpp_error_basic(2_4,"deallocate before calling fms_find_my_string(x)")'
+        assert [c[2] for c in call_candidates(text)] == ["mpp_error_basic"]
+
+    def test_escaped_quotes_do_not_unbalance_the_string(self):
+        text = 'log_it("can""t open f(x)",handler(y))'
+        assert [c[2] for c in call_candidates(text)] == ["log_it", "handler"]
+
+
+# =============================================================================
+# CallEvents: what the call pass records (per-call sema text, not per-statement)
+# =============================================================================
+
+class TestCallEvents:
+
+    def test_generic_subroutine_calls_carry_the_specific(self):
+        pt, _ = parse_all_passes(F90_DIR / "test_interface_basic_ptree")
+        # every call is written as the generic `compute` ...
+        assert {ev.written_name for ev in pt.call_events} == {"compute"}
+        # ... while sema's text names the specific it resolved to
+        assert sorted(ev.call_text for ev in pt.call_events) == [
+            "CALL compute_int(i,2_4)",
+            "CALL compute_logical(flag,.true._4)",
+            "CALL compute_real(r,1_4)",
+        ]
+
+    def test_function_references_get_their_own_call_text(self):
+        # `a = area(y) + area(k)` — one statement, two calls: each event carries
+        # the exact resolved text of ITS call (the enclosing Expr annotation),
+        # not the shared statement text, so no cross-call attribution is needed.
+        pt, _ = parse_all_passes(F90_DIR / "test_generic_function_ptree")
+        assert [(ev.written_name, ev.call_text) for ev in pt.call_events] == [
+            ("area", "area_r(y)"),
+            ("area", "area_i(k)"),
+        ]
+
+    def test_type_bound_events_record_the_declared_type(self):
+        pt, _ = parse_all_passes(F90_DIR / "test_type_bound_generic_ptree")
+        bound = [ev for ev in pt.call_events if ev.is_type_bound]
+        assert {ev.bound_type_name for ev in bound} == {"gadget_t"}
+        # static dispatch: sema hoists the object and names the specific
+        assert sorted(ev.call_text for ev in bound) == [
+            "CALL go_i(obj,2_4)",
+            "CALL go_r(obj,1._4)",
+            "CALL reset_state(obj)",
+        ]
+
+    def test_mangled_answer_for_private_specifics(self):
+        pt, _ = parse_all_passes(F90_DIR / "test_private_specifics_ptree")
+        assert sorted(ev.call_text for ev in pt.call_events) == [
+            "CALL priv_mod$priv_mod$compute_i(2_4)",
+            "CALL priv_mod$priv_mod$compute_r(1._4)",
+        ]
+
+
+# =============================================================================
+# Scope/visibility-correct lookup (W4)
+# =============================================================================
+
+class TestVisibility:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        ptree_path = F90_DIR / "test_interface_basic_ptree"
-        assert ptree_path.exists(), f"Parse tree not found: {ptree_path}"
-        self.pt, self.nr = parse_all_passes(ptree_path)
-        self.iface = get_interface(self.nr, "interface_basic_mod", "compute")
+        self.pt, self.nr = parse_all_passes(F90_DIR / "test_private_specifics_ptree")
 
-    def test_exact_type_match(self):
-        result = self.pt.resolve_interface_procedures(
-            self.iface, call_arg_types=["real", "integer"], call_arg_ranks=[0, 0],
-        )
-        names = sorted(r.name for r in result)
-        assert "compute_real" in names
-        assert "compute_int" in names
-        assert "compute_logical" not in names
+    def test_access_stmts_recorded(self):
+        priv = get_module(self.nr, "priv_mod")
+        assert priv.default_access == "private"
+        assert priv.access_overrides == {"compute": "public"}
 
-    def test_integer_type_match(self):
-        result = self.pt.resolve_interface_procedures(
-            self.iface, call_arg_types=["integer", "integer"], call_arg_ranks=[0, 0],
-        )
-        names = sorted(r.name for r in result)
-        assert "compute_int" in names
-        assert "compute_real" in names
-        assert "compute_logical" not in names
+    def test_public_generic_is_visible_through_the_only_list(self):
+        caller = get_module(self.nr, "priv_caller_mod")
+        found = self.pt.find_named_entity(caller, "compute")
+        assert found is not None and found.name == "compute"
 
-    def test_unknown_type_matches_all(self):
-        result = self.pt.resolve_interface_procedures(
-            self.iface, call_arg_types=["unknown", "unknown"], call_arg_ranks=[-1, -1],
-        )
-        assert len(result) == 3
+    def test_private_specific_is_not_visible_from_the_caller(self):
+        caller = get_module(self.nr, "priv_caller_mod")
+        assert self.pt.find_named_entity(caller, "compute_r") is None
 
-    def test_no_match_falls_back_to_all(self):
-        result = self.pt.resolve_interface_procedures(
-            self.iface,
-            call_arg_types=["character", "character", "character", "character"],
-            call_arg_ranks=[0, 0, 0, 0],
-        )
-        assert len(result) == 3
+    def test_private_specific_is_visible_inside_its_own_module(self):
+        priv = get_module(self.nr, "priv_mod")
+        found = self.pt.find_named_entity(priv, "compute_r")
+        assert found is not None and found.name == "compute_r"
 
 
-# =============================================================================
-# _procedure_matches
-# =============================================================================
+class TestUseChainModule:
+    """_use_chain_module scope-qualifies unresolved targets (hand-built registry,
+    since a with-sema fixture cannot USE a module outside the parsed set)."""
 
-class TestProcedureMatches:
+    def setup_method(self):
+        self.nr = NodeRegistry()
+        self.caller_mod = self.nr.Module("caller_mod")
+        self.caller = self.nr.Subroutine("do_work", self.caller_mod)
+        self.ext = self.nr.Module("ext_mod")
 
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        ptree_path = F90_DIR / "test_keyword_args_ptree"
-        assert ptree_path.exists(), f"Parse tree not found: {ptree_path}"
-        self.pt, self.nr = parse_all_passes(ptree_path)
+    def test_only_list_pins_the_module(self):
+        self.caller_mod.used_names_lists[self.ext] = ["only_sub"]
+        assert ParseTree._use_chain_module(self.caller, "only_sub") == "ext_mod"
 
-    def test_positional_match(self):
-        proc = get_subroutine(self.nr, "interface_keyword_mod", "transform_scale")
-        assert self.pt._procedure_matches(
-            proc, call_arg_types=["real", "real", "real"], call_arg_ranks=[1, 0, 0],
-        )
+    def test_wildcard_pins_nothing(self):
+        self.caller_mod.used_names_lists[self.ext] = ["*"]
+        assert ParseTree._use_chain_module(self.caller, "only_sub") is None
 
-    def test_positional_mismatch(self):
-        proc = get_subroutine(self.nr, "interface_keyword_mod", "transform_scale")
-        assert not self.pt._procedure_matches(
-            proc, call_arg_types=["real", "character", "character"], call_arg_ranks=[1, 0, 0],
-        )
-
-    def test_keyword_match_by_name(self):
-        proc = get_subroutine(self.nr, "interface_keyword_mod", "transform_scale")
-        assert self.pt._procedure_matches(
-            proc, call_arg_types=["real", "real", "real"], call_arg_ranks=[1, 0, 0],
-            call_arg_names=[None, "offset", "scale"],
-        )
-
-    def test_wrong_keyword_rejected(self):
-        proc = get_subroutine(self.nr, "interface_keyword_mod", "transform_scale")
-        assert not self.pt._procedure_matches(
-            proc, call_arg_types=["real", "integer", "integer"], call_arg_ranks=[1, 0, 0],
-            call_arg_names=[None, "idx", "count"],
-        )
-
-    def test_too_many_args_rejected(self):
-        proc = get_subroutine(self.nr, "interface_keyword_mod", "transform_scale")
-        assert not self.pt._procedure_matches(
-            proc, call_arg_types=["real", "real", "real", "real"], call_arg_ranks=[1, 0, 0, 0],
-        )
-
-    def test_too_few_args_rejected(self):
-        proc = get_subroutine(self.nr, "interface_keyword_mod", "transform_scale")
-        assert not self.pt._procedure_matches(
-            proc, call_arg_types=["real"], call_arg_ranks=[1],
-        )
+    def test_rename_pins_through_the_alias(self):
+        self.caller_mod.used_names_lists[self.ext] = []
+        self.caller_mod.used_renames_lists[self.ext] = [("alias_sub", "real_sub")]
+        assert ParseTree._use_chain_module(self.caller, "alias_sub") == "ext_mod"
 
 
 # =============================================================================
-# Variable tracking
+# Variable tracking (kept for `obj%binding()` receiver types and signatures)
 # =============================================================================
 
 class TestVariableParsing:
@@ -173,6 +238,12 @@ class TestVariableParsing:
         assert scope_vars["cube"].type == "real"
         assert scope_vars["cube"].rank == 3
 
+    def test_derived_type_variable(self):
+        pt, nr = parse_all_passes(F90_DIR / "test_type_bound_generic_ptree")
+        mod = get_module(nr, "tbp_caller_mod")
+        scope_key = Subroutine.key("test_type_bound_calls", mod)
+        assert pt.variables[scope_key]["obj"].type == "derived:gadget_t"
+
 
 class TestAssumedShapeVariables:
 
@@ -193,83 +264,3 @@ class TestAssumedShapeVariables:
         scope_key = Subroutine.key("test_assumed_calls", mod)
         scope_vars = self.pt.variables.get(scope_key, {})
         assert scope_vars["data2d"].rank == 2
-
-
-# =============================================================================
-# with-sema dump line shapes (Phase 1b)
-#
-# The fixtures are with-sema dumps, so the matchers must cope with unparse
-# annotations and the extra `Expr` nesting they introduce. These pin the two
-# helpers that absorb the difference, using real lines from both dump variants.
-# =============================================================================
-
-class TestSemaLineShapes:
-
-    # the same CALL, as each dump variant renders it
-    SEMA_CALL = "| | | | ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'"
-    NOSEMA_CALL = "| | | | ActionStmt -> CallStmt"
-
-    def test_node_path_ignores_unparse_annotation(self):
-        assert node_path(self.SEMA_CALL) == self.NOSEMA_CALL
-        assert node_path(self.NOSEMA_CALL) == self.NOSEMA_CALL
-
-    def test_node_path_strips_leaf_values_too(self):
-        assert node_path("| | Name = 'compute'") == "| | Name"
-
-    def test_unparse_text(self):
-        assert unparse_text(self.SEMA_CALL) == "CALL compute_real(r,1_4)"
-        assert unparse_text(self.NOSEMA_CALL) is None
-
-    def test_splice_reproduces_the_nosema_line(self):
-        # An annotated Expr pushes its structure one level down; splicing the two
-        # back together must yield exactly what -no-sema would have emitted.
-        sema_expr = "| | | | | | | ActualArg -> Expr = '1_4'"
-        sema_child = "| | | | | | | | LiteralConstant -> IntLiteralConstant = '1'"
-        assert splice_annotated_child(sema_expr, sema_child) == (
-            "| | | | | | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'"
-        )
-
-    def test_expr_structure_line_collapses_annotated_expr(self):
-        lines = [
-            "| | | | | | | ActualArg -> Expr = 'j+1_4'",
-            "| | | | | | | | Add",
-            "| | | | | | | | | Expr = 'j'",
-        ]
-        # the operator sits on the child line, so type inference only sees it
-        # after the splice
-        assert ParseTree._expr_structure_line(lines, 0).endswith("Expr -> Add")
-
-    def test_expr_structure_line_passes_nosema_through(self):
-        lines = ["| | | ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'"]
-        assert ParseTree._expr_structure_line(lines, 0) == lines[0]
-
-
-# =============================================================================
-# Phase 2 hook: sema's resolved call text recorded alongside each call
-#
-# Answers DESIGN Q2 as an executable fact — the structured tree still names the
-# generic, while the statement's unparse annotation names the specific procedure
-# sema picked. Nothing consumes this yet.
-# =============================================================================
-
-class TestResolvedCallUnparse:
-
-    def test_generic_subroutine_call_carries_the_specific(self):
-        pt, _ = parse_all_passes(F90_DIR / "test_interface_basic_ptree")
-        # every call is written as the generic `compute` ...
-        assert {callee for _, callee, _ in pt.call_unparse} == {"compute"}
-        # ... while sema's text names the specific it resolved to
-        assert sorted(unparse for _, _, unparse in pt.call_unparse) == [
-            "CALL compute_int(i,2_4)",
-            "CALL compute_logical(flag,.true._4)",
-            "CALL compute_real(r,1_4)",
-        ]
-
-    def test_generic_function_reference_carries_the_specifics(self):
-        pt, _ = parse_all_passes(F90_DIR / "test_generic_function_ptree")
-        # both references are written as the generic `area`, and both are recorded
-        # against the enclosing statement, whose text resolves each one
-        assert [callee for _, callee, _ in pt.call_unparse] == ["area", "area"]
-        assert {unparse for _, _, unparse in pt.call_unparse} == {
-            "a=area_r(y)+area_i(k)"
-        }

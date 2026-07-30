@@ -54,6 +54,25 @@ def callee_names(ir, caller, with_interfaces=False):
 
 
 # =============================================================================
+# Confidence strata: the may/must lattice views (D3)
+# =============================================================================
+
+class TestConfidenceViews:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ir = extract("test_interface_basic_ptree")
+
+    def test_calls_is_the_union_of_the_strata(self):
+        assert self.ir.calls == (
+            self.ir.calls_resolved | self.ir.calls_assumed | self.ir.calls_unresolved
+        )
+
+    def test_calls_must_is_the_resolved_stratum(self):
+        assert self.ir.calls_must == self.ir.calls_resolved
+
+
+# =============================================================================
 # Basic interface resolution by argument type
 # =============================================================================
 
@@ -89,6 +108,22 @@ class TestInterfaceBasic:
         assert "compute_real" in callees
         assert "compute_int" in callees
         assert "compute_logical" in callees
+
+    def test_generic_calls_land_in_the_resolved_stratum(self):
+        # sema names the specific for each call, so every edge — the three
+        # specifics and the caller->interface edge — is `resolved`; nothing is
+        # left to guess.
+        caller = get_subroutine(self.ir, "caller_basic_mod", "test_calls")
+        iface = get_interface(self.ir, "interface_basic_mod", "compute")
+        expected = {
+            (caller.id, iface.id),
+            (caller.id, get_subroutine(self.ir, "interface_basic_mod", "compute_real").id),
+            (caller.id, get_subroutine(self.ir, "interface_basic_mod", "compute_int").id),
+            (caller.id, get_subroutine(self.ir, "interface_basic_mod", "compute_logical").id),
+        }
+        assert self.ir.calls_resolved == expected
+        assert self.ir.calls_assumed == set()
+        assert self.ir.calls_unresolved == set()
 
 
 # =============================================================================
@@ -146,7 +181,107 @@ class TestKeywordArgs:
 
 
 # =============================================================================
-# StructureComponent returns unknown type -> conservative fallback
+# Calls to targets defined nowhere in the parsed set (D3: unresolved)
+# =============================================================================
+
+class TestExternalCalls:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ir = extract("test_external_calls_ptree")
+        self.caller = get_subroutine(self.ir, "ext_caller_mod", "test_external_calls")
+
+    def test_unresolved_targets_are_first_class_entities(self):
+        ext_sub = self.ir.get("ext_sub")
+        ext_fun = self.ir.get("ext_fun")
+        assert ext_sub is not None and not ext_sub.defined
+        assert ext_fun is not None and not ext_fun.defined
+        # the call context tells the frontend which flavour each target is
+        assert ext_sub.kind == "subroutine"
+        assert ext_fun.kind == "function"
+
+    def test_edges_land_in_the_unresolved_stratum(self):
+        assert self.ir.calls_unresolved == {
+            (self.caller.id, "ext_sub"),
+            (self.caller.id, "ext_fun"),
+        }
+
+    def test_resolvable_neighbor_is_unaffected(self):
+        helper = get_subroutine(self.ir, "ext_provider_mod", "helper_sub")
+        assert (self.caller.id, helper.id) in self.ir.calls_resolved
+
+    def test_must_view_excludes_unresolved(self):
+        assert not any(callee in ("ext_sub", "ext_fun")
+                       for (_, callee) in self.ir.calls_must)
+        # ... while the may view keeps them
+        assert (self.caller.id, "ext_sub") in self.ir.calls
+
+
+# =============================================================================
+# Type-bound procedure calls, generic and `=>`-renamed (Phase 2 / DESIGN Q2)
+# =============================================================================
+
+class TestTypeBoundGeneric:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ir = extract("test_type_bound_generic_ptree")
+        self.caller = get_subroutine(self.ir, "tbp_caller_mod", "test_type_bound_calls")
+
+    def test_generic_binding_resolves_by_argument_type(self):
+        go_r = get_subroutine(self.ir, "tbp_mod", "go_r")
+        go_i = get_subroutine(self.ir, "tbp_mod", "go_i")
+        assert (self.caller.id, go_r.id) in self.ir.calls_resolved
+        assert (self.caller.id, go_i.id) in self.ir.calls_resolved
+
+    def test_renamed_binding_resolves_to_the_implementation(self):
+        # `procedure :: reset => reset_state`; the call is written obj%reset()
+        reset = get_subroutine(self.ir, "tbp_mod", "reset_state")
+        assert (self.caller.id, reset.id) in self.ir.calls_resolved
+
+    def test_nothing_is_guessed(self):
+        assert self.ir.calls_assumed == set()
+        assert self.ir.calls_unresolved == set()
+
+    def test_bindings_are_entity_facts(self):
+        gadget = next(dt for dt in self.ir.derived_types if dt.name == "gadget_t")
+        assert ("reset", "reset_state") in gadget.bindings
+
+
+# =============================================================================
+# A public generic with PRIVATE specifics: the mangled sema answer (Q1/Q2, W4)
+# =============================================================================
+
+class TestPrivateSpecifics:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ir = extract("test_private_specifics_ptree")
+        self.caller = get_subroutine(self.ir, "priv_caller_mod", "test_private_calls")
+
+    def test_mangled_answers_demangle_to_scope_qualified_targets(self):
+        # sema prints `priv_mod$priv_mod$compute_r(...)`; the edge must land on
+        # the entity `priv_mod::compute_r`, not on a bare-name atom
+        compute_r = get_subroutine(self.ir, "priv_mod", "compute_r")
+        compute_i = get_subroutine(self.ir, "priv_mod", "compute_i")
+        assert (self.caller.id, compute_r.id) in self.ir.calls_resolved
+        assert (self.caller.id, compute_i.id) in self.ir.calls_resolved
+
+    def test_generic_edge_kept_alongside_the_specifics(self):
+        iface = get_interface(self.ir, "priv_mod", "compute")
+        assert (self.caller.id, iface.id) in self.ir.calls_resolved
+
+    def test_all_edges_are_resolved(self):
+        assert self.ir.calls_assumed == set()
+        assert self.ir.calls_unresolved == set()
+
+
+# =============================================================================
+# StructureComponent actual arguments (e.g. `call update(cs%mode, 2)`)
+#
+# The component's type is invisible to a structural scrape, which is why the
+# retired heuristic engine had to fall back to full fan-out here; sema's unparse
+# names each call's specific regardless.
 # =============================================================================
 
 class TestStructureComponent:
@@ -159,23 +294,23 @@ class TestStructureComponent:
         iface = get_interface(self.ir, "struct_comp_mod", "update")
         assert member_names(self.ir, iface) == ["update_int", "update_real"]
 
-    def test_struct_calls_fall_back(self):
+    def test_struct_component_args_resolve(self):
         caller = get_subroutine(self.ir, "caller_struct_mod", "test_struct_calls")
         callees = callee_names(self.ir, caller)
         assert "update_real" in callees
         assert "update_int" in callees
+        assert self.ir.calls_assumed == set()
 
 
 # =============================================================================
 # Generic FUNCTION reference inside an expression
 #
 # Every other fixture calls generics through CALL statements; this one is the only
-# coverage of the FunctionReference path. Note what sema does here: the dump's
-# structure still names the generic (`ProcedureDesignator -> Name = 'area'`) while
-# the statement's unparse annotation reads `a=area_r(y)+area_i(k)` — already
-# resolved. The frontend's own heuristic is coarser: it treats real and integer as
-# mutually compatible, so both specifics show up as callees. Consuming sema's
-# resolution instead (and dropping to one edge per reference) is Phase 2.
+# coverage of the FunctionReference path. The dump's structure still names the
+# generic (`ProcedureDesignator -> Name = 'area'`) while each reference's
+# enclosing Expr annotation carries its resolved text (`area_r(y)`, `area_i(k)`)
+# — consumed since Phase 2, so each reference yields exactly one resolved edge
+# even though both calls share one statement.
 # =============================================================================
 
 class TestGenericFunction:
@@ -201,6 +336,18 @@ class TestGenericFunction:
     def test_generic_recorded_as_callee(self):
         caller = get_subroutine(self.ir, "caller_area_mod", "test_generic_function_calls")
         assert "area" in callee_names(self.ir, caller, with_interfaces=True)
+
+    def test_each_reference_resolves_to_exactly_its_specific(self):
+        # `a = area(y) + area(k)`: two calls in one statement, each resolved to
+        # its own specific — all edges in the resolved stratum, none guessed.
+        caller = get_subroutine(self.ir, "caller_area_mod", "test_generic_function_calls")
+        iface = get_interface(self.ir, "area_mod", "area")
+        assert self.ir.calls_resolved == {
+            (caller.id, iface.id),
+            (caller.id, get_function(self.ir, "area_mod", "area_r").id),
+            (caller.id, get_function(self.ir, "area_mod", "area_i").id),
+        }
+        assert self.ir.calls_assumed == set()
 
 
 # =============================================================================
@@ -260,13 +407,13 @@ class TestAssumedShape:
 
 
 # =============================================================================
-# Optional arguments and argument count matching
+# Optional arguments (signature facts) and calls that omit/keyword them
 #
 # The fixture's two specifics differ in their first argument's type — `init` would
 # otherwise be an ambiguous generic, which sema rejects outright (Phase 1b: the
-# fixture only ever compiled under -no-sema). The 3-/4-argument and keyword calls
-# therefore still exercise argument-count and keyword matching against the optional
-# dummies, while the 2-argument call exercises the fan-out below.
+# fixture only ever compiled under -no-sema). The optional dummies are entity
+# metadata (num_required in the Signature); the 2-/3-/4-argument and keyword
+# calls each resolve to exactly one specific via sema.
 # =============================================================================
 
 class TestOptionalArgs:
@@ -289,12 +436,11 @@ class TestOptionalArgs:
         assert sub.signature.num_args == 4
         assert sub.signature.num_required == 2
 
-    def test_2arg_call_matches_both(self):
+    def test_every_call_form_resolves(self):
+        # positional-with-omitted-optionals and keyword calls alike
         caller = get_subroutine(self.ir, "caller_optional_mod", "test_optional_calls")
         callees = callee_names(self.ir, caller)
         assert "init_simple" in callees
         assert "init_advanced" in callees
-
-    def test_keyword_optional_resolves(self):
-        caller = get_subroutine(self.ir, "caller_optional_mod", "test_optional_calls")
-        assert "init_advanced" in callee_names(self.ir, caller)
+        assert self.ir.calls_assumed == set()
+        assert self.ir.calls_unresolved == set()

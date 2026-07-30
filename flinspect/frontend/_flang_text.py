@@ -18,26 +18,21 @@ def level(line):
 
 
 # ---------------------------------------------------------------------------
-# with-sema vs no-sema line shapes
+# with-sema line shapes
 #
-# `-fdebug-dump-parse-tree` (with sema) differs from `-...-no-sema` in two ways
-# that matter to a line matcher:
+# In the `-fdebug-dump-parse-tree` (with-sema) dump, statement and expression
+# nodes carry an *unparse annotation* — the source they unparse to after
+# semantic analysis:
+#     ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'
+#     ActualArg -> Expr = '1_4'
+# Only `CallStmt`, `AssignmentStmt`, `Expr` and `Variable` carry one; other
+# nodes (`SubroutineStmt`, `UseStmt`, …) do not. An annotated `Expr` occupies
+# its line alone, so its structural child sits one level deeper.
 #
-#   1. Statement and expression nodes gain an *unparse annotation* — the source
-#      they unparse to after semantic analysis:
-#          ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'
-#          ActualArg -> Expr = '1_4'
-#      Only `CallStmt`, `AssignmentStmt`, `Expr` and `Variable` carry one; other
-#      nodes (`SubroutineStmt`, `UseStmt`, …) are unchanged.
-#   2. Because an annotated `Expr` occupies the line by itself, its structural
-#      child is pushed one level deeper:
-#          no-sema:  ActualArg -> Expr -> LiteralConstant -> IntLiteralConstant = '1'
-#          sema:     ActualArg -> Expr = '1_4'
-#                      LiteralConstant -> IntLiteralConstant = '1'
-#
-# The two helpers below let the matchers accept either variant: `node_path`
-# ignores the annotation, and `splice_annotated_child` collapses (2) back into
-# the single line a no-sema dump would have produced.
+# `node_path` lets matchers ignore the annotation; `unparse_text` extracts it.
+# The annotation is where sema's *resolution* lives (DESIGN Q2): generic and
+# type-bound calls are printed with the specific procedure sema picked, so
+# `call_candidates` + `demangle` below are how the frontend reads those answers.
 # ---------------------------------------------------------------------------
 
 _PAYLOAD_RE = re.compile(r" = '(.*)'\s*$")
@@ -63,13 +58,53 @@ def unparse_text(line):
     return m.group(1) if m else None
 
 
-def splice_annotated_child(line, child):
-    """Collapse an annotated node and its structural child onto one line.
+# ---------------------------------------------------------------------------
+# Reading sema's resolution out of an unparse annotation
+# ---------------------------------------------------------------------------
 
-    Reproduces the single line a no-sema dump would have emitted, so structural
-    matchers keep working unchanged on with-sema input.
+# flang's name mangling in unparse text. When the resolved specific procedure is
+# not accessible by name in the calling scope (e.g. only the generic is
+# USE-imported, or the specifics are private), flang prints a fully qualified
+# form:  <module-imported-through>$<symbol-owner-module>$<specific>
+# Derived empirically from the MOM6+FMS2 production corpus (994 distinct mangled
+# names, all exactly three components): the FIRST component is the module the
+# name was imported through; the SECOND is the module that *owns the specific's
+# symbol* — usually its definition site (`fms_mod$mpp_mod$mpp_error_basic`: the
+# specific lives in mpp_mod), but the owner may itself hold the name by
+# use-association (`fms2_io_mod$fms2_io_mod$compressed_read_2d`, whose body
+# lives in netcdf_io_mod), so resolution must follow the owner's use-chain.
+# Note this is pretty-printer behaviour with no stability contract (DESIGN Q1);
+# the conformance fixture `test_private_specifics` pins it.
+_MANGLED_RE = re.compile(r"^(\w+)\$(\w+)\$(\w+)$")
+
+
+def demangle(name):
+    """Split a mangled unparse name into (imported_via, owner_module, specific).
+
+    Returns None if *name* is a plain identifier.
     """
-    return f"{node_path(line)} -> {child.lstrip('| ').rstrip()}"
+    m = _MANGLED_RE.match(name)
+    return m.groups() if m else None
+
+
+# A call site in unparse text: an (optionally mangled) identifier directly
+# applied to an argument list, optionally reached through `%` (type-bound).
+_CALL_SITE_RE = re.compile(r"(%?)([A-Za-z_][A-Za-z0-9_$]*)\s*\(")
+
+# A double-quoted character literal ('""' is the escaped quote). flang's
+# unparser normalizes strings to double quotes.
+_STRING_RE = re.compile(r'"(?:[^"]|"")*"')
+
+
+def call_candidates(text):
+    """Ordered call sites in an unparse text, as (offset, is_type_bound, name).
+
+    ``offset`` is the position of the name in *text*; string-literal contents
+    are blanked first so a parenthesis inside a message can't fake a call.
+    """
+    blanked = _STRING_RE.sub(lambda m: '"' * len(m.group(0)), text)
+    return [(m.start(2), m.group(1) == "%", m.group(2))
+            for m in _CALL_SITE_RE.finditer(blanked)]
 
 
 _fortran_intrinsics = {

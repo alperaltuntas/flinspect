@@ -57,6 +57,12 @@ class ProgramUnit(Scope):
         A set of Function instances defined in this program unit.
     parse_tree_path : Path
         The path to the parse tree file from which this program unit was read.
+    default_access : str
+        The unit's default accessibility ('public' unless a bare `private`
+        statement was parsed).
+    access_overrides : dict
+        Per-name accessibility from explicit `public :: x` / `private :: x`
+        statements, as name (lowercase) -> 'public' | 'private'.
     """
 
     def __init__(self, name):
@@ -66,6 +72,8 @@ class ProgramUnit(Scope):
         self.interfaces = set()
         self.derived_types = set()
         self.parse_tree_path = None # To be set when the parse tree is read
+        self.default_access = "public"
+        self.access_overrides = {}
 
     @classmethod
     def key(cls, name):
@@ -77,9 +85,6 @@ class Module(ProgramUnit):
 
 class Program(ProgramUnit):
     """Class representing a Fortran program."""
-    def __init__(self, name):
-        super().__init__(name)
-        self.callees = set()
     pass
 
 class Subprogram(ProgramUnit):
@@ -97,10 +102,6 @@ class Callable(Scope):
         The program unit (module, program, or subprogram) that contains this callable.
     parent : Callable or None
         The parent callable if this is a nested subroutine/function, otherwise None.
-    callees : set
-        A set of Callable instances that are called by this callable.
-    callers : set
-        A set of Callable instances that call this callable.
     num_args : int or None
         The total number of arguments in the callable's signature (derived from arg_types).
         None if arg_types not yet parsed.
@@ -136,8 +137,6 @@ class Callable(Scope):
         super().__init__(name)
         self.program_unit = program_unit
         self.parent = parent # Parent callable if nested, else None
-        self.callees = set()
-        self.callers = set()
         self.derived_types = set()
         self.num_required_args = None  # Number of required (non-optional) arguments
         self.arg_types = None  # List of argument types in order
@@ -171,7 +170,6 @@ class Interface(Node):
         self.program_unit = program_unit
         self.program_unit.interfaces.add(self)
         self.procedures = set()
-        self.callers = set()
 
     @classmethod
     def key(cls, name, program_unit):
@@ -184,8 +182,8 @@ class DerivedType(Node):
         assert hasattr(scope, 'derived_types'), self.msg("Current scope cannot hold derived types")
         self.scope = scope
         self.scope.derived_types.add(self)
-        self.callees = set()
         self.bindings = {}  # Maps binding_name -> impl_name (e.g., 'reset' -> 'reset_bounds')
+        self.generic_bindings = {}  # Maps generic binding name -> [specific binding names]
         self.parent_type_name = None  # Name of parent type if EXTENDS is used
 
     @classmethod

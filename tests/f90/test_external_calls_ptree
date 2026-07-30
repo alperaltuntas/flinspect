@@ -1,0 +1,75 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'ext_provider_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'helper_sub'
+| | | | DummyArg -> Name = 'x'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'ext_caller_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'ext_provider_mod'
+| | | Only -> GenericSpec -> Name = 'helper_sub'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_external_calls'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> OtherSpecificationStmt -> ExternalStmt -> Name = 'ext_sub'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> External
+| | | | | EntityDecl
+| | | | | | Name = 'ext_fun'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | EntityDecl
+| | | | | | Name = 'r'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'r=1._4'
+| | | | | Variable = 'r'
+| | | | | | Designator -> DataRef -> Name = 'r'
+| | | | | Expr = '1._4'
+| | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | Real = '1.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL ext_sub(r)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'ext_sub'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = 'r'
+| | | | | | | | Designator -> DataRef -> Name = 'r'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'r=ext_fun(r)'
+| | | | | Variable = 'r'
+| | | | | | Designator -> DataRef -> Name = 'r'
+| | | | | Expr = 'ext_fun(r)'
+| | | | | | FunctionReference -> Call
+| | | | | | | ProcedureDesignator -> Name = 'ext_fun'
+| | | | | | | ActualArgSpec
+| | | | | | | | ActualArg -> Expr = 'r'
+| | | | | | | | | Designator -> DataRef -> Name = 'r'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL helper_sub(r)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'helper_sub'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = 'r'
+| | | | | | | | Designator -> DataRef -> Name = 'r'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

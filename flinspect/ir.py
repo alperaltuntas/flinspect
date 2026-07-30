@@ -7,11 +7,14 @@ frontend (flang dump today, LFortran ASR tomorrow) populates an ``IR`` and every
 consumer reads only from it.
 
 Identity is a scope-qualified, interned ``EntityId`` string — never a bare name
-(design principle #7). Relations are plain tuple-sets so that confidence can later
-be modeled by *stratifying* a relation into ``calls_resolved`` / ``calls_assumed`` /
-``calls_unresolved`` (principle #2, D3) without reshaping anything. Phase 1a keeps a
-single ``calls`` relation; ``unresolved_calls`` is already kept as a first-class
-fact rather than silently dropped.
+(design principle #7). Confidence is modeled by *stratified relations*, not tuple
+attributes (principle #2, D3): the call relation is stored as three pure relations,
+``calls_resolved`` / ``calls_assumed`` / ``calls_unresolved``, and the standard
+sound-analysis lattice falls out as computed views — ``calls_must`` (the
+under-approximation, = ``calls_resolved``) and ``calls`` (the over-approximation,
+the union of all three strata). Unresolved call *targets* are first-class entities
+with ``defined=False`` (scope-qualified when the use-chain pins the module, a bare
+name atom otherwise) — never silently dropped (principle #6).
 """
 
 from __future__ import annotations
@@ -104,19 +107,37 @@ class IR:
 
     entities: dict[EntityId, Entity] = field(default_factory=dict)
 
-    # Relations. Each is a set of tuples of EntityIds (or names where the target
-    # may be external/unresolved).
-    calls: set[tuple[EntityId, EntityId]] = field(default_factory=set)
+    # The call relation, stratified by confidence (D3, principle #2). Each stratum
+    # is a pure relation of (caller_id, callee_id) over interned atoms:
+    #   resolved   — the target identity is certain (compiler-derived or a direct
+    #                call to a unique, visible, non-generic procedure);
+    #   assumed    — the target is a guess (e.g. generic fan-out, dynamic dispatch);
+    #   unresolved — the target is known to exist but was found nowhere; the callee
+    #                is a first-class entity with ``defined=False``.
+    calls_resolved: set[tuple[EntityId, EntityId]] = field(default_factory=set)
+    calls_assumed: set[tuple[EntityId, EntityId]] = field(default_factory=set)
+    calls_unresolved: set[tuple[EntityId, EntityId]] = field(default_factory=set)
+
+    # Other relations.
     contains: set[tuple[EntityId, EntityId]] = field(default_factory=set)
     interface_members: set[tuple[EntityId, EntityId]] = field(default_factory=set)
     uses: set[Use] = field(default_factory=set)
 
-    # First-class partial knowledge: a call whose target could not be resolved.
-    # (caller_id, callee_name) — kept, never silently dropped (D3, principle #6).
-    unresolved_calls: set[tuple[EntityId, str]] = field(default_factory=set)
-
     # Fault isolation: files that failed to parse (W3).
     file_errors: list[FileError] = field(default_factory=list)
+
+    # ------------------------------------------------------------------ #
+    # Confidence views (computed, not stored) — the may/must lattice (D3)
+    # ------------------------------------------------------------------ #
+    @property
+    def calls(self) -> set[tuple[EntityId, EntityId]]:
+        """The *may*-call relation: union of all confidence strata."""
+        return self.calls_resolved | self.calls_assumed | self.calls_unresolved
+
+    @property
+    def calls_must(self) -> set[tuple[EntityId, EntityId]]:
+        """The *must*-call relation: the under-approximation (resolved only)."""
+        return self.calls_resolved
 
     # ------------------------------------------------------------------ #
     # Entity-set views (unary relations)

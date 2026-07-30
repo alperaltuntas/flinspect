@@ -1,0 +1,76 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'priv_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> OtherSpecificationStmt -> AccessStmt
+| | | AccessSpec -> Kind = Private
+| | DeclarationConstruct -> SpecificationConstruct -> OtherSpecificationStmt -> AccessStmt
+| | | AccessSpec -> Kind = Public
+| | | AccessId -> GenericSpec -> Name = 'compute'
+| | DeclarationConstruct -> SpecificationConstruct -> InterfaceBlock
+| | | InterfaceStmt -> GenericSpec -> Name = 'compute'
+| | | InterfaceSpecification -> ProcedureStmt
+| | | | Kind = ModuleProcedure
+| | | | Name = 'compute_r'
+| | | | Name = 'compute_i'
+| | | EndInterfaceStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'compute_r'
+| | | | DummyArg -> Name = 'x'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'compute_i'
+| | | | DummyArg -> Name = 'k'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'k'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'priv_caller_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'priv_mod'
+| | | Only -> GenericSpec -> Name = 'compute'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_private_calls'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL priv_mod$priv_mod$compute_r(1._4)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'compute'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = '1._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL priv_mod$priv_mod$compute_i(2_4)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'compute'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = '2_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '2'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

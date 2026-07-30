@@ -1,19 +1,59 @@
 import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 from flinspect.frontend._flang_text import (
-    level, is_fortran_intrinsic, node_path, unparse_text, splice_annotated_child,
+    level, is_fortran_intrinsic, node_path, unparse_text, call_candidates, demangle,
 )
 from flinspect.frontend._state import ParseState
 from flinspect.frontend._variable_info import VariableInfo
-from flinspect.frontend._nodes import (
-    Interface, Callable, Subroutine, Function,
-    Module, Program, Subprogram, DerivedType,
-)
+from flinspect.frontend._nodes import Interface, Callable, DerivedType
 from flinspect.frontend._registry import NodeRegistry
 from flinspect.ir import (
     IR, Entity, Signature, Use, FileError,
     MODULE, PROGRAM, SUBPROGRAM, SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE,
+    CALLABLE_KINDS,
 )
+
+
+# Confidence strata (D3). Frontend-internal tokens; the IR expresses them as the
+# calls_resolved / calls_assumed / calls_unresolved relations.
+RESOLVED = "resolved"
+ASSUMED = "assumed"
+UNRESOLVED = "unresolved"
+
+
+@dataclass
+class CallEvent:
+    """One call site, as recorded during the call pass (resolution happens later).
+
+    ``call_text`` is sema's unparse of *this* call: the ``CallStmt`` annotation
+    for subroutine calls, the enclosing annotated ``Expr`` for function
+    references. Sema resolves generic and type-bound names in that text, so it —
+    not the structured tree, which still shows the name as written — carries the
+    compiler's answer (DESIGN Q2).
+    """
+
+    caller: object                     # Scope node the call was made from
+    written_name: str                  # callee as written (generic/binding name)
+    call_text: Optional[str]           # sema unparse of this call (None if absent)
+    is_function: bool = False
+    is_type_bound: bool = False        # a `obj%binding(...)` call
+    bound_type_name: Optional[str] = None  # declared derived type of `obj`, if known
+
+
+@dataclass(frozen=True)
+class UnknownTarget:
+    """A call target that exists (it is called) but was found nowhere (D3).
+
+    Projected onto the IR as a first-class entity with ``defined=False`` —
+    scope-qualified when ``module`` pins the defining module, a bare name atom
+    otherwise.
+    """
+
+    name: str
+    module: Optional[str] = None
+    is_function: bool = False
 
 
 class ParseTree:
@@ -38,21 +78,17 @@ class ParseTree:
         self.next_line = None
         self.line_number = 0
 
-        # Set of unfound calls during call resolution
-        self.unfound_subroutine_calls = []
-        self.unfound_function_calls = []
+        # Call sites recorded by the call pass, resolved later (classify_calls).
+        self.call_events = []
 
-        # Phase 2 hook (below the seam, unused today): the with-sema unparse text
-        # of the statement enclosing each recorded call, as
-        # (caller_name, callee_name_as_written, stmt_unparse).  Sema resolves
-        # generics in that text (`CALL compute_real(...)` where the structured
-        # tree still says the generic `compute`), so Phase 2 can consume it
-        # instead of re-deriving resolution.  None for a no-sema dump.
-        self.call_unparse = []
-        self.stmt_unparse = None
+        # Stack of enclosing annotated Expr nodes, as (level, unparse_text) —
+        # maintained by parse_calls so a FunctionReference can read the exact
+        # resolved text of its own call from its parent Expr.
+        self._expr_stack = []
 
-        # Variable type tracking: maps (scope_key, var_name) -> VariableInfo
-        # Persists across parsing passes (structure, interfaces, calls)
+        # Variable type tracking: maps (scope_key, var_name) -> VariableInfo.
+        # Persists across parsing passes; survives Phase 2 to give `obj%binding()`
+        # calls the declared derived type of `obj`.
         self.variables = {}
 
         # Current state variables during parsing that get updated as we read lines
@@ -91,9 +127,7 @@ class ParseTree:
         self.next_line = None
         self.line_number = 0
         self.curr = ParseState()
-        self.unfound_subroutine_calls = []
-        self.unfound_function_calls = []
-        self.stmt_unparse = None
+        self._expr_stack = []
 
     # -------------------------------------------------------------------------
     # Variable tracking methods
@@ -156,13 +190,12 @@ class ParseTree:
     def _kind_selector_name(self, line):
         """Extract the kind name from a KindSelector line (e.g. 'r8_kind'), or None.
 
-        A no-sema dump carries the whole path — kind designator included — on the
-        KindSelector line.  With sema the annotated ``Expr`` node ends the line
+        The annotated ``Expr`` node ends the KindSelector line
         (``KindSelector -> ... -> Expr = '8_4'``, holding sema's *folded* kind
-        value) and the designator moves to the child line, so read the name from
-        there.  We deliberately keep using the kind *name* as the token, leaving
-        resolution semantics unchanged — consuming sema's folded value instead is
-        Phase 2 (W6).
+        value) and the designator sits on the child line, so read the name from
+        there.  The kind *name* is deliberately the token kept: kinds are entity
+        signature facts, no longer inputs to call resolution (Phase 2 retired
+        that engine), and the name is the more readable fact.
 
         Must be called with *line* already consumed: it may read the child line.
         """
@@ -269,480 +302,32 @@ class ParseTree:
 
         return binding_name, None
 
-    def _record_call_dependencies(self, callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names=None, is_function=False, defining_scope=None):
-        """Record a call relationship between the current scope and the callee."""
-        caller = self.curr.scope
-        callee = self.find_named_entity(caller, callee_name)
+    def _record_call(self, written_name, call_text, is_function=False,
+                     is_type_bound=False, object_name=None):
+        """Record a call site as a :class:`CallEvent` (resolution happens later)."""
+        bound_type_name = None
+        if is_type_bound and object_name:
+            var_info = self.get_variable(object_name)
+            if var_info and var_info.type.startswith("derived:"):
+                bound_type_name = var_info.type[len("derived:"):]
+        self.call_events.append(CallEvent(
+            caller=self.curr.scope,
+            written_name=written_name,
+            call_text=call_text,
+            is_function=is_function,
+            is_type_bound=is_type_bound,
+            bound_type_name=bound_type_name,
+        ))
 
-        # Phase 2 hook: keep the enclosing statement's with-sema unparse text
-        # alongside the call as written.  Recorded, never read (see __init__).
-        self.call_unparse.append((caller.name, callee_name, self.stmt_unparse))
+    def _skip_call_block(self, call_level):
+        """Consume the remainder of a Call node (its argument subtree).
 
-        # If not found through normal USE chains, try the defining scope directly
-        # (for type-bound procedure calls where the routine is not explicitly USE'd)
-        if callee is None and defining_scope is not None:
-            callee = self.find_named_entity(defining_scope, callee_name)
-
-        if callee is None:
-            if is_function:
-                self.unfound_function_calls.append((caller.name, callee_name))
-            elif not callee_name.lower().startswith("mpi_"):
-                self.unfound_subroutine_calls.append((caller.name, callee_name))
-        elif isinstance(callee, Interface):
-            matching_procs = self.resolve_interface_procedures(callee, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names)
-            for proc in matching_procs:
-                caller.callees.add(proc)
-                proc.callers.add(caller)
-            caller.callees.add(callee)
-            callee.callers.add(caller)
-        else:
-            caller.callees.add(callee)
-            callee.callers.add(caller)
-
-    def _types_compatible(self, call_type, proc_type):
-        """Check if a call argument type (str) is compatible with a procedure parameter type (str)."""
-
-        # Unknown types are always considered compatible (conservative)
-        if call_type == "unknown" or proc_type == "unknown":
-            return True
-        
-        # Exact match
-        if call_type == proc_type:
-            return True
-        
-        # Numeric is compatible with integer or real
-        if call_type == "numeric" and proc_type in ("integer", "real"):
-            return True
-        if proc_type == "numeric" and call_type in ("integer", "real"):
-            return True
-        
-        # Incompatible type pairs
-        incompatible_pairs = [
-            (("integer", "real", "numeric"), ("character", "logical")),
-            (("character",), ("integer", "real", "logical", "numeric")),
-            (("logical",), ("integer", "real", "character", "numeric")),
-        ]
-        for group1, group2 in incompatible_pairs:
-            if call_type in group1 and proc_type in group2:
-                return False
-            if proc_type in group1 and call_type in group2:
-                return False
-        
-        # For derived types, they must match exactly (if both are known)
-        if call_type.startswith("derived:") and proc_type.startswith("derived:"):
-            return call_type == proc_type
-        
-        # Default: assume compatible (conservative)
-        return True
-
-    def _ranks_compatible(self, call_rank, proc_rank):
-        """Check if call argument rank (int) is compatible with procedure parameter rank."""
-        # -1 means unknown, treat as compatible
-        if call_rank == -1 or proc_rank == -1:
-            return True
-        return call_rank == proc_rank
-
-    def _kinds_compatible(self, call_kind, proc_kind):
-        """Check if call argument kind (str) is compatible with procedure parameter kind (str)."""
-
-        # None means unknown, treat as compatible
-        if call_kind is None or proc_kind is None:
-            return True
-        return call_kind == proc_kind
-
-    def _procedure_matches(self, proc, call_arg_types, call_arg_ranks=None, call_arg_kinds=None, call_arg_names=None):
-        """Check if a procedure matches the call signature.
-        
-        Parameters
-        ----------
-        proc : Callable
-            The procedure to check.
-        call_arg_types : list
-            Inferred types of actual arguments.
-        call_arg_ranks : list, optional
-            Inferred ranks of actual arguments.
-        call_arg_kinds : list, optional
-            Inferred kinds of actual arguments.
-        call_arg_names : list, optional
-            Keyword names used in the call (None for positional args).
-            
-        Returns
-        -------
-        bool
-            True if the procedure could match the call, False otherwise.
+        Note this intentionally preserves the long-standing behaviour that a
+        function reference nested in another call's argument list is not recorded
+        as a call site of its own (an under-approximation; see DESIGN W2).
         """
-        if proc.num_args is None:
-            return True  # No signature info, assume match
-        
-        # Check argument count
-        num_call_args = len(call_arg_types)
-        min_args = proc.num_required_args if proc.num_required_args is not None else proc.num_args
-        max_args = proc.num_args
-        if not (min_args <= num_call_args <= max_args):
-            return False
-        
-        # Build a mapping from call argument index to the corresponding
-        # procedure parameter index.  Positional arguments map 1-to-1;
-        # keyword arguments must be resolved by name.
-        proc_arg_names_lower = (
-            [n.lower() for n in proc.arg_names] if proc.arg_names else None
-        )
-
-        call_to_proc_idx = []
-        for i in range(len(call_arg_types)):
-            kw_name = call_arg_names[i] if call_arg_names else None
-            if kw_name is not None and proc_arg_names_lower is not None:
-                kw_lower = kw_name.lower()
-                if kw_lower in proc_arg_names_lower:
-                    call_to_proc_idx.append(proc_arg_names_lower.index(kw_lower))
-                else:
-                    return False  # keyword not in procedure → no match
-            else:
-                call_to_proc_idx.append(i)  # positional
-
-        # Check types
-        if call_arg_types and proc.arg_types:
-            for i, call_type in enumerate(call_arg_types):
-                pi = call_to_proc_idx[i]
-                if pi < len(proc.arg_types):
-                    if not self._types_compatible(call_type, proc.arg_types[pi]):
-                        return False
-        
-        # Check ranks
-        if call_arg_ranks and proc.arg_ranks:
-            for i, call_rank in enumerate(call_arg_ranks):
-                pi = call_to_proc_idx[i]
-                if pi < len(proc.arg_ranks):
-                    if not self._ranks_compatible(call_rank, proc.arg_ranks[pi]):
-                        return False
-        
-        # Check kinds
-        if call_arg_kinds and proc.arg_kinds:
-            for i, call_kind in enumerate(call_arg_kinds):
-                pi = call_to_proc_idx[i]
-                if pi < len(proc.arg_kinds):
-                    if not self._kinds_compatible(call_kind, proc.arg_kinds[pi]):
-                        return False
-        
-        return True
-
-    # -------------------------------------------------------------------------
-    # Expression and variable type inference
-    # -------------------------------------------------------------------------
-
-    # Lookup tables for expression type inference
-    _LITERAL_TYPES = {
-        "IntLiteralConstant": ("integer", 0, None),
-        "RealLiteralConstant": ("real", 0, None),
-        "CharLiteralConstant": ("character", 0, None),
-        "LogicalLiteralConstant": ("logical", 0, None),
-        "BOZLiteralConstant": ("logical", 0, None),
-        "ComplexLiteralConstant": ("complex", 0, None),
-    }
-    _ARITHMETIC_OPS = {"-> Add", "-> Subtract", "-> Multiply", "-> Divide", "-> Negate"}
-    _LOGICAL_OPS = {"-> NOT", "-> AND", "-> OR"}
-    _COMPARISON_OPS = {"-> LT", "-> LE", "-> GT", "-> GE", "-> EQ", "-> NE"}
-
-    def _infer_expr_type(self, expr_line):
-        """Infer the type of an expression from its parse tree representation.
-        
-        Parameters
-        ----------
-        expr_line : str
-            A line containing an expression (ActualArg -> Expr -> ...)
-            
-        Returns
-        -------
-        tuple (str, int, str or None)
-            The inferred type ('integer', 'real', 'character', 'logical', 'unknown'),
-            rank (0 for scalar, 1+ for arrays, -1 for unknown),
-            and kind specifier (e.g., 'r8_kind', 'i4_kind') or None if unknown
-        """
-        # Check for literal constants (always scalars with default kind)
-        for literal, type_info in self._LITERAL_TYPES.items():
-            if literal in expr_line:
-                return type_info
-        
-        # Arithmetic operations return numeric type with unknown rank
-        if any(op in expr_line for op in self._ARITHMETIC_OPS):
-            return "numeric", -1, None
-        
-        # Logical operations
-        if any(op in expr_line for op in self._LOGICAL_OPS):
-            return "logical", -1, None
-        
-        # Comparison operations return logical scalars
-        if any(op in expr_line for op in self._COMPARISON_OPS):
-            return "logical", 0, None
-        
-        # String concatenation
-        if "-> Concat" in expr_line:
-            return "character", -1, None
-        
-        # Array constructor returns array rank 1
-        if "-> ArrayConstructor" in expr_line:
-            return "unknown", 1, None
-        
-        # If it's a simple designator/variable, we can't easily determine type without context
-        return "unknown", -1, None
-
-    def _infer_variable_type(self, lines, start_level):
-        """Infer type, rank, and kind from a variable reference in expression lines.
-        
-        Parameters
-        ----------
-        lines : list of str
-            Lines to parse looking for variable name and array subscripts
-        start_level : int
-            The indentation level of the start of this expression
-            
-        Returns
-        -------
-        tuple (str, int, str or None)
-            Type, rank, and kind inferred from variable lookup and subscript analysis
-        """
-        var_name = None
-        has_subscripts = False
-        subscript_count = 0
-        has_triplet = False
-
-        # Detect StructureComponent access (e.g., CS%data_field).  We can only
-        # resolve the parent object's type, not the component's, so we must
-        # return unknown to avoid false type/rank mismatches.
-        has_structure_component = any("StructureComponent" in l for l in lines)
-
-        func_ref_name = None  # Name from ProcedureDesignator (array-as-FunctionReference)
-        func_ref_level = None  # Level of the FunctionReference -> Call line
-
-        for line in lines:
-            lvl = level(line)
-            if lvl <= start_level:
-                break
-
-            # flang parses array element access (e.g., fields(i)) as
-            # FunctionReference -> Call with ProcedureDesignator -> Name.
-            # Capture this name so we can look it up as a variable.
-            if "ProcedureDesignator -> Name = '" in line and func_ref_name is None:
-                m = re.search(r"Name = '(\w+)'", line)
-                if m:
-                    func_ref_name = m.group(1)
-                    func_ref_level = lvl
-                continue
-
-            # If we are inside a FunctionReference's ActualArgSpec (subscript),
-            # skip DataRef -> Name lines – they are subscript indices, not the
-            # variable being referenced.
-            if func_ref_level is not None and lvl > func_ref_level:
-                continue
-
-            # Look for variable name in DataRef -> Name pattern
-            if "DataRef -> Name = '" in line:
-                m = re.search(r"Name = '(\w+)'", line)
-                if m:
-                    var_name = m.group(1)
-            # Check for array element access (reduces rank)
-            elif "ArrayElement" in line:
-                has_subscripts = True
-            elif "SectionSubscript" in line:
-                subscript_count += 1
-            elif "SubscriptTriplet" in line:
-                has_triplet = True  # Triplet means dimension is preserved
-
-        # If no DataRef name was found but we have a FunctionReference name,
-        # it may be an array element access.  Try looking it up as a variable.
-        if var_name is None and func_ref_name is not None:
-            var_info = self.get_variable(func_ref_name)
-            if var_info is not None:
-                var_name = func_ref_name
-                # Array element access: rank is reduced by 1 (scalar subscript)
-                has_subscripts = True
-                subscript_count = max(subscript_count, 1)
-
-        if var_name:
-            # Look up the variable type
-            var_info = self.get_variable(var_name)
-            if var_info:
-                # For StructureComponent access (e.g., CS%data_field) we resolved
-                # the parent object (CS) but not the component (data_field).
-                # Return unknown so that the wildcard doesn't falsely reject
-                # matching procedures.
-                if has_structure_component:
-                    return "unknown", -1, None
-
-                var_type = var_info.type
-                var_rank = var_info.rank
-                var_kind = var_info.kind
-
-                # Adjust rank based on subscripts
-                if has_subscripts and subscript_count > 0:
-                    # If using subscript triplets (:), dimensions are preserved
-                    # If using scalar subscripts, rank is reduced
-                    # This is a simplification - we'd need more analysis for full accuracy
-                    if has_triplet:
-                        # At least some dimensions preserved
-                        new_rank = max(0, var_rank - (subscript_count - 1)) if subscript_count > 0 else var_rank
-                        return var_type, new_rank, var_kind
-                    else:
-                        # All subscripts are scalar, reduces to scalar or lower rank
-                        new_rank = max(0, var_rank - subscript_count)
-                        return var_type, new_rank, var_kind
-                return var_type, var_rank, var_kind
-
-        return "unknown", -1, None
-
-    def _collect_arg_lines(self, arg_level):
-        """Collect all lines belonging to a single argument expression.
-        
-        Returns
-        -------
-        list of str
-            Lines within this argument block.
-        """
-        arg_lines = []
-        while self.peek_next_line() and level(self.peek_next_line()) > arg_level:
-            arg_lines.append(self.peek_next_line())
+        while self.peek_next_line() and level(self.peek_next_line()) > call_level:
             self.read_next_line()
-        return arg_lines
-
-    @staticmethod
-    def _expr_structure_line(lines, i):
-        """The line whose *structure* describes the expression at ``lines[i]``.
-
-        A no-sema dump carries the whole expression path on the ``Expr`` line
-        itself (``ActualArg -> Expr -> LiteralConstant -> ...``).  With sema the
-        ``Expr`` node ends the line (it holds the unparsed text) and its structure
-        is the child one level deeper, so splice the two back into the single line
-        the structural matchers expect.
-        """
-        line = lines[i]
-        if not node_path(line).endswith("Expr"):
-            return line
-        expr_level = level(line)
-        for child in lines[i + 1:]:
-            if level(child) <= expr_level:
-                break
-            if level(child) == expr_level + 1:
-                return splice_annotated_child(line, child)
-        return line
-
-    def _infer_arg_type(self, arg_lines, arg_level):
-        """Infer type, rank, and kind for a single argument from its expression lines.
-
-        Returns
-        -------
-        tuple (str, int, str or None)
-            Inferred (type, rank, kind).
-        """
-        arg_type, arg_rank, arg_kind = "unknown", -1, None
-
-        # First pass: check for expression-level type inference
-        for i, line in enumerate(arg_lines):
-            if "ActualArg -> Expr" in line:
-                arg_type, arg_rank, arg_kind = self._infer_expr_type(
-                    self._expr_structure_line(arg_lines, i))
-                if arg_type != "unknown" and arg_rank != -1:
-                    return arg_type, arg_rank, arg_kind
-                break
-        
-        # Second pass: try variable lookup for rank/kind info
-        var_type, var_rank, var_kind = self._infer_variable_type(arg_lines, arg_level)
-        if var_type != "unknown":
-            # Keep "numeric" from arithmetic, but use variable's rank/kind
-            if arg_type == "numeric":
-                return arg_type, var_rank, var_kind
-            return var_type, var_rank, var_kind
-        
-        return arg_type, arg_rank, arg_kind
-
-    def parse_call_arguments(self, call_level):
-        """Parse actual arguments in a call statement, extracting types, ranks, kinds, and keyword names.
-        
-        Returns
-        -------
-        tuple (list, list, list, list)
-            (arg_types, arg_ranks, arg_kinds, arg_names)
-            arg_names contains the keyword name if used (e.g., 'data' in data=x), or None for positional args
-        """
-        arg_types, arg_ranks, arg_kinds, arg_names = [], [], [], []
-        arg_level = call_level + 1
-        
-        while self.peek_next_line():
-            next_line = self.peek_next_line()
-            next_lvl = level(next_line)
-            
-            if next_lvl <= call_level:
-                break
-            
-            if next_lvl == arg_level and "ActualArgSpec" in next_line:
-                self.read_next_line()
-                arg_lines = self._collect_arg_lines(arg_level)
-                
-                # Check for keyword argument (Keyword -> Name = 'xxx')
-                keyword_name = None
-                for line in arg_lines:
-                    if "Keyword -> Name = " in line:
-                        m = re.search(r"Keyword -> Name = '(\w+)'", line)
-                        if m:
-                            keyword_name = m.group(1)
-                        break
-                
-                arg_type, arg_rank, arg_kind = self._infer_arg_type(arg_lines, arg_level)
-                arg_types.append(arg_type)
-                arg_ranks.append(arg_rank)
-                arg_kinds.append(arg_kind)
-                arg_names.append(keyword_name)
-            else:
-                self.read_next_line()
-        
-        return arg_types, arg_ranks, arg_kinds, arg_names
-
-    def resolve_interface_procedures(self, interface, call_arg_types, call_arg_ranks=None, call_arg_kinds=None, call_arg_names=None):
-        """Resolves which interface procedures match a call based on argument types, ranks, kinds, and names.
-        
-        When a call is made to an interface (generic name), this method determines
-        which specific module procedures within the interface could match based on
-        the types, array ranks, kind specifiers, and keyword argument names provided in the call.
-        
-        Parameters
-        ----------
-        interface : Interface
-            The interface block containing module procedures.
-        call_arg_types : list
-            The inferred types of actual arguments in order.
-        call_arg_ranks : list, optional
-            The inferred ranks of actual arguments in order (-1 for unknown).
-        call_arg_kinds : list, optional
-            The inferred kind specifiers of actual arguments in order (None if unknown).
-        call_arg_names : list, optional
-            The keyword names used in the call (None for positional arguments).
-            
-        Returns
-        -------
-        list
-            List of matching procedures. If signature info is not available,
-            returns all procedures (fallback to old behavior).
-        """
-        # Check if any procedure has signature info
-        has_any_signature_info = any(p.num_args is not None for p in interface.procedures)
-        
-        # If no signature info at all, fall back to returning all procedures
-        if not has_any_signature_info:
-            return list(interface.procedures)
-        
-        # Filter procedures that match the call signature
-        matching = [
-            proc for proc in interface.procedures
-            if self._procedure_matches(proc, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names)
-        ]
-
-        # If no procedures matched, fall back to returning all procedures.
-        # In Fortran, a call to a generic interface must resolve to at least one
-        # module procedure at runtime, so an empty result means our type inference
-        # was too imprecise — not that no procedure matches.
-        if not matching:
-            return list(interface.procedures)
-
-        return matching
 
     def msg(self, prefix):
         """Helper method to format error/warning messages."""
@@ -966,7 +551,7 @@ class ParseTree:
             # Extract type from DeclarationTypeSpec
             if "DeclarationTypeSpec" in next_line:
                 decl_type = self._extract_type_from_decl(next_line)
-                if decl_type == "derived":
+                if decl_type in ("derived", "class"):
                     self.read_next_line()
                     if self.peek_next_line() and "DerivedTypeSpec" in self.peek_next_line():
                         self.read_next_line()
@@ -1142,6 +727,43 @@ class ParseTree:
 
         return True
 
+    def parse_access_stmt(self):
+        """Parse an AccessStmt to record module-level public/private accessibility (W4).
+
+        Shapes (with or without names)::
+
+            OtherSpecificationStmt -> AccessStmt
+              AccessSpec -> Kind = Private            ! default accessibility
+            OtherSpecificationStmt -> AccessStmt
+              AccessSpec -> Kind = Public
+              AccessId -> GenericSpec -> Name = 'compute'   ! per-name override
+
+        Non-name AccessIds (operators, assignment) are ignored — the call
+        resolver only looks up names.
+        """
+        if not node_path(self.line).endswith("AccessStmt"):
+            return False
+
+        stmt_level = level(self.line)
+        kind = None
+        names = []
+        while self.peek_next_line() and level(self.peek_next_line()) > stmt_level:
+            child = self.read_next_line()
+            if (m := re.search(r"AccessSpec -> Kind = (\w+)", child)):
+                kind = m.group(1).lower()
+            elif (m := re.search(r"AccessId -> GenericSpec -> Name = '(\w+)'", child)):
+                names.append(m.group(1))
+
+        unit = self.curr.program_unit
+        if unit is None or self.curr.routine is not None or self.curr.in_derived_type or kind is None:
+            return True
+        if names:
+            for n in names:
+                unit.access_overrides[n.lower()] = kind
+        else:
+            unit.default_access = kind
+        return True
+
     def parse_derived_type_stmt(self):
 
         if "DerivedTypeDef" not in self.line:
@@ -1182,17 +804,27 @@ class ParseTree:
 
 
     def parse_type_bound_proc_binding(self):
-        """Parse TypeBoundProcBinding to record binding_name -> impl_name mappings.
+        """Parse a TypeBoundProcBinding into the derived type's binding tables.
 
-        In Fortran, derived types can have type-bound procedures:
-            procedure :: reset => reset_bounds   ! binding_name=reset, impl_name=reset_bounds
-            procedure :: get_imin                 ! binding_name=impl_name=get_imin
+        Specific bindings — one TypeBoundProcDecl per bound name, several per
+        statement (`procedure :: a, b` or `procedure :: reset => reset_bounds`)::
 
-        In the parse tree these appear as:
             TypeBoundProcBinding -> TypeBoundProcedureStmt -> WithoutInterface
               TypeBoundProcDecl
                 Name = 'binding_name'
                 Name = 'impl_name'       (only present when => is used)
+              TypeBoundProcDecl          (next name of the same statement)
+                ...
+
+        land in ``bindings`` as binding_name -> impl_name. Generic bindings
+        (`generic :: go => go_r, go_i`)::
+
+            TypeBoundProcBinding -> TypeBoundGenericStmt
+              GenericSpec -> Name = 'go'
+              Name = 'go_r'
+              Name = 'go_i'
+
+        land in ``generic_bindings`` as generic name -> [specific binding names].
         """
         if "TypeBoundProcBinding" not in self.line:
             return False
@@ -1201,32 +833,46 @@ class ParseTree:
             return False
 
         binding_level = level(self.line)
-        binding_name = None
-        impl_name = None
+        is_generic = "TypeBoundGenericStmt" in self.line
+        dt = self.curr.derived_type
 
-        # Read through nested lines to find the name(s)
+        generic_name = None
+        specifics = []          # generic stmt: the specific binding names
+        decl_names = []         # current TypeBoundProcDecl's names
+        in_decl = False
+
+        def flush_decl():
+            if decl_names:
+                # first name is the binding; the second (from `=>`) its impl
+                dt.bindings[decl_names[0]] = decl_names[1] if len(decl_names) > 1 else decl_names[0]
+
         while self.peek_next_line():
             next_line = self.peek_next_line()
-            next_lvl = level(next_line)
-
-            if next_lvl <= binding_level:
+            if level(next_line) <= binding_level:
                 break
-
-            m = re.search(r"Name = '(\w+)'", next_line)
-            if m:
-                if binding_name is None:
-                    binding_name = m.group(1)
-                else:
-                    impl_name = m.group(1)
-
             self.read_next_line()
 
-        # If no impl_name, the binding name IS the impl name
-        if binding_name and not impl_name:
-            impl_name = binding_name
+            if "TypeBoundProcDecl" in next_line:
+                flush_decl()
+                decl_names = []
+                in_decl = True
+                continue
+            m = re.search(r"Name = '(\w+)'", next_line)
+            if not m:
+                continue
+            if is_generic:
+                if "GenericSpec" in next_line:
+                    generic_name = m.group(1)
+                else:
+                    specifics.append(m.group(1))
+            elif in_decl:
+                decl_names.append(m.group(1))
+            # names outside any decl (e.g. WithInterface's interface name) are
+            # not bindings — ignore them
 
-        if binding_name and impl_name:
-            self.curr.derived_type.bindings[binding_name] = impl_name
+        flush_decl()
+        if is_generic and generic_name and specifics:
+            dt.generic_bindings[generic_name] = specifics
 
         return True
 
@@ -1251,9 +897,18 @@ class ParseTree:
             if "DeclarationTypeSpec" in next_line:
                 var_type = self._extract_type_from_decl(next_line)
                 self.read_next_line()
+                if var_type in ("derived", "class"):
+                    # `type(t) :: x` / `class(t) :: x` split over child lines:
+                    # DerivedTypeSpec, then Name — read them so the declared type
+                    # is usable for resolving `x%binding()` calls.
+                    if self.peek_next_line() and "DerivedTypeSpec" in self.peek_next_line():
+                        self.read_next_line()
+                        if self.peek_next_line() and "Name = " in self.peek_next_line():
+                            m = re.search(r"Name = '(\w+)'", self.read_next_line())
+                            if m:
+                                var_type = f"derived:{m.group(1)}"
+                    continue
                 var_kind = self._kind_selector_name(next_line) or var_kind
-                if "DoublePrecision" in next_line:
-                    var_kind = "r8_kind"
             # Array rank in AttrSpec
             elif "AttrSpec -> ArraySpec" in next_line:
                 rank = self._parse_array_spec(next_line)
@@ -1369,15 +1024,34 @@ class ParseTree:
         
         return True
 
+    @staticmethod
+    def _exports(unit, name):
+        """Whether *unit* makes *name* accessible to code that USEs it (W4).
+
+        Decided from the module's parsed AccessStmts: an explicit ``public`` /
+        ``private`` naming wins; otherwise the module's default accessibility
+        applies. Modules never parsed (external) default to public — their
+        contents are unknown anyway.
+        """
+        overrides = getattr(unit, "access_overrides", {})
+        default = getattr(unit, "default_access", "public")
+        return overrides.get(name.lower(), default) == "public"
+
     def find_named_entity(self, origin, name):
-        """Finds a named entity (subroutine, function, or interface) by name in the current parse tree.
+        """Finds a callable (subroutine, function, or interface) visible as *name*.
+
+        The search follows the use-chain exactly (principle #7, W4): the origin
+        scope's own subprograms and interfaces first (private ones included —
+        they are local), then USE'd modules through explicit only-lists and
+        renames, then wildcard USEs — crossing into a used module only for names
+        that module makes public.
 
         Parameters
         ----------
         origin : Routine or ProgramUnit
-            The origin routine or program unit where the search starts.
+            The scope the name is referenced from.
         name : str
-            The name of the entity to find.
+            The name of the entity to find, as visible in *origin*.
 
         Returns
         -------
@@ -1393,51 +1067,57 @@ class ParseTree:
 
         visited = set() # to avoid repetition
 
-        def dfs(current_unit, name):
+        def dfs(scope, name):
 
-            if (current_unit, name) in visited:
+            if (scope, name) in visited:
                 return None
-            visited.add((current_unit, name))
+            visited.add((scope, name))
 
-            # Check subroutines
-            for subr in current_unit.subroutines:
+            # Check the scope's own subprograms and interfaces. (A Callable scope
+            # has none of these; its own USE statements below still apply.)
+            for subr in getattr(scope, "subroutines", ()):
                 if subr.name == name:
                     return subr
-
-            # Check functions
-            for func in current_unit.functions:
+            for func in getattr(scope, "functions", ()):
                 if func.name == name:
                     return func
-
-            # Check interfaces
-            for intf in current_unit.interfaces:
+            for intf in getattr(scope, "interfaces", ()):
                 if intf.name == name:
                     return intf
 
-            # Recurse on used modules
-            for used_mod in current_unit.used_names_lists.keys():
-                if '*' in current_unit.used_names_lists[used_mod]:
+            # Explicit only-list imports: flang already validated the import, so
+            # the name's accessibility in used_mod is settled; search used_mod as
+            # a fresh origin (its own privates are candidates there).
+            for used_mod, names in scope.used_names_lists.items():
+                if name in names:
                     result = dfs(used_mod, name)
                     if result is not None:
                         return result
-                if name in current_unit.used_names_lists[used_mod]:
-                    return self.find_named_entity(used_mod, name)
-            
-            # Recurse on used modules via renames
-            found_alias = False
-            for used_mod, renames in current_unit.used_renames_lists.items():
+
+            # Renamed imports: the alias is local; the original name is looked
+            # up in the exporting module.
+            for used_mod, renames in scope.used_renames_lists.items():
                 for alias, original_name in renames:
                     if alias == name:
-                        result = self.find_named_entity(used_mod, original_name)
+                        result = dfs(used_mod, original_name)
                         if result is not None:
                             return result
-                        found_alias = True
-                        break
-                if found_alias:
-                    break
+
+            # Wildcard imports: only names the used module exports are visible.
+            for used_mod, names in scope.used_names_lists.items():
+                if '*' in names and self._exports(used_mod, name):
+                    result = dfs(used_mod, name)
+                    if result is not None:
+                        return result
 
             return None
 
+        # A routine scope's own USE statements are searched first, then the
+        # enclosing program unit's.
+        if origin is not origin_unit:
+            result = dfs(origin, name)
+            if result is not None:
+                return result
         return dfs(origin_unit, name)
 
     def parse_subroutine_call_stmt(self):
@@ -1446,10 +1126,12 @@ class ParseTree:
             return False
 
         # With sema the statement carries an unparse annotation
-        # (`ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'`), so match on the
-        # node path to accept either dump variant.
+        # (`ActionStmt -> CallStmt = 'CALL compute_real(r,1_4)'`) in which generic
+        # and type-bound names are already *resolved* — that text is the call's
+        # sema answer (DESIGN Q2).
         assert node_path(self.line).endswith("ActionStmt -> CallStmt"), self.msg("CallStmt syntax not recognized")
         assert self.curr.program_unit is not None, self.msg("CallStmt found outside of a program unit")
+        call_text = unparse_text(self.line)
 
         self.line = self.read_next_line()
         assert self.line.endswith("| Call"), self.msg("CallStmt syntax not recognized.")
@@ -1459,29 +1141,17 @@ class ParseTree:
         if self.line.endswith("ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent"):
             designator_level = level(self.line)
             binding_name, object_name = self._extract_structure_component_name(designator_level)
-            if binding_name is None:
-                return
-            # Look up the object's declared type so we resolve the correct binding
-            obj_type_name = None
-            if object_name:
-                var_info = self.get_variable(object_name)
-                if var_info and var_info.type.startswith('derived:'):
-                    obj_type_name = var_info.type[len('derived:'):]
-            if obj_type_name is not None:
-                callee_name, defining_scope = self._resolve_binding_name(binding_name, obj_type_name)
-            else:
-                callee_name, defining_scope = binding_name, None
-            call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names = self.parse_call_arguments(call_level)
-            self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names,
-                                           defining_scope=defining_scope)
-            return
+            if binding_name is not None:
+                self._record_call(binding_name, call_text,
+                                  is_type_bound=True, object_name=object_name)
+            self._skip_call_block(call_level)
+            return True
         m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", self.line)
         if not m:
             raise ValueError(self.msg("ProcedureDesignator syntax not recognized"))
-        callee_name = m.group(1)
-
-        call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names = self.parse_call_arguments(call_level)
-        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names)
+        self._record_call(m.group(1), call_text)
+        self._skip_call_block(call_level)
+        return True
 
     def parse_function_call_stmt(self):
 
@@ -1493,29 +1163,26 @@ class ParseTree:
         assert self.curr.program_unit is not None, self.msg("FunctionReference found outside of a program unit")
         call_level = level(self.line)
 
+        # The exact resolved text of *this* call is the annotation on the
+        # enclosing Expr node (the FunctionReference's parent line), which
+        # parse_calls tracks on a stack.
+        call_text = self._expr_stack[-1][1] if self._expr_stack else None
+
         self.line = self.read_next_line()
         assert "ProcedureDesignator" in self.line, self.msg("FunctionReference syntax not recognized")
 
         callee_name = None
-        defining_scope = None
+        is_type_bound = False
+        object_name = None
         m = re.search(r"ProcedureDesignator -> Name = '(\w+)'", self.line)
         if m:
             callee_name = m.group(1)
         elif "ProcComponentRef" in self.line:
             designator_level = level(self.line)
-            binding_name, object_name = self._extract_structure_component_name(designator_level)
-            if binding_name is None:
+            callee_name, object_name = self._extract_structure_component_name(designator_level)
+            if callee_name is None:
                 return True
-            # Look up the object's declared type so we resolve the correct binding
-            obj_type_name = None
-            if object_name:
-                var_info = self.get_variable(object_name)
-                if var_info and var_info.type.startswith('derived:'):
-                    obj_type_name = var_info.type[len('derived:'):]
-            if obj_type_name is not None:
-                callee_name, defining_scope = self._resolve_binding_name(binding_name, obj_type_name)
-            else:
-                callee_name, defining_scope = binding_name, None
+            is_type_bound = True
         else:
             l = level(self.line)
             while level(self.line) >= l:
@@ -1526,12 +1193,14 @@ class ParseTree:
                         callee_name = m.group(1)
                     break
             assert callee_name is not None, self.msg("FunctionReference syntax not recognized")
-        
+
         if is_fortran_intrinsic(callee_name):
             return True
 
-        call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names = self.parse_call_arguments(call_level)
-        self._record_call_dependencies(callee_name, call_arg_types, call_arg_ranks, call_arg_kinds, call_arg_names, is_function=True, defining_scope=defining_scope)
+        self._record_call(callee_name, call_text, is_function=True,
+                          is_type_bound=is_type_bound, object_name=object_name)
+        self._skip_call_block(call_level)
+        return True
 
     def parse_structure(self):
         """Reads a flang parse tree file and extracts structural information."""
@@ -1549,6 +1218,8 @@ class ParseTree:
                 if self.parse_rename_clause():
                     continue
                 if self.parse_use_stmt():
+                    continue
+                if self.parse_access_stmt():
                     continue
                 if self.parse_derived_type_stmt():
                     continue
@@ -1597,19 +1268,29 @@ class ParseTree:
             self.reset()
 
     def parse_calls(self):
-        """Reads a flang parse tree file and extracts subroutine/function call relationships."""
+        """Reads a flang parse tree file and records subroutine/function call sites.
 
-        self.call_unparse = []
+        Call sites land in ``self.call_events``; resolving them into stratified
+        edges is :meth:`classify_calls`' job (it needs the whole forest parsed
+        first).
+        """
+
+        self.call_events = []
 
         try:
             self.parse_header()
 
             for self.line in self.lines():
-                # Track the enclosing executable statement's unparse annotation, so
-                # calls nested in an expression (a FunctionReference inside an
-                # AssignmentStmt) can record it too. Phase 2 hook only.
-                if "ActionStmt ->" in self.line:
-                    self.stmt_unparse = unparse_text(self.line)
+                # Maintain the stack of enclosing annotated Expr nodes: each Expr
+                # unparse is the exact resolved text of the (sub)expression it
+                # heads, which is how a FunctionReference reads its own call text.
+                lvl = level(self.line)
+                while self._expr_stack and self._expr_stack[-1][0] >= lvl:
+                    self._expr_stack.pop()
+                if node_path(self.line).endswith("Expr"):
+                    text = unparse_text(self.line)
+                    if text is not None:
+                        self._expr_stack.append((lvl, text))
 
                 if self.parse_routine_begin():
                     continue
@@ -1629,9 +1310,287 @@ class ParseTree:
                     continue
                 if self.parse_function_call_stmt():
                     continue
-            return self.unfound_subroutine_calls, self.unfound_function_calls
+            return self.call_events
         finally:
             self.reset()
+
+    # -------------------------------------------------------------------------
+    # Call classification: sema's answer -> stratified edges (D3)
+    # -------------------------------------------------------------------------
+
+    def _sema_answer(self, event):
+        """Sema's resolved callee for *event*, read from its unparse text.
+
+        Returns ``("static", name)`` when sema printed the call with a resolved
+        procedure name (possibly mangled — see :func:`demangle`), ``("dynamic",
+        binding_name)`` when a type-bound call survives as ``obj%binding(...)``
+        (dynamic dispatch: sema could not resolve it statically), or ``None``
+        when there is no usable answer.
+        """
+        text = event.call_text
+        if not text:
+            return None
+        body = text[5:] if text.startswith("CALL ") else text
+        cands = call_candidates(body)
+        if not cands:
+            return None
+        if event.is_type_bound:
+            # Dynamic dispatch keeps the `%binding(` in the text; check it first
+            # so an array-element object (`x(i)%go(...)`) can't masquerade as a
+            # resolved call to `x`.
+            for _, is_bound, name in cands:
+                if is_bound and name.lower() == event.written_name.lower():
+                    return ("dynamic", event.written_name)
+            # Static dispatch: sema hoists the object into the argument list and
+            # prints the specific up front: `CALL go_r(obj,1._4)`.
+            offset, is_bound, name = cands[0]
+            if offset == 0 and not is_bound:
+                return ("static", name)
+            return None
+        # A plain call's own text always starts with its (resolved) callee; a
+        # nonzero offset means the text belongs to an enclosing construct and
+        # cannot be attributed to this call with certainty.
+        offset, is_bound, name = cands[0]
+        if offset == 0 and not is_bound:
+            return ("static", name)
+        return None
+
+    def _procs_named(self, name, is_function):
+        """All defined procedures of the right flavour with this name (any scope)."""
+        pool = self.nr.functions if is_function else self.nr.subroutines
+        return [p for p in pool if p.name.lower() == name.lower()]
+
+    @staticmethod
+    def _proc_in_scope(scope, name, is_function):
+        """A procedure named *name* among *scope*'s own subprograms, or None."""
+        pool = getattr(scope, "functions" if is_function else "subroutines", ())
+        for p in pool:
+            if p.name.lower() == name.lower():
+                return p
+        return None
+
+    def _module_named(self, name):
+        for mod in self.nr.modules:
+            if mod.name.lower() == name.lower():
+                return mod
+        return None
+
+    @staticmethod
+    def _use_chain_module(scope, name):
+        """The single module whose only-list/rename imports *name* into *scope*.
+
+        Used to scope-qualify an unresolved target: if the caller (or its
+        program unit) imports *name* from exactly one module via an explicit
+        only-list or rename, that module is the target's defining scope. A
+        wildcard USE pins nothing.
+        """
+        modules = set()
+        scopes = [scope]
+        program_unit = getattr(scope, "program_unit", None)
+        if program_unit is not None:
+            scopes.append(program_unit)
+        for s in scopes:
+            for used_mod, names in getattr(s, "used_names_lists", {}).items():
+                if any(n != "*" and n.lower() == name.lower() for n in names):
+                    modules.add(used_mod.name)
+            for used_mod, renames in getattr(s, "used_renames_lists", {}).items():
+                for alias, _original in renames:
+                    if alias.lower() == name.lower():
+                        modules.add(used_mod.name)
+        return modules.pop() if len(modules) == 1 else None
+
+    def _locate_resolved(self, event, name):
+        """Find the procedure entity behind a sema-resolved plain *name*.
+
+        Tried in decreasing order of scope-correctness; sema vouches for the
+        name, so a whole-forest unique match is accepted as a last resort (the
+        resolved specific need not be accessible by name in the calling scope —
+        e.g. a private specific reached through a public generic is printed
+        unmangled when the call and definition share a file).
+        """
+        found = self.find_named_entity(event.caller, name)
+        if found is not None and not isinstance(found, Interface):
+            return found
+        procs = self._procs_named(name, event.is_function)
+        if len(procs) == 1:
+            return procs[0]
+        return None
+
+    def _classify_type_bound(self, event, answer):
+        """Stratified edges for a `obj%binding(...)` call."""
+        if answer is not None and answer[0] == "static":
+            name = answer[1]
+            mangled = demangle(name)
+            if mangled:
+                _, def_mod, specific = mangled
+                return self._edges_for_mangled(event, def_mod, specific)
+            # Prefer the impl reachable through the object's declared type.
+            if event.bound_type_name:
+                impl, defining_scope = self._resolve_binding_name(
+                    name, event.bound_type_name)
+                if defining_scope is not None:
+                    target = self._proc_in_scope(defining_scope, impl, event.is_function)
+                    if target is not None:
+                        return [(RESOLVED, target)]
+            target = self._locate_resolved(event, name)
+            if target is not None:
+                return [(RESOLVED, target)]
+            return [(UNRESOLVED, UnknownTarget(name, None, event.is_function))]
+        # Dynamic dispatch (or no answer): the declared type's binding table is a
+        # guess — an override may be selected at runtime, and a generic binding
+        # fans out over its specific bindings.
+        edges = []
+        if event.bound_type_name:
+            for impl, defining_scope in self._binding_impls(
+                    event.written_name, event.bound_type_name):
+                target = self._proc_in_scope(defining_scope, impl, event.is_function)
+                if target is not None:
+                    edges.append((ASSUMED, target))
+        if edges:
+            return edges
+        return [(UNRESOLVED,
+                 UnknownTarget(event.written_name, None, event.is_function))]
+
+    def _binding_impls(self, binding_name, type_name):
+        """Implementation candidates for a type-bound *binding_name* on *type_name*.
+
+        Yields (impl_name, defining_scope) pairs: one for a specific binding,
+        one per member for a generic binding. A binding not found on the type
+        itself is searched up its EXTENDS chain (inherited bindings); a type's
+        own binding shadows the parent's.
+        """
+        binding_lower = binding_name.lower()
+        seen = set()
+        queue = [type_name.lower()]
+        while queue:
+            tname = queue.pop(0)
+            if tname in seen:
+                continue
+            seen.add(tname)
+            for dt in self.nr.derived_types:
+                if dt.name.lower() != tname:
+                    continue
+                found_here = False
+                for gname, members in dt.generic_bindings.items():
+                    if gname.lower() == binding_lower:
+                        for member in members:
+                            yield dt.bindings.get(member, member), dt.scope
+                            found_here = True
+                for bname, iname in dt.bindings.items():
+                    if bname.lower() == binding_lower:
+                        yield iname, dt.scope
+                        found_here = True
+                if not found_here and dt.parent_type_name:
+                    queue.append(dt.parent_type_name.lower())
+
+    def _edges_for_mangled(self, event, owner_mod, specific, interface=None):
+        """Stratified edges for a mangled sema answer (`imported$owner$specific`).
+
+        The middle component is the module that *owns the specific's symbol* —
+        usually its textual definition site, but the owner can itself hold the
+        name by use-association (e.g. `fms2_io_mod$fms2_io_mod$compressed_read_2d`
+        whose subroutine body lives in netcdf_io_mod), so the lookup falls back
+        to the owner module's use-chain.
+        """
+        edges = []
+        if interface is not None:
+            edges.append((RESOLVED, interface))
+        module = self._module_named(owner_mod)
+        target = None
+        if module is not None:
+            target = self._proc_in_scope(module, specific, event.is_function)
+            if target is None:
+                found = self.find_named_entity(module, specific)
+                if found is not None and not isinstance(found, Interface):
+                    target = found
+        if target is not None:
+            edges.append((RESOLVED, target))
+        else:
+            # Sema names the owning module and the specific; the module just
+            # isn't in the parsed set. The target identity is certain, so the
+            # edge is resolved — to a defined=False entity.
+            edges.append((RESOLVED,
+                          UnknownTarget(specific, owner_mod, event.is_function)))
+        return edges
+
+    def _classify_event(self, event):
+        """Resolve one call event into [(stratum, target), ...] edges.
+
+        The confidence rules (D3): an edge whose callee comes from sema's
+        unparse — or a direct call to a unique, visible, non-generic procedure —
+        is *resolved*; a generic or dynamic-dispatch guess is *assumed*; a target
+        found nowhere is *unresolved*. A generic call keeps the caller→interface
+        edge alongside the resolved specific edge, mirroring
+        ``interface_members``.
+        """
+        answer = self._sema_answer(event)
+        if event.is_type_bound:
+            return self._classify_type_bound(event, answer)
+
+        written = event.written_name
+        found = self.find_named_entity(event.caller, written)
+        iface = found if isinstance(found, Interface) else None
+
+        if answer is not None:
+            name = answer[1]
+            mangled = demangle(name)
+            if mangled:
+                _, def_mod, specific = mangled
+                return self._edges_for_mangled(event, def_mod, specific, interface=iface)
+            if iface is not None:
+                edges = [(RESOLVED, iface)]
+                member = next((p for p in iface.procedures
+                               if p.name.lower() == name.lower()), None)
+                if member is not None:
+                    edges.append((RESOLVED, member))
+                else:
+                    # The answer does not line up with the generic's members —
+                    # attribution failed, so fall back to the conservative fan-out.
+                    edges += [(ASSUMED, p) for p in iface.procedures]
+                return edges
+            if found is not None:
+                if name.lower() in (written.lower(), found.name.lower()):
+                    return [(RESOLVED, found)]
+                # Sema picked something other than the visible procedure of that
+                # name (shouldn't happen; trust sema and try to locate it).
+                target = self._locate_resolved(event, name)
+                if target is not None:
+                    return [(RESOLVED, target)]
+                return [(UNRESOLVED, UnknownTarget(name, None, event.is_function))]
+            # Nothing visible under the written name.
+            if name.lower() == written.lower():
+                # Sema echoes the name unchanged: an external / unparsed target.
+                module = self._use_chain_module(event.caller, written)
+                return [(UNRESOLVED, UnknownTarget(written, module, event.is_function))]
+            target = self._locate_resolved(event, name)
+            if target is not None:
+                return [(RESOLVED, target)]
+            return [(UNRESOLVED, UnknownTarget(name, None, event.is_function))]
+
+        # No sema answer (attribution failure).
+        if iface is not None:
+            # The generic's identity is certain; which specific it dispatches to
+            # is not — fan out to every member as assumed.
+            return [(RESOLVED, iface)] + [(ASSUMED, p) for p in iface.procedures]
+        if found is not None:
+            # A direct call to a unique, visible, non-generic procedure.
+            return [(RESOLVED, found)]
+        module = self._use_chain_module(event.caller, written)
+        return [(UNRESOLVED, UnknownTarget(written, module, event.is_function))]
+
+    def classify_calls(self):
+        """Resolve all recorded call events into stratified edges.
+
+        Returns a list of ``(caller_node, stratum, target)`` triples, where
+        *target* is an interned node or an :class:`UnknownTarget`. Must run after
+        every file's structure/interface passes so cross-file lookups see the
+        whole forest.
+        """
+        edges = []
+        for event in self.call_events:
+            for stratum, target in self._classify_event(event):
+                edges.append((event.caller, stratum, target))
+        return edges
 
 
 # ============================================================================= #
@@ -1698,8 +1657,33 @@ def _scope_uses(ir, scope_node, scope_id):
                         only=only, renames=renames))
 
 
-def project_registry(registry, file_errors, unresolved_subs, unresolved_funcs):
-    """Walk the interned node graph and build the flinspect IR (the seam)."""
+def _unknown_target(ir, name, kind, module=None):
+    """Intern a referenced-but-undefined call target as a first-class entity.
+
+    The atom is scope-qualified (``module::name``) when the use-chain pins the
+    defining module, a bare name atom otherwise (DESIGN §2.1). Guards against the
+    freak collision of a bare name atom with an existing non-callable entity.
+    """
+    eid = f"{module}::{name}" if module else name
+    existing = ir.entities.get(eid)
+    if existing is not None and existing.kind not in CALLABLE_KINDS:
+        eid = f"::{name}"
+        existing = ir.entities.get(eid)
+    if existing is None:
+        ir.entities[eid] = Entity(
+            id=eid, kind=kind, name=name,
+            scope=module, defined=False,
+        )
+    return eid
+
+
+def project_registry(registry, file_errors, call_edges):
+    """Walk the interned node graph and build the flinspect IR (the seam).
+
+    ``call_edges`` is the classified call relation from
+    :meth:`ParseTree.classify_calls`: ``(caller_node, stratum, target)`` triples
+    where *target* is an interned node or an :class:`UnknownTarget`.
+    """
     ir = IR(file_errors=list(file_errors))
 
     # --- program units (modules / programs / subprograms) ---
@@ -1727,8 +1711,6 @@ def project_registry(registry, file_errors, unresolved_subs, unresolved_funcs):
         )
         ir.contains.add((scope_id, cid))
         _scope_uses(ir, c, cid)
-        for callee in c.callees:
-            ir.calls.add((cid, _node_id(callee)))
 
     # --- interfaces ---
     for iface in registry.interfaces:
@@ -1750,9 +1732,19 @@ def project_registry(registry, file_errors, unresolved_subs, unresolved_funcs):
         )
         ir.contains.add((scope_id, did))
 
-    # --- unresolved calls (first-class partial knowledge, D3 / principle #6) ---
-    for caller_name, callee_name in list(unresolved_subs) + list(unresolved_funcs):
-        ir.unresolved_calls.add((caller_name, callee_name))
+    # --- calls, stratified by confidence (D3) ---
+    # An UnknownTarget becomes a defined=False entity (first-class partial
+    # knowledge, principle #6); everything else is already interned.
+    strata = {RESOLVED: ir.calls_resolved,
+              ASSUMED: ir.calls_assumed,
+              UNRESOLVED: ir.calls_unresolved}
+    for caller_node, stratum, target in call_edges:
+        if isinstance(target, UnknownTarget):
+            kind = FUNCTION if target.is_function else SUBROUTINE
+            callee_id = _unknown_target(ir, target.name, kind, target.module)
+        else:
+            callee_id = _node_id(target)
+        strata[stratum].add((_node_id(caller_node), callee_id))
 
     return ir
 
@@ -1760,10 +1752,16 @@ def project_registry(registry, file_errors, unresolved_subs, unresolved_funcs):
 class FlangDumpFrontend:
     """Frontend that scrapes flang's textual parse-tree dump into an :class:`IR`.
 
-    Orchestrates the three parse passes across all sources (structure, then
-    interfaces, then calls — the order cross-file resolution requires), with
-    per-file fault isolation (W3), then projects the interned node graph onto the
-    IR. Implements the :class:`~flinspect.frontend.base.Frontend` protocol.
+    Orchestrates the passes across all sources — structure, interfaces, call-site
+    recording, then call classification (the order cross-file resolution
+    requires) — with per-file fault isolation (W3), and projects the interned
+    node graph onto the IR. Implements the
+    :class:`~flinspect.frontend.base.Frontend` protocol.
+
+    Input is the with-sema dump (``-fdebug-dump-parse-tree``), the sole
+    production input per VISION D4: call resolution is read from sema's unparse
+    annotations. A no-sema dump still parses, but every generic call degrades to
+    an `assumed` fan-out — that path is neither tested nor supported.
     """
 
     @staticmethod
@@ -1802,16 +1800,23 @@ class FlangDumpFrontend:
             except Exception as e:
                 file_errors.append(FileError(tree.parse_tree_path, f"parse_interfaces: {e}"))
 
-        # Pass 3: calls
-        unresolved_subs, unresolved_funcs = [], []
+        # Pass 3: record call sites
         for tree in trees:
             try:
-                uc, uf = tree.parse_calls()
-                unresolved_subs.extend(uc)
-                unresolved_funcs.extend(uf)
+                tree.parse_calls()
             except Exception as e:
                 file_errors.append(FileError(tree.parse_tree_path, f"parse_calls: {e}"))
 
-        return project_registry(registry, file_errors, unresolved_subs, unresolved_funcs)
+        # Pass 4: classify each call site against the whole forest — sema's
+        # unparse answer where it exists, scope-correct lookup otherwise —
+        # producing the stratified call relation (D3).
+        call_edges = []
+        for tree in trees:
+            try:
+                call_edges.extend(tree.classify_calls())
+            except Exception as e:
+                file_errors.append(FileError(tree.parse_tree_path, f"classify_calls: {e}"))
+
+        return project_registry(registry, file_errors, call_edges)
 
 

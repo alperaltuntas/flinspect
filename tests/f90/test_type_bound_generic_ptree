@@ -1,0 +1,135 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'tbp_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | Name = 'gadget_t'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'state'
+| | | | | Initialization -> Constant -> Expr = '0_4'
+| | | | | | LiteralConstant -> IntLiteralConstant = '0'
+| | | TypeBoundProcedurePart
+| | | | ContainsStmt
+| | | | TypeBoundProcBinding -> TypeBoundProcedureStmt -> WithoutInterface
+| | | | | TypeBoundProcDecl
+| | | | | | Name = 'go_r'
+| | | | TypeBoundProcBinding -> TypeBoundProcedureStmt -> WithoutInterface
+| | | | | TypeBoundProcDecl
+| | | | | | Name = 'go_i'
+| | | | TypeBoundProcBinding -> TypeBoundGenericStmt
+| | | | | GenericSpec -> Name = 'go'
+| | | | | Name = 'go_r'
+| | | | | Name = 'go_i'
+| | | | TypeBoundProcBinding -> TypeBoundProcedureStmt -> WithoutInterface
+| | | | | TypeBoundProcDecl
+| | | | | | Name = 'reset'
+| | | | | | Name = 'reset_state'
+| | | EndTypeStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'go_r'
+| | | | DummyArg -> Name = 'self'
+| | | | DummyArg -> Name = 'x'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Class
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'gadget_t'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'self'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'go_i'
+| | | | DummyArg -> Name = 'self'
+| | | | DummyArg -> Name = 'k'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Class
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'gadget_t'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'self'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'k'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'reset_state'
+| | | | DummyArg -> Name = 'self'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Class
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'gadget_t'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'self'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'tbp_caller_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'tbp_mod'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'test_type_bound_calls'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Type
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'gadget_t'
+| | | | | EntityDecl
+| | | | | | Name = 'obj'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL go_r(obj,1._4)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent
+| | | | | | | DataRef -> Name = 'obj'
+| | | | | | | Name = 'go'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = '1._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL go_i(obj,2_4)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent
+| | | | | | | DataRef -> Name = 'obj'
+| | | | | | | Name = 'go'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = '2_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '2'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL reset_state(obj)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent
+| | | | | | | DataRef -> Name = 'obj'
+| | | | | | | Name = 'reset'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

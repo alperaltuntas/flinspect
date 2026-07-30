@@ -101,8 +101,8 @@ class ParseForest:
         relation (a caller may also point at a generic interface, which is added as
         a node via the edge, matching the legacy behaviour).
         """
-        n_unresolved = len(self.ir.unresolved_calls)
-        print(f"Total unresolved calls across all parse trees: {n_unresolved}")
+        n_unresolved = len(self.ir.calls_unresolved)
+        print(f"Total unresolved call edges across all parse trees: {n_unresolved}")
 
         g = nx.DiGraph()
         callers = {}
