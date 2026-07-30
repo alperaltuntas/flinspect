@@ -16,13 +16,13 @@ From the review of the current codebase. Ordered by impact on the vision.
 
 | # | Weakness | Where | Fix lands in |
 |---|----------|-------|--------------|
-| W1 | Re-implements semantics flang already computed, from a *no-sema* dump | whole `parse_tree.py` | D4 + Phase 1 |
-| W2 | Facts are heuristically over- *and* under-approximate; unsound for a verification layer | `_types_compatible`, `resolve_interface_procedures` (all-procs fallback), `unfound_*` drops | D3 + Phase 2 |
+| W1 | Re-implements semantics flang already computed, from a *no-sema* dump | whole `parse_tree.py` | **fixed in Phase 2** — resolution read from sema's unparse; the inference engine deleted |
+| W2 | Facts are heuristically over- *and* under-approximate; unsound for a verification layer | `_types_compatible`, `resolve_interface_procedures` (all-procs fallback), `unfound_*` drops | **fixed in Phase 2** — confidence strata (D3); unresolved first-class. Residue: nested function references in argument lists still unrecorded (documented at the skip site) |
 | W3 | Brittle text scraping: exact flang node strings, `|`-counting, `assert ...not recognized`, no per-file isolation | `parse_tree.py`, `utils.level()` | D2 (seam) + Phase 1 |
-| W4 | Name-based matching ignores scope/visibility/overloading | `find_named_entity`, `get_subroutine_by_name` (`endswith`), no public/private | Phase 2 |
+| W4 | Name-based matching ignores scope/visibility/overloading | `find_named_entity`, `get_subroutine_by_name` (`endswith`), no public/private | **fixed in Phase 2** — AccessStmt-derived visibility, use-chain lookup, `endswith` gone |
 | W5 | Explorer keys cytoscape nodes by **bare name** → distinct same-named routines silently merge | `explorer.py` (`'id': node.name`) | Phase 3 |
-| W6 | Hardcoded intrinsic list; `DoublePrecision→'r8_kind'` MOM-ism; named-kinds-only | `utils.py`, `_extract_kind_from_line` | resolved by sema/IR |
-| W7 | Three full re-parse passes per file | `parse_structure/interfaces/calls` | Phase 1 (revisit) |
+| W6 | Hardcoded intrinsic list; `DoublePrecision→'r8_kind'` MOM-ism; named-kinds-only | `utils.py`, `_extract_kind_from_line` | **mostly fixed in Phase 2** — MOM-ism deleted; kinds are signature facts, not resolution inputs. The intrinsic list remains (nothing in the dump marks intrinsics); names it misses surface as unresolved atoms |
+| W7 | Three full re-parse passes per file | `parse_structure/interfaces/calls` | revisit (now three passes + a classification pass; ~30 s for the 458-file corpus) |
 | W8 | No CLI; notebook-only despite "CI-enforceable" claim | — | Phase 4 |
 | W9 | README oversells; ~90% aspiration | `README.md` | Phase 0 |
 | W10 | Python 3.14 hard pin | `pyproject.toml` | **fixed in Phase 1b** (floor `>=3.11`) |
@@ -218,12 +218,19 @@ the real MOM6+FMS2 corpus went from 346 unparseable files to 0. See `DEVLOG.md`.
 - Adapt the frontend parsing as the spike reveals, then switch fixtures to
   `-fdebug-dump-parse-tree` (D4) so tests and production parse the same variant.
 
-**Phase 2 — Soundness & resolution quality.**
-- Consume *resolved* names/types from sema (and/or `-fdebug-dump-symbols`), retiring
-  the hand-rolled inference where the compiler already answers (W1, W6).
-- Add the confidence field end-to-end; convert `unfound_*` into first-class
-  `unresolved` edges (W2).
-- Scope/visibility-correct resolution; kill `endswith` matching (W4).
+**Phase 2 — Soundness & resolution quality.** — **DONE 2026-07-29.**
+- Consume *resolved* names from sema's unparse annotations, retiring the
+  hand-rolled inference engine (W1, W6). `-fdebug-dump-symbols` was not needed
+  (Q2). No-sema input support dropped (D4; maintainer decision).
+- The confidence strata of §2.1 (D3): stored `calls_resolved` / `calls_assumed` /
+  `calls_unresolved` relations, `calls` (may) and `calls_must` (must) as computed
+  views; `unfound_*` became first-class `unresolved` edges to `defined=False`
+  entities (W2).
+- Scope/visibility-correct resolution (AccessStmt public/private, use-chain
+  only-lists/renames, mangled-name demangling); `endswith` matching killed (W4).
+- Acceptance on the production corpus: 458 files, 0 errors; resolved 22,764 /
+  assumed 114 / unresolved 1,578 — the drop from the Phase 1b may-count is the
+  eliminated generic fan-out, verified edge-by-edge (see `DEVLOG.md`).
 
 **Phase 3 — Explorer correctness.** Scope-qualified node identity (W5); show
 confidence (e.g., assumed edges dashed).
@@ -259,9 +266,9 @@ frontier-and-gate story real).
 **Ongoing — conformance corpus (D7).** Formalize `tests/f90/` into the corpus: a
 manifest (construct → fixture → parser code path), a coverage rule (every parse
 branch in the frontend has ≥1 fixture), and the two assertion tiers (dump
-snapshots = early warning; IR assertions = the contract). Partially in place since
-Phase 1b (`PROVENANCE` version stamping, regenerable fixtures); finish alongside
-Phase 2.
+snapshots = early warning; IR assertions = the contract). The manifest landed
+with Phase 2 (`tests/f90/MANIFEST.md`), including an honest list of parser paths
+that still lack a fixture; closing those gaps is the ongoing part.
 
 **Deferred — Frontend upgrade exploration (much later, optional).** Evaluate an
 alternative frontend — LFortran ASR / fparser2 ("Option B"), or flang's own more
@@ -287,7 +294,12 @@ the dump can't give. Resolves D5.
   (`tests/f90/PROVENANCE`) so a format shift shows up as a version delta; that is
   detection, not defense. The defense is the conformance corpus (D7): per-construct
   minimal examples that turn an LLVM upgrade into a bounded list of localized,
-  independently fixable breaks.
+  independently fixable breaks. *Phase 2 update:* the mangling rule is now
+  load-bearing and documented where it is implemented
+  (`frontend/_flang_text.py::demangle` — `imported$owner$specific`, where the
+  owner module may hold the name by use-association rather than define it) and
+  pinned by the `test_private_specifics` fixture, so a mangling change breaks a
+  named test rather than silently degrading resolution.
 - **Q2: ANSWERED (2026-07-29) — yes, in the textual output.** The with-sema dump's
   unparse annotation on each statement carries the *resolved* specific procedure —
   for generic subroutine calls, generic function references, and type-bound
@@ -296,6 +308,13 @@ the dump can't give. Resolves D5.
   becomes deletable in Phase 2. Two caveats for that work: the resolved name may be
   mangled (see Q1), and the annotation is per-*statement*, so a statement
   containing several calls yields one string to attribute across them.
+  *Phase 2 postscript:* both caveats resolved better than expected — the mangling
+  is a gift (it names the owning module, exactly what scope-qualified identity
+  needs), and the per-statement worry dissolved because every `Expr` node carries
+  its own annotation, so each function reference reads the exact resolved text of
+  its *own* call from its parent `Expr` line. Static type-bound dispatch is also
+  resolved in the text (the object hoisted into the argument list); only genuine
+  dynamic dispatch keeps the `obj%binding(...)` shape.
 - **Q3 (deferred, gates D5):** Does LFortran's ASR — or fparser2 — actually ingest
   FMS+MOM6 at current maturity? Only relevant if/when we pursue the deferred
   frontend-upgrade exploration; not near-term.

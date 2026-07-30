@@ -35,7 +35,8 @@ up work, so it errs toward making implicit reasoning explicit.
 
 ## 2. What flinspect is today
 
-Pipeline, as of Phase 1b (the seam from D2 is in place):
+Pipeline, as of Phase 2 (the seam from D2 is in place; call facts carry
+confidence per D3):
 
 ```
 flang -fdebug-dump-parse-tree (with sema)  →  text dump
@@ -63,16 +64,21 @@ Key facts about the current implementation:
   `tests/f90/gen_ptree_files.sh`, which stamps the generating `flang --version`
   into `tests/f90/PROVENANCE`.
 - The "parser" is still a flat dispatch of `if "<substring>" in line` checks plus a
-  `level()` function that counts leading `|` characters to infer tree depth. It
-  tolerates both dump variants: with-sema statement/expression nodes carry an
-  unparse annotation, which the matchers look past.
-- It still contains a hand-rolled, partial **type/rank/kind inference engine** and
-  **generic-interface / type-bound-procedure resolver** (`_infer_*`,
-  `_types_compatible`, `resolve_interface_procedures`, `_resolve_binding_name`).
-  Sema already answers most of this — its resolved call text is recorded below the
-  seam but not yet consumed — so retiring the engine is Phase 2's job (W1, W2).
-- Call edges are a single `calls` relation plus first-class `unresolved_calls`; the
-  must/may confidence strata of D3 are not built yet (Phase 2).
+  `level()` function that counts leading `|` characters to infer tree depth. The
+  with-sema unparse annotations are no longer just tolerated — they are the fact
+  source for call resolution.
+- **Call resolution is read from sema, not re-derived** (Phase 2, W1): generic and
+  type-bound calls take the specific procedure from the statement's/expression's
+  unparse annotation, demangling flang's `imported$owner$specific` qualified names
+  into scope-qualified identities. The old hand-rolled type/rank/kind inference
+  engine and generic resolver are deleted; what survives below the seam is
+  signature parsing (entity facts) and declared-type tracking for `obj%binding()`
+  receivers. No-sema dumps are no longer a supported input (D4).
+- Call edges are **stratified by confidence** (D3): `calls_resolved` /
+  `calls_assumed` / `calls_unresolved` relations with `calls` (may) and
+  `calls_must` (must) as computed views; unresolved targets are first-class
+  `defined=False` entities. On the MOM6+FMS2 corpus, `resolved` is 93% of the
+  may-relation; `assumed` survives only for genuine dynamic dispatch.
 
 ---
 
@@ -161,6 +167,10 @@ that silently mix guesses with truths. Making confidence explicit:
 - means migrating to a more precise frontend (LFortran) **automatically upgrades
   reasoning quality** without touching the query layer.
 
+**Status — implemented for the call relation in Phase 2 (2026-07-29):** stratified
+`calls_resolved` / `calls_assumed` / `calls_unresolved` relations with computed
+may/must views (DESIGN §2.1).
+
 ### D4 — Unify on the with-sema dump
 
 Switch test fixtures (and any docs) to `-fdebug-dump-parse-tree` (with sema) so
@@ -176,11 +186,13 @@ path is now only an optional resilience measure, not a coverage requirement. The
 total enabling cost was four small, foundational fixes — see `DEVLOG.md` for the
 full account.
 
-**The switch itself landed 2026-07-29 (Phase 1b).** Fixtures are now with-sema, so
-tests and production parse the same variant; consuming sema's *resolved* names and
-types (rather than merely tolerating them) is Phase 2. `-fdebug-dump-symbols` turned
-out not to be needed for generic/type-bound resolution — the parse-tree dump's
-unparse annotations already carry it (DESIGN Q2).
+**The switch itself landed 2026-07-29 (Phase 1b), and Phase 2 (same day) consumes
+it.** Fixtures are with-sema, tests and production parse the same variant, and the
+frontend now *reads* sema's resolved names from the unparse annotations instead of
+re-deriving them — with-sema is the sole supported input (no-sema support was
+dropped with the inference engine). `-fdebug-dump-symbols` turned out not to be
+needed for generic/type-bound resolution — the parse-tree dump's unparse
+annotations already carry it (DESIGN Q2).
 
 ### D5 — A frontend upgrade (LFortran/fparser2, or flang's structured API) is a much-later option, not a near-term track
 

@@ -11,6 +11,97 @@
 
 ---
 
+## 2026-07-29 — Phase 2 landed: sema's answers replace the hand-rolled resolver
+
+**What:** completed Phase 2 (DESIGN §4) — soundness & resolution quality. The IR's
+call relation is now stratified by confidence (D3), call resolution is *read from
+sema* instead of re-derived, and the heuristic inference engine is gone (W1, W2,
+W4, W6). Landed as two code commits (IR stratification; frontend resolution
+overhaul) plus this docs pass.
+
+- **IR (D3):** the single `calls` set became three pure relations —
+  `calls_resolved` / `calls_assumed` / `calls_unresolved` — with `calls` (may)
+  and `calls_must` (must) as computed union views, so existing consumers kept
+  working unchanged. Unresolved *targets* are first-class entities with
+  `defined=False` (scope-qualified `module::name` when the use-chain or sema's
+  mangling pins the module, bare name atoms otherwise), replacing the
+  `(caller, name)` `unresolved_calls` side-table. The old silent drop of `mpi_*`
+  calls is gone too.
+- **Attribution turned out cleaner than feared.** DESIGN Q2 warned the unparse
+  annotation is per-*statement*, leaving `a = f(x) + g(y)` one string to split
+  across two calls. In fact every `Expr` node carries its own annotation, and a
+  `FunctionReference`'s *parent* `Expr` line is exactly the resolved text of that
+  one call (`Expr = 'area_r(y)'`); `CallStmt` lines annotate themselves. The call
+  pass keeps a stack of enclosing annotated `Expr`s, so each recorded call event
+  gets its own resolved text and no cross-call attribution heuristic exists.
+- **The mangling rule (Q1 caveat), derived empirically** from all 994 distinct
+  mangled names in the corpus: always exactly three components,
+  `imported$owner$specific`. One subtlety found the hard way: the middle
+  component is the module that owns the specific's *symbol*, which is usually but
+  not always its definition site — `fms2_io_mod$fms2_io_mod$compressed_read_2d`
+  names a subroutine whose body lives in netcdf_io_mod (fms2_io_mod holds it by
+  use-association), so demangled lookup follows the owner module's use-chain
+  before falling back to a `defined=False` entity. Rule + fixture:
+  `frontend/_flang_text.py::demangle`, `test_private_specifics`.
+- **Type-bound calls:** sema resolves *static* dispatch in the unparse by
+  hoisting the object into the argument list (`call obj%reset()` →
+  `'CALL reset_bounds(obj)'` — even for `=>`-renamed and private impls), so those
+  edges are `resolved`. *Dynamic* dispatch (polymorphic receiver, deferred
+  binding) keeps the `obj%binding(...)` shape; those edges are classified through
+  the declared type's binding table as `assumed` (an override may win at
+  runtime), or `unresolved` when the receiver's type is unknown. Three latent
+  binding-table bugs were fixed on the way: `generic :: g => a, b` was recorded
+  as `g => b` (last name won), `procedure :: a, b, c` as `a => c`, and inherited
+  bindings (EXTENDS chain) were never searched.
+- **Retired (W1, W6):** `resolve_interface_procedures`, `_procedure_matches`,
+  `_types_compatible`/`_ranks_compatible`/`_kinds_compatible`, all `_infer_*`
+  call-site type/rank/kind inference, per-argument parsing in the call pass, the
+  `DoublePrecision → 'r8_kind'` MOM-ism, and `get_subroutine_by_name` (the last
+  `endswith` lookup, already dead). Variable *type* tracking survives — it types
+  `obj%binding()` receivers — and signature parsing (types/ranks/kinds/optional)
+  survives as entity facts. **No-sema input support is dropped** (decided with
+  the maintainer; D4 made it redundant): nothing rejects a no-sema dump, but it
+  is untested and unadvertised — generics would degrade to `assumed` fan-out.
+- **Scope/visibility-correct lookup (W4):** the frontend now parses
+  `AccessStmt`s (module default + per-name overrides), and `find_named_entity`
+  crosses a wildcard USE only for names the used module makes public, follows
+  only-lists/renames as before, and searches a routine's own USE statements
+  before its enclosing unit's. Only-list imports are deliberately not
+  visibility-checked (flang already validated them).
+
+**Production corpus (458 MOM6+FMS2 with-sema dumps): 0 file errors; 42,199 call
+events → resolved 22,764 / assumed 114 / unresolved 1,578** (may = 24,456,
+must = 22,764; `resolved` is 93% of may). The may count sits 15% below the
+Phase 1b baseline (28,931), outside the "few percent" acceptance band, so the
+delta was decomposed edge-by-edge against a baseline replay rather than accepted:
+- **6,655 edges removed**, of which 6,639 are fan-out siblings — edges to *other*
+  members of a generic the caller invoked, i.e. exactly the W2 over-approximation
+  this phase existed to eliminate. The residual 16 were inspected individually:
+  all are corrected wrong edges (self-edges from dynamic dispatch resolved to the
+  caller's own generic sibling, and name-coincidence binding matches like
+  `reopen_mom_file → mom_io_infra::file_is_open` from the old
+  search-all-types-for-a-binding heuristic).
+- **2,180 edges added**: 1,578 first-class unresolved edges (the old
+  `unresolved_calls` side-table, now real may-edges) plus ~600 correct edges the
+  old engine could not find — demangled cross-module targets, `use`-renamed
+  callees, and module-pinned externals (`netcdf::nf90_get_var_fourbyteint`,
+  courtesy of the mangling).
+
+Suite: 70 tests green (3 new fixtures: `test_external_calls`,
+`test_type_bound_generic`, `test_private_specifics`; the retired engine's tests
+replaced by attribution/demangle/visibility coverage, not dropped).
+
+**Known residue, recorded not hidden:** (a) a function reference nested in
+another call's argument list is still not recorded as a call site — a
+long-standing under-approximation, now documented at the skip site (W2 residue);
+(b) the hardcoded intrinsic list still filters function references, and names it
+misses (`sqrt`, `loc`, `exp` are absent) surface as bare-name unresolved atoms —
+same behaviour as the baseline, now at least visible in the unresolved stratum;
+(c) dynamic dispatch lands on the *declared* type's impl as `assumed` — a later
+phase could fan out over the EXTENDS overrides instead.
+
+---
+
 ## 2026-07-29 — Phase 1b landed: fixtures and production now parse the same dump
 
 **What:** completed Phase 1b (DESIGN §4) — tests and production consume the *same*
