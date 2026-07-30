@@ -32,6 +32,7 @@ Two assertion tiers per construct:
 | Structure-component actual arguments (`cs%field`) | `test_struct_component` | `parse_subroutine_call_stmt` + sema answer |
 | Derived type + type-bound bindings (specific, `=>` rename, generic) | `test_type_bound_generic` | `parse_derived_type_stmt`, `parse_type_bound_proc_binding` |
 | Type-bound CALL, static dispatch (sema hoists the object) | `test_type_bound_generic` | `_extract_structure_component_name`, `_classify_type_bound` |
+| Derived-type EXTENDS: same-module + cross-module extension, inherited binding (static → resolved; dynamic via `class(...)` receiver → assumed through the ancestor walk), module-dependency edges without self-loops | `test_type_extends` | `parse_derived_type_stmt` (Extends), `_binding_impls`, `_classify_type_bound`; consumer-side `parse_forest.get_module_dependency_graph` |
 | PUBLIC/PRIVATE accessibility (default + per-name) | `test_private_specifics` | `parse_access_stmt`, `_exports` / `find_named_entity` |
 | Mangled resolved names (`imported$owner$specific`) | `test_private_specifics` | `_flang_text.demangle`, `_edges_for_mangled` |
 | Unresolved externals → first-class `defined=False` targets | `test_external_calls` | `_classify_event` unresolved branch, `_unknown_target` |
@@ -49,12 +50,11 @@ these don't have one yet:
   docstring reads as "whole module". Resolution is unaffected (it follows the
   rename), so the test asserts the renames and not the only-list; the projection
   itself wants a fix in a frontend phase (DEVLOG 2026-07-30).
-- **Dynamic type-bound dispatch** (polymorphic receiver keeping `obj%binding(...)`
-  in the unparse; deferred bindings) — `_classify_type_bound`'s
-  `assumed`/`unresolved` branches; currently covered only by the production
-  corpus replay.
-- **Derived-type EXTENDS** (inheritance; the `_binding_impls` ancestor walk and
-  the ParseForest type-extension edges).
+- **Dynamic type-bound dispatch, `unresolved` branch** — a polymorphic receiver
+  whose declared type the frontend cannot determine (e.g. a component chain
+  `eos%type%binding(...)`); `test_type_extends` covers the `assumed` branch, but
+  the receiver-type-unknown → `unresolved` path is still covered only by the
+  production corpus replay.
 - **Nested (CONTAINS'd) routines** inside a routine.
 - **Main PROGRAM and module-less subprogram files** — `parse_program_unit`'s
   `MainProgram` / `Subprogram` branches.

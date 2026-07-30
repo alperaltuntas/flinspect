@@ -90,6 +90,12 @@ class ParseForest:
             if child_mod is None:
                 continue
             for parent_mod in type_module.get(dt.parent_type.lower(), ()):
+                # A type extending a type of its own module is not an
+                # inter-module dependency; the self-loop it would draw makes the
+                # graph trivially cyclic (e.g. MOM_io_file's MOM_infra_file
+                # extends MOM_file in the same module).
+                if parent_mod == child_mod.name:
+                    continue
                 g.add_edge(child_mod.name, parent_mod)
 
         return g

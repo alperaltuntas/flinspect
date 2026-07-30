@@ -1,0 +1,109 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'shape_base_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | Name = 'shape_t'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'id'
+| | | | | Initialization -> Constant -> Expr = '0_4'
+| | | | | | LiteralConstant -> IntLiteralConstant = '0'
+| | | TypeBoundProcedurePart
+| | | | ContainsStmt
+| | | | TypeBoundProcBinding -> TypeBoundProcedureStmt -> WithoutInterface
+| | | | | TypeBoundProcDecl
+| | | | | | Name = 'describe'
+| | | | | | Name = 'describe_shape'
+| | | EndTypeStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | TypeAttrSpec -> Extends -> Name = 'shape_t'
+| | | | Name = 'tagged_shape_t'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'tag'
+| | | | | Initialization -> Constant -> Expr = '0_4'
+| | | | | | LiteralConstant -> IntLiteralConstant = '0'
+| | | EndTypeStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'describe_shape'
+| | | | DummyArg -> Name = 'self'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Class
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'shape_t'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'self'
+| | | ExecutionPart -> Block
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'shape_ext_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'shape_base_mod'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | TypeAttrSpec -> Extends -> Name = 'shape_t'
+| | | | Name = 'circle_t'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'radius'
+| | | | | Initialization -> Constant -> Expr = '1._4'
+| | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | Real = '1.0'
+| | | EndTypeStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'use_circle'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Type
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'circle_t'
+| | | | | EntityDecl
+| | | | | | Name = 'c'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL describe_shape(c)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent
+| | | | | | | DataRef -> Name = 'c'
+| | | | | | | Name = 'describe'
+| | | EndSubroutineStmt -> 
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'describe_any'
+| | | | DummyArg -> Name = 'c'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Class
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'circle_t'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'c'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL c%describe()'
+| | | | | Call
+| | | | | | ProcedureDesignator -> ProcComponentRef -> Scalar -> StructureComponent
+| | | | | | | DataRef -> Name = 'c'
+| | | | | | | Name = 'describe'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 

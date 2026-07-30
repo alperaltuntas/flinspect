@@ -249,6 +249,51 @@ class TestTypeBoundGeneric:
 
 
 # =============================================================================
+# Derived-type EXTENDS: inherited bindings and module-dependency edges
+# =============================================================================
+
+class TestTypeExtends:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        from flinspect.parse_forest import ParseForest
+        self.forest = ParseForest(["tests/f90/test_type_extends_ptree"])
+        self.ir = self.forest.ir
+
+    def test_parent_type_recorded(self):
+        by_name = {dt.name: dt for dt in self.ir.derived_types}
+        assert by_name["tagged_shape_t"].parent_type == "shape_t"
+        assert by_name["circle_t"].parent_type == "shape_t"
+
+    def test_inherited_binding_static_dispatch_is_resolved(self):
+        # `type(circle_t) :: c; call c%describe()` — sema hoists the object and
+        # names the parent's impl
+        caller = get_subroutine(self.ir, "shape_ext_mod", "use_circle")
+        impl = get_subroutine(self.ir, "shape_base_mod", "describe_shape")
+        assert (caller.id, impl.id) in self.ir.calls_resolved
+
+    def test_inherited_binding_dynamic_dispatch_is_assumed(self):
+        # `class(circle_t) :: c; call c%describe()` — dispatch may pick an
+        # override at runtime, so the declared type's impl (found by walking the
+        # EXTENDS chain: circle_t has no own binding) is a guess
+        caller = get_subroutine(self.ir, "shape_ext_mod", "describe_any")
+        impl = get_subroutine(self.ir, "shape_base_mod", "describe_shape")
+        assert (caller.id, impl.id) in self.ir.calls_assumed
+        assert (caller.id, impl.id) not in self.ir.calls_must
+
+    def test_cross_module_extension_is_a_module_dependency(self):
+        g = self.forest.get_module_dependency_graph()
+        assert ("shape_ext_mod", "shape_base_mod") in g.edges()
+
+    def test_same_module_extension_draws_no_self_loop(self):
+        # tagged_shape_t extends shape_t inside shape_base_mod: a self-loop here
+        # would make every acyclicity/topological analysis trivially fail (the
+        # real-corpus case is MOM_io_file's file types)
+        g = self.forest.get_module_dependency_graph()
+        assert not [e for e in g.edges() if e[0] == e[1]]
+
+
+# =============================================================================
 # A public generic with PRIVATE specifics: the mangled sema answer (Q1/Q2, W4)
 # =============================================================================
 
