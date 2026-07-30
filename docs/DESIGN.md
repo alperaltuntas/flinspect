@@ -267,14 +267,15 @@ Phases 1–2 land; the IR + confidence model is the prerequisite.)
 Independent of Phases 2–4 — its only input is the dumps, so it can run alongside
 them — but it must not displace them (Phase 2's confidence model is what makes the
 frontier-and-gate story real).
-- *Pilot (timeboxed, no tooling):* hand-write Lean 4 / Mathlib models of one
-  already-ported kernel pair — `PPM_limit_pos`
+- *Pilot (timeboxed, no tooling):* — **DONE 2026-07-30, SUCCEEDED.** Hand-written
+  Lean 4 / Mathlib models of `PPM_limit_pos`
   (Fortran: `submodules/MOM6/src/core/MOM_continuity_PPM.F90`;
-  C++: `submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp`) — and prove
-  the point lemma and the `do concurrent` ≡ `ParallelFor` iteration schema over ℝ.
-  Success = a machine-checked `theorem`; failure or blow-up = the track stays
-  aspirational and we record why in `DEVLOG.md`. Either way the pilot surfaces the
-  Q5 modeling questions concretely.
+  C++: `submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp`); both the
+  point lemma and the `do concurrent` ≡ `ParallelFor` iteration schema are
+  machine-checked over ℝ (`lean/pilot/Pilot/PpmLimitPos.lean`; axioms audited —
+  no `sorry`). The point lemma proved near-mechanical (~5 lines) for kernels in
+  the TIM point-function style. See the DEVLOG entry for the Q5 answers surfaced
+  and the honest caveats (hand-written models; friendliest kernel shape).
 - *Then:* automate the printer (deterministic dump → kernel IR → Lean; §2.3), one
   construct at a time in the D7 corpus style (construct → golden Lean model).
 - *Later:* kernels with cross-iteration structure (k-recurrences → induction),
@@ -360,6 +361,12 @@ the dump can't give. Resolves D5.
   the C++ side, `clang -ast-dump=json` vs. libclang as the ingestion route. None
   of these needs deciding before the pilot — hand-writing the `PPM_limit_pos`
   models *is* how they get answered concretely.
+  *Pilot postscript (2026-07-30):* three answered — `intent(inout)` scalars as
+  functional result-pairs work with zero friction; the schema over an abstract
+  index type `ι` (arrays as `ι → ℝ`) covers the mask-free `do concurrent` case
+  and lifts the point lemma by `funext`; ℝ's decidable-order instances make the
+  `if`-guards unremarkable. Still open: masks/strides, reductions/k-recurrences
+  (need induction, not a ∀-schema), and the clang-side ingestion route.
 
 ---
 

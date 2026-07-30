@@ -11,6 +11,56 @@
 
 ---
 
+## 2026-07-30 — Track B pilot SUCCEEDED: `PPM_limit_pos` equivalence machine-checked over ℝ
+
+**What:** completed the Track B pilot (DESIGN §4; VISION D6) — hand-written Lean 4
+models of the already-ported kernel pair `PPM_limit_pos` (Fortran,
+`MOM6/src/core/MOM_continuity_PPM.F90`) / `ppm_limit_pos_point` (C++,
+`TIM/mom/cpp/mom_continuity_ppm_kernel.hpp`), with machine-checked equivalence.
+Everything lives in `lean/pilot/` (a `lake` project; Mathlib dependency).
+
+- **The theorems** (`lean/pilot/Pilot/PpmLimitPos.lean`):
+  `ppmLimitPos_point_equiv` — the C++ point kernel and the Fortran loop body are
+  the same function ℝ⁴ → ℝ² — and `ppmLimitPos_kernel_equiv` — the AMReX
+  `ParallelFor` launch and the Fortran `do concurrent` nest produce identical
+  output arrays over any index box. Each model mirrors *its own* source's
+  expression shapes (Fortran `curv**2 + 3.0*dh**2` vs C++
+  `(curv*curv) + (3.0*(dh*dh))`), so the proof absorbs exactly the transcription
+  deltas and nothing else. The whole proof is ~5 lines: `unfold`, one
+  `ring`-provable bridge identity, `simp only`. **It compiled on the first
+  attempt** — for kernels in the TIM point-function style, the point lemma is
+  near-mechanical.
+- **Trusted-base audit** (`Pilot/AxiomsAudit.lean`): `#print axioms` on both
+  theorems reports exactly `[propext, Classical.choice, Quot.sound]` — Lean's
+  standard axioms; no `sorryAx`.
+- **Q5 answers surfaced by the pilot:** `intent(inout)` scalars modeled
+  functionally (result pair) work with zero friction; the iteration schema over
+  an abstract index type `ι` (arrays as `ι → ℝ`) suffices for a mask-free
+  `do concurrent` and composes with the point lemma by `funext`; Mathlib's
+  decidable-order instances on ℝ mean the `if`-guards need no explicit
+  `Classical` opens. Still open: masks/wet-dry variants, reductions/k-recurrences,
+  and the clang-side ingestion route.
+- **Infrastructure** (new, reusable): elan 4.2.3 + Lean v4.32.2 under
+  `/glade/work/altuntas/lean-root/` (home quota is too tight for a toolchain);
+  activate with `. /glade/work/altuntas/lean-root/activate_lean.sh`. Project
+  created with `lake new pilot math`, which also fetched the full Mathlib
+  binary cache (8,639 prebuilt modules — no source build needed).
+- **Practical lessons:** a blanket `import Mathlib` is prohibitively slow on
+  GLADE (>10 min to elaborate one file); targeted imports
+  (`Mathlib.Data.Real.Basic` + `Mathlib.Tactic.Ring`) bring a full rebuild of the
+  file to ~2 min. Mathlib's style linters fire on non-Mathlib file headers;
+  disabled per-file (`set_option linter.style.header false`) — this is project
+  code, not a Mathlib contribution.
+
+**Honest caveats:** the models are **hand-written** — source fidelity is by eye,
+which is acceptable for the pilot (that was its design) but is exactly what the
+next Track B step removes: the deterministic printer (dump → kernel IR → Lean)
+makes fidelity mechanical and auditable. And `PPM_limit_pos` is the friendliest
+kernel shape (pure point function, no reductions, no masks); the schema's reach
+beyond that shape is untested.
+
+---
+
 ## 2026-07-30 — Notebooks overhauled: a post-seam suite, and the venv made self-sufficient
 
 **What:** replaced the pre-seam notebook collection with a four-notebook
