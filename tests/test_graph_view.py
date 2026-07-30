@@ -230,6 +230,12 @@ class TestInterfaceMembership:
 class TestExplorerWidgetLayer:
 
     def test_explorer_renders_the_elements_without_merging(self):
+        # Skip (not fail) where the ipycytoscape import chain is broken — e.g. a
+        # user-site pandas without numpy shadowing the venv; see the module
+        # docstring (PYTHONNOUSERSITE=1 runs this test for real). exc_type is
+        # needed because the breakage is a transitive ImportError, not a missing
+        # ipycytoscape.
+        pytest.importorskip("ipycytoscape", exc_type=ImportError)
         from flinspect.explorer import Explorer  # imports ipycytoscape
         from flinspect.parse_forest import ParseForest
 
