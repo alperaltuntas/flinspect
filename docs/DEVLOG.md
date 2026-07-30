@@ -11,6 +11,68 @@
 
 ---
 
+## 2026-07-30 — Notebooks overhauled: a post-seam suite, and the venv made self-sufficient
+
+**What:** replaced the pre-seam notebook collection with a four-notebook
+explanatory suite (`notebooks/README.md` + `01_getting_started` →
+`04_confidence_queries`) and repaired the venv so `PYTHONNOUSERSITE=1` works for
+*everything*. Consumer-side work only — no frontend or IR changes.
+
+- **The venv was not self-sufficient.** Under `PYTHONNOUSERSITE=1`,
+  nbformat/nbconvert died on missing `platformdirs`/`attrs` even though
+  jupyterlab is a declared dependency — pip had satisfied those transitive deps
+  from the (broken) `~/.local` user site at install time, so they never landed
+  in the venv. Meanwhile *without* the env var, `import flinspect.explorer`
+  fails because the user site's broken pandas shadows the venv. Fix:
+  `PYTHONNOUSERSITE=1 .venv/bin/pip install -e '.[dev]'` (re-resolves the tree
+  without the user site; pulled in platformdirs, attrs, requests,
+  python-dateutil, …). Verified: 99 tests, `jupyter nbconvert`, and headless
+  notebook execution all pass under `PYTHONNOUSERSITE=1`; the bare-mode suite is
+  unchanged (98 + 1 skip). `~/.local` itself untouched. Launch and install
+  commands are documented in `notebooks/README.md` — the env var belongs on the
+  *install* command too, or the hole reopens.
+- **The old suite (7 tracked notebooks + root `test.ipynb`) is retired.** Only
+  the untracked `explorer_TIM_new.ipynb` ran against the current package; the
+  rest imported pre-seam APIs (`frontend._nodes`, `e.store[...]`,
+  `pf.registry`, `node.program_unit.parse_tree_path`) and referenced dump
+  directories that no longer exist. Every `*_TIM*` name was aspirational —
+  there is still no TIM corpus (see 2026-05-28 below). Their durable ideas were
+  rebuilt, not copied: the reachability analyses ("which FMS2 modules does MOM6
+  actually need", the direct API surface) live in `03_module_dependencies` on
+  `get_module_dependency_graph()` + IR relations. `environment.yml` went with
+  them — its only content beyond `pip install -e .` was pyvis, which only the
+  retired notebooks used; the venv flow above is the single documented setup.
+- **Suite conventions** (spelled out in `notebooks/README.md`): seam-only
+  imports (`flinspect.{ir, parse_forest, graph_view, explorer}`), one parameter
+  cell per notebook, corpus root from `FLINSPECT_CORPUS` (glade default),
+  outputs committed **stripped**, and every notebook must execute end-to-end
+  headlessly (the 69 KB committed-outputs blob does not survive this policy).
+  `01_getting_started` is fully portable — it runs off the `tests/f90` fixtures
+  and demonstrates the `assumed` stratum with a small hand-built IR, since no
+  self-contained fixture produces one (the known dynamic-dispatch manifest gap).
+- **Findings recorded, not fixed** (this was a consumer-side pass; the package
+  is untouched):
+  - (a) **The IR carries no source provenance.** Corpus-level analyses want
+    "which source tree defined this module"; the pre-seam notebooks read a
+    `parse_tree_path` node attribute that rightly no longer exists. Workaround
+    in `03`: extract each corpus subdirectory separately and attribute modules
+    by where they are defined. Whether provenance becomes an IR fact is a
+    deliberate decision for later, not a notebook's call.
+  - (b) `ParseForest.get_call_graph()` **prints** an unresolved-count line on
+    every call — noisy for library consumers; candidate cleanup.
+  - (c) 84 call events originate from `program` units or module-level code and
+    therefore appear in the relations but not as call-graph edges (nodes are
+    subroutines/functions only) — noted where visible (`04`).
+  - (d) The module dependency graph carries two **self-loops**
+    (`mom_diag_buffers`, `mom_io_file` — same-module EXTENDS edges), so
+    `nx.is_directed_acyclic_graph` is False even though no multi-module cycle
+    exists; `03` checks strongly-connected components instead.
+
+Corpus replay unchanged: 458 files, 0 errors, resolved 22,764 / assumed 165 /
+unresolved 1,527.
+
+---
+
 ## 2026-07-30 — Phase 3 landed: the Explorer shows what it knows (and what it doesn't)
 
 **What:** completed Phase 3 (DESIGN §4) — Explorer correctness. W5 is closed, the

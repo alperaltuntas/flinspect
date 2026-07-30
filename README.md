@@ -36,64 +36,64 @@ yet implemented**.
 4. **Multi-project analysis.** The `ParseForest` class analyzes multiple parse trees
    together, for codebases spanning several components (e.g. MOM6 + its libraries).
 
-It also contains a hand-rolled, partial type/rank/kind inference and
-generic-interface resolver. Much of this re-derives information the compiler can
-provide directly; replacing it with compiler-resolved (with-sema) facts is a
-planned refactor — see `docs/DESIGN.md`.
+Call resolution is read from the compiler's semantic analysis (with-sema dumps),
+and every call fact carries a confidence stratum — `resolved` / `assumed` /
+`unresolved` — with *may* and *must* views derived from the strata. See
+`docs/DESIGN.md` §2.1.
 
 ---
 
 ## Working with flinspect
 
-flinspect is a prototype; see the `notebooks/` directory for examples. To run them,
-first create the conda environment:
+flinspect is a prototype; the notebooks under `notebooks/` are the guided tour —
+see [`notebooks/README.md`](notebooks/README.md) for the index, the launch
+instructions, and the conventions. In short:
 
 ```bash
-conda env create -f environment.yml
+python3 -m venv .venv
+PYTHONNOUSERSITE=1 .venv/bin/pip install -e '.[dev]'
+PYTHONNOUSERSITE=1 .venv/bin/jupyter lab notebooks/
 ```
 
-Then activate it and also install pygraphviz:
-
-```bash
-conda activate flinspect
-conda install -c conda-forge pygraphviz
-```
-
-You are now ready to explore the Jupyter notebooks under `notebooks/`.
-
-**Note** that the notebooks require flang parse-tree files for MOM6 and its
-libraries. These are available on NCAR's glade filesystem, and the paths are
-specified in the notebooks. If you don't have glade access, you will need to
-generate flang parse trees on your own machine (see the build pipeline notes in
+`01_getting_started.ipynb` runs anywhere off the committed `tests/f90` fixtures —
+no corpus needed. Notebooks 02–04 read a corpus of parse-tree dumps: by default
+the MOM6 + FMS2 one on NCAR's glade filesystem, overridable with the
+`FLINSPECT_CORPUS` environment variable (to generate dumps for your own code,
+see `tests/f90/gen_ptree_files.sh` and the build pipeline notes in
 `docs/DEVLOG.md`).
 
 ---
 
 ## Key classes and components
 
-- **`ParseTree`** — reads and parses an individual flang parse-tree file.
-- **`ParseForest`** — manages collections of parse trees for multi-file analysis.
+- **`flinspect.ir.IR`** — the seam: entities (scope-qualified atoms) plus
+  relations (tuple-sets) over them; nothing flang-specific appears in it.
+- **`flinspect.frontend`** — everything flang-specific, behind one method:
+  `FlangDumpFrontend.extract(sources) -> IR`.
+- **`ParseForest`** — flang-agnostic consumer; builds NetworkX module-dependency
+  and call graphs from the IR (call edges carry their confidence stratum).
+- **`flinspect.graph_view`** — pure neighbourhood → renderable-elements builder
+  (the testable half of the Explorer; no widget imports).
 - **`Explorer`** — interactive Jupyter widget for code exploration.
-- **Node classes** — represent Fortran constructs (Module, Subroutine, Function, …).
-- **`NodeRegistry`** — manages object interning and relationships.
 
 ## How it works
 
-1. **Input.** Takes flang-generated parse-tree dump files as input (typically under
-   a build directory such as `.../flang_ptree/`).
-2. **Parsing pipeline.** Iterates through each dump file line by line, identifies
-   Fortran constructs by pattern matching, and builds internal node representations.
-   *(This text-scraping approach is the prototype's main fragility; isolating it
-   behind a stable internal representation is the central goal of the planned
-   refactor — see `docs/DESIGN.md`.)*
-3. **Relationship analysis.** Tracks USE dependencies, identifies call
-   relationships, and resolves call targets across modules.
+1. **Input.** Takes flang-generated with-sema parse-tree dump files as input
+   (typically under a build directory such as `.../flang_ptree/`).
+2. **Parsing pipeline.** The frontend scrapes each dump line by line and projects
+   the result onto the flinspect-owned IR at the boundary. *(Text scraping is
+   inherently fragile; the IR seam contains that fragility — a format change is a
+   frontend fix, invisible to consumers — and the conformance corpus under
+   `tests/f90/` localizes it to named constructs. See `docs/DESIGN.md`.)*
+3. **Relationship analysis.** USE dependencies, containment, interfaces, and
+   call relationships — read from the compiler's resolution and stratified by
+   confidence, never silently guessed.
 4. **Visualization.** Uses NetworkX for graph structures and ipycytoscape for
    interactive visualization in Jupyter.
 
 ## Dependencies
 
-- Python 3.14
+- Python >= 3.11
 - NetworkX (graph analysis)
 - Jupyter ecosystem: jupyterlab, ipywidgets, ipycytoscape
 - z3-solver — present as a dependency for the planned reasoning layer (see Roadmap)
