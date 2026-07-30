@@ -94,12 +94,26 @@ class ParseForest:
 
         return g
 
-    def get_call_graph(self):
+    def get_call_graph(self, *, must_only=False):
         """Directed call graph over subroutines and functions.
 
         Nodes are IR :class:`~flinspect.ir.Entity` objects; edges are the ``calls``
         relation (a caller may also point at a generic interface, which is added as
         a node via the edge, matching the legacy behaviour).
+
+        Every edge carries its confidence stratum as a ``confidence`` attribute
+        (``'resolved'`` / ``'assumed'`` / ``'unresolved'``; D3), so a NetworkX
+        consumer can filter — e.g. ``[e for e in g.edges(data=True)
+        if e[2]['confidence'] != 'resolved']`` — without re-deriving set membership.
+
+        Parameters
+        ----------
+        must_only : bool, default False
+            Build from the *must* view (``calls_must`` = resolved only, the
+            under-approximation) instead of the *may* view (all three strata).
+            Every edge is then ``confidence='resolved'``. This filters *edges*
+            only — the node set is still every subroutine/function in the IR, so
+            ``defined=False`` targets remain as isolated nodes.
         """
         n_unresolved = len(self.ir.calls_unresolved)
         print(f"Total unresolved call edges across all parse trees: {n_unresolved}")
@@ -115,11 +129,13 @@ class ParseForest:
             g.add_node(f, type='function', program_unit=pu.name if pu else None)
             callers[f.id] = f
 
-        for caller_id, callee_id in self.ir.calls:
+        relation = self.ir.calls_must if must_only else self.ir.calls
+        for caller_id, callee_id in relation:
             caller = callers.get(caller_id)
             callee = self.ir.get(callee_id)
             if caller is None or callee is None:
                 continue
-            g.add_edge(caller, callee)
+            g.add_edge(caller, callee,
+                       confidence=self.ir.call_confidence(caller_id, callee_id))
 
         return g
