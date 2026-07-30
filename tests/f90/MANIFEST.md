@@ -20,6 +20,8 @@ Two assertion tiers per construct:
 | Signature facts: arg types/ranks/kinds, OPTIONAL | `test_interface_basic`, `test_interface_rank`, `test_optional_args` | `_parse_routine_signature`, `_extract_type_from_decl`, `_parse_array_spec`, `_kind_selector_name` |
 | USE with only-list | `test_private_specifics`, `test_external_calls` | `parse_use_stmt`, `parse_only_clause` |
 | USE, whole-module (wildcard) | `test_interface_basic`, `test_type_bound_generic`, … | `parse_use_stmt` |
+| USE renames, both forms (bare `alias => name`; inside an only-list) | `test_name_collision` | `parse_rename_clause`, `parse_only_clause` (Rename branch), the rename branch of `find_named_entity` |
+| Scope-qualified identity: same routine name in three modules (W5) | `test_name_collision` | consumer-side — `parse_forest.get_call_graph`, `graph_view.subgraph_elements` |
 | Generic interface block (`module procedure`) | `test_interface_basic` (types), `test_interface_rank` (ranks) | `parse_interface_stmt` |
 | Generic subroutine CALL, resolved by sema | `test_interface_basic`, `test_interface_rank` | `parse_subroutine_call_stmt`, `_sema_answer`, `_classify_event` |
 | Generic function reference in an expression | `test_generic_function` | `parse_function_call_stmt`, the `_expr_stack` in `parse_calls` |
@@ -40,9 +42,13 @@ Two assertion tiers per construct:
 Recorded per the D7 coverage rule — every parse branch should gain a fixture;
 these don't have one yet:
 
-- **USE renames** (`use m, alias => name`; only-list and bare forms) —
-  `parse_rename_clause` / the rename branches of `find_named_entity` are
-  exercised only by unit tests over a hand-built registry.
+- **`Use.only` for the only-list rename form** — `test_name_collision` covers the
+  construct and its *resolution*, but the IR projection reports
+  `Use(only=(), renames=(('bc_c','apply_bc'),))` for
+  `use m, only: bc_c => apply_bc`, i.e. an empty only-list, which the `Use`
+  docstring reads as "whole module". Resolution is unaffected (it follows the
+  rename), so the test asserts the renames and not the only-list; the projection
+  itself wants a fix in a frontend phase (DEVLOG 2026-07-30).
 - **Dynamic type-bound dispatch** (polymorphic receiver keeping `obj%binding(...)`
   in the unparse; deferred bindings) — `_classify_type_bound`'s
   `assumed`/`unresolved` branches; currently covered only by the production

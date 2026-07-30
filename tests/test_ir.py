@@ -444,3 +444,44 @@ class TestOptionalArgs:
         assert "init_advanced" in callees
         assert self.ir.calls_assumed == set()
         assert self.ir.calls_unresolved == set()
+
+
+# =============================================================================
+# Same-named routines in different modules stay distinct (W5, principle #7)
+# =============================================================================
+
+class TestNameCollision:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ir = extract("test_name_collision_ptree")
+        self.caller = get_subroutine(self.ir, "collide_caller_mod", "drive")
+
+    def test_three_distinct_atoms_share_the_name(self):
+        same_named = [s for s in self.ir.subroutines if s.name == "apply_bc"]
+        assert len(same_named) == 3
+        assert {s.id for s in same_named} == {
+            "collide_a_mod::apply_bc",
+            "collide_b_mod::apply_bc",
+            "collide_c_mod::apply_bc",
+        }
+
+    def test_each_call_resolves_to_its_own_module(self):
+        # One edge per USE form (wildcard rename / only-list / only-list rename),
+        # each to a *different* atom — a bare-name model would collapse these
+        # three into one edge.
+        assert self.ir.calls_resolved == {
+            (self.caller.id, "collide_a_mod::apply_bc"),
+            (self.caller.id, "collide_b_mod::apply_bc"),
+            (self.caller.id, "collide_c_mod::apply_bc"),
+        }
+        assert len(self.ir.callees(self.caller.id)) == 3
+
+    def test_use_renames_are_recorded(self):
+        # Both rename forms: bare (wildcard USE) and inside an only-list.
+        renames = {(u.module, u.renames) for u in self.ir.uses
+                   if u.scope == "collide_caller_mod" and u.renames}
+        assert renames == {
+            ("collide_a_mod", (("bc_a", "apply_bc"),)),
+            ("collide_c_mod", (("bc_c", "apply_bc"),)),
+        }

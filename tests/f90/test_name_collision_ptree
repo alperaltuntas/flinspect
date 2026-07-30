@@ -1,0 +1,146 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'collide_a_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'apply_bc'
+| | | | DummyArg -> Name = 'x'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'x=x+1._4'
+| | | | | Variable = 'x'
+| | | | | | Designator -> DataRef -> Name = 'x'
+| | | | | Expr = 'x+1._4'
+| | | | | | Add
+| | | | | | | Expr = 'x'
+| | | | | | | | Designator -> DataRef -> Name = 'x'
+| | | | | | | Expr = '1._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '1.0'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'collide_b_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'apply_bc'
+| | | | DummyArg -> Name = 'x'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'x=x+2._4'
+| | | | | Variable = 'x'
+| | | | | | Designator -> DataRef -> Name = 'x'
+| | | | | Expr = 'x+2._4'
+| | | | | | Add
+| | | | | | | Expr = 'x'
+| | | | | | | | Designator -> DataRef -> Name = 'x'
+| | | | | | | Expr = '2._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '2.0'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'collide_c_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'apply_bc'
+| | | | DummyArg -> Name = 'x'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'x=x+3._4'
+| | | | | Variable = 'x'
+| | | | | | Designator -> DataRef -> Name = 'x'
+| | | | | Expr = 'x+3._4'
+| | | | | | Add
+| | | | | | | Expr = 'x'
+| | | | | | | | Designator -> DataRef -> Name = 'x'
+| | | | | | | Expr = '3._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '3.0'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
+ProgramUnit -> Module
+| ModuleStmt -> Name = 'collide_caller_mod'
+| SpecificationPart
+| | UseStmt
+| | | Name = 'collide_a_mod'
+| | | Rename -> Names
+| | | | Name = 'bc_a'
+| | | | Name = 'apply_bc'
+| | UseStmt
+| | | Name = 'collide_b_mod'
+| | | Only -> GenericSpec -> Name = 'apply_bc'
+| | UseStmt
+| | | Name = 'collide_c_mod'
+| | | Only -> Rename -> Names
+| | | | Name = 'bc_c'
+| | | | Name = 'apply_bc'
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'drive'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | EntityDecl
+| | | | | | Name = 'r'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'r=0._4'
+| | | | | Variable = 'r'
+| | | | | | Designator -> DataRef -> Name = 'r'
+| | | | | Expr = '0._4'
+| | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | Real = '0.0'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL bc_a(r)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'bc_a'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = 'r'
+| | | | | | | | Designator -> DataRef -> Name = 'r'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL apply_bc(r)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'apply_bc'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = 'r'
+| | | | | | | | Designator -> DataRef -> Name = 'r'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> CallStmt = 'CALL bc_c(r)'
+| | | | | Call
+| | | | | | ProcedureDesignator -> Name = 'bc_c'
+| | | | | | ActualArgSpec
+| | | | | | | ActualArg -> Expr = 'r'
+| | | | | | | | Designator -> DataRef -> Name = 'r'
+| | | EndSubroutineStmt -> 
+| EndModuleStmt -> 
