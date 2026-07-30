@@ -1,8 +1,28 @@
+"""Explorer — the Jupyter widget layer over the IR.
+
+Kept deliberately thin (principle #10 — rendering is not the seam): every
+decision about *what* is drawn lives in :mod:`flinspect.graph_view`, which is
+pure and unit-tested; this module owns the stylesheet, the legend, and the event
+wiring. The stylesheet is where the visual encoding is defined:
+
+* node fill      = entity kind (subroutine / function / interface)
+* node ghosting  = ``defined="false"`` — referenced but never parsed
+* edge colour    = direction relative to the selected node (incoming/outgoing)
+* edge line style = confidence stratum (D3): solid resolved, dashed assumed,
+  dotted + muted unresolved
+* purple diamond-headed edges = generic-interface membership (structure, not a
+  call, hence no confidence)
+
+The two edge encodings compose because they touch different properties (colour
+vs. line style); ``LEGEND_HTML`` below spells the whole scheme out for the user.
+"""
+
 import re
-import networkx as nx
-from collections import defaultdict
 from flinspect.ir import (
-    MODULE, SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE, CALLABLE_KINDS,
+    SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE, CALLABLE_KINDS,
+)
+from flinspect.graph_view import (
+    gen_subgraph, subgraph_elements, INTERFACE_MEMBER,
 )
 from ipywidgets import VBox, HBox, Dropdown, Text, Select, Output, HTML, IntSlider, Label, Button
 import ipycytoscape
@@ -17,6 +37,46 @@ _CATEGORY_KIND = {
     "Interface": INTERFACE,
     "Derived Type": DERIVED_TYPE,
 }
+
+# Colours shared by the stylesheet and the legend.
+_INCOMING_COLOR = '#3498db'
+_OUTGOING_COLOR = '#e74c3c'
+_MEMBER_COLOR = '#8e44ad'
+_EDGE_COLOR = '#95a5a6'
+
+
+def _line_swatch(style, color=_EDGE_COLOR):
+    return (f"<span style='display:inline-block;width:34px;border-top:3px {style} "
+            f"{color};vertical-align:middle;margin:0 4px 4px 0;'></span>")
+
+
+def _node_swatch(color, extra=''):
+    return (f"<span style='display:inline-block;width:14px;height:14px;border-radius:50%;"
+            f"background:{color};vertical-align:middle;margin:0 4px -2px 0;{extra}'></span>")
+
+
+#: Makes the visual encoding discoverable — call confidence (D3) is the point of
+#: the graph, so it must not be a thing you have to read the source to decode.
+LEGEND_HTML = f"""
+<div style='font-size:11px;line-height:1.7;color:#333;border:1px solid #ddd;
+            border-radius:4px;padding:6px 10px;margin:4px 0;max-width:780px;'>
+  <b>Call confidence</b> (line style):
+    {_line_swatch('solid')}resolved
+    {_line_swatch('dashed')}assumed
+    <span style='opacity:0.55;'>{_line_swatch('dotted')}unresolved</span>
+  &nbsp;|&nbsp; <b>Direction</b> (colour):
+    {_line_swatch('solid', _INCOMING_COLOR)}calls in
+    {_line_swatch('solid', _OUTGOING_COLOR)}calls out
+  &nbsp;|&nbsp; {_line_swatch('solid', _MEMBER_COLOR)}interface membership
+  <br>
+  <b>Nodes:</b>
+    {_node_swatch('#ECCBCA')}subroutine
+    {_node_swatch('#c7b7a2')}function
+    {_node_swatch('#b2c0ca')}interface
+    {_node_swatch('#ffffff', 'border:2px dashed #999;opacity:0.6;')}undefined
+      (referenced, never parsed)
+</div>
+"""
 
 
 class Explorer(VBox):
@@ -73,6 +133,7 @@ class Explorer(VBox):
             self.name_selector,
             HTML("<hr>"),
             self.graph_top_bar,
+            HTML(LEGEND_HTML),
             self.graph_widget,
             out
         ]
@@ -145,6 +206,19 @@ class Explorer(VBox):
                 }
             },
             {
+                # Referenced but never parsed (defined=False): ghosted outline, so
+                # "we don't have this code" reads at a glance (D3, principle #6).
+                'selector': 'node[defined="false"]',
+                'style': {
+                    'background-opacity': 0.15,
+                    'border-width': '2px',
+                    'border-color': '#999999',
+                    'border-style': 'dashed',
+                    'color': '#777777',
+                    'font-style': 'italic'
+                }
+            },
+            {
                 'selector': 'node.selected',
                 'style': {
                     'border-width': '4px',
@@ -155,24 +229,59 @@ class Explorer(VBox):
                 'selector': 'edge',
                 'style': {
                     'width': 2,
-                    'line-color': '#95a5a6',
-                    'target-arrow-color': '#95a5a6',
+                    'line-color': _EDGE_COLOR,
+                    'target-arrow-color': _EDGE_COLOR,
                     'target-arrow-shape': 'triangle',
                     'curve-style': 'bezier'
                 }
             },
+            # Direction sets colour; confidence (below) sets line style — the two
+            # encodings touch disjoint properties, so they compose.
             {
                 'selector': 'edge[direction="incoming"]',
                 'style': {
-                    'line-color': '#3498db',
-                    'target-arrow-color': '#3498db'
+                    'line-color': _INCOMING_COLOR,
+                    'target-arrow-color': _INCOMING_COLOR
                 }
             },
             {
                 'selector': 'edge[direction="outgoing"]',
                 'style': {
-                    'line-color': '#e74c3c',
-                    'target-arrow-color': '#e74c3c'
+                    'line-color': _OUTGOING_COLOR,
+                    'target-arrow-color': _OUTGOING_COLOR
+                }
+            },
+            {
+                'selector': 'edge[confidence="resolved"]',
+                'style': {
+                    'line-style': 'solid'
+                }
+            },
+            {
+                'selector': 'edge[confidence="assumed"]',
+                'style': {
+                    'line-style': 'dashed'
+                }
+            },
+            {
+                'selector': 'edge[confidence="unresolved"]',
+                'style': {
+                    'line-style': 'dotted',
+                    'opacity': 0.55,
+                    'width': 1
+                }
+            },
+            {
+                # Interface membership is structure, not a call: no confidence, and
+                # visually distinct from every call edge. Listed after the direction
+                # rules so its colour wins.
+                'selector': f'edge[relation="{INTERFACE_MEMBER}"]',
+                'style': {
+                    'line-color': _MEMBER_COLOR,
+                    'target-arrow-color': _MEMBER_COLOR,
+                    'target-arrow-shape': 'diamond',
+                    'line-style': 'solid',
+                    'width': 2
                 }
             },
             {
@@ -211,30 +320,9 @@ class Explorer(VBox):
             return entity
         return None
 
-    def _enclosing_module_name(self, eid):
-        seen = set()
-        cur = self.ir.get(eid)
-        while cur is not None and cur.id not in seen:
-            if cur.kind == MODULE:
-                return cur.name
-            seen.add(cur.id)
-            cur = self.ir.get(cur.scope) if cur.scope else None
-        return 'Unknown Module'
-
     def gen_subgraph(self, entity):
-        subgraph = nx.DiGraph()
-        subgraph.add_node(entity)
-        if entity.kind in (SUBROUTINE, FUNCTION):
-            for caller in self.ir.callers(entity.id):
-                subgraph.add_edge(caller, entity)
-            for callee in self.ir.callees(entity.id):
-                subgraph.add_edge(entity, callee)
-        elif entity.kind == INTERFACE:
-            for caller in self.ir.callers(entity.id):
-                subgraph.add_edge(caller, entity)
-            for procedure in self.ir.members(entity.id):
-                subgraph.add_edge(entity, procedure)
-        return subgraph
+        """The one-hop neighbourhood of ``entity`` (see :mod:`flinspect.graph_view`)."""
+        return gen_subgraph(self.ir, entity)
 
     def update_graph_display(self):
         """Update the dependency graph display based on current selection."""
@@ -249,64 +337,21 @@ class Explorer(VBox):
             self.graph_widget.graph.clear()
             return
 
-        # Extract subgraph
-        subgraph = self.gen_subgraph(center_node)
+        # All content decisions (grouping, confidence, ghosting) happen in the pure
+        # builder; here we only hand the elements to the widget.
+        nodes, edges = subgraph_elements(
+            self.ir, self.gen_subgraph(center_node), center_node)
 
         self.graph_widget.graph.clear()
 
-        # Group nodes by program unit (enclosing module)
-        program_units = defaultdict(list)
-        for node in subgraph.nodes():
-            program_units[self._enclosing_module_name(node.id)].append(node)
-
-        # Add parent nodes for each program unit
-        for program_unit_name, nodes in program_units.items():
-            if len(nodes) > 1 or len(program_units) > 1:
-                parent_data = {
-                    'id': f'module_{program_unit_name}',
-                    'label': program_unit_name,
-                    'type': 'module'
-                }
-                parent_node = ipycytoscape.Node(data=parent_data)
-                self.graph_widget.graph.add_node(parent_node)
-
-        # Add child nodes
-        for node in subgraph.nodes():
-            program_unit_name = self._enclosing_module_name(node.id)
-
-            node_data = {
-                'id': node.id,
-                'label': node.name,
-                'type': node.kind if node.kind in ('subroutine', 'function', 'interface') else 'other'
-            }
-
-            # Set parent if there are multiple program units or multiple nodes per unit
-            if len(program_units) > 1 or len(program_units.get(program_unit_name, [])) > 1:
-                node_data['parent'] = f'module_{program_unit_name}'
-
-            # Mark the selected node
-            if node == center_node:
-                node_data['classes'] = 'selected'
-
-            cytoscape_node = ipycytoscape.Node(data=node_data)
-            self.graph_widget.graph.add_node(cytoscape_node)
-
-        # Add edges
-        for source, target in subgraph.edges():
-            edge_data = {
-                'source': source.id,
-                'target': target.id
-            }
-
-            if target == center_node:
-                edge_data['direction'] = 'incoming'
-            elif source == center_node:
-                edge_data['direction'] = 'outgoing'
-            else:
-                edge_data['direction'] = 'other'
-
-            cytoscape_edge = ipycytoscape.Edge(data=edge_data)
-            self.graph_widget.graph.add_edge(cytoscape_edge)
+        # `classes` is a top-level cytoscape element attribute, not a data key —
+        # passing it inside `data` silently disables the `.selected` style.
+        for node in nodes:
+            self.graph_widget.graph.add_node(
+                ipycytoscape.Node(data=node['data'], classes=node['classes']))
+        for edge in edges:
+            self.graph_widget.graph.add_edge(
+                ipycytoscape.Edge(data=edge['data'], classes=edge['classes']))
 
         # Apply layout - use a layout that works well with compound nodes
         self.graph_widget.set_layout(name='cose', animate=False,

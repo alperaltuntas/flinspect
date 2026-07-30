@@ -40,6 +40,13 @@ DERIVED_TYPE = "derived_type"
 #: interface that fans out to specific procedures).
 CALLABLE_KINDS = frozenset({SUBROUTINE, FUNCTION, INTERFACE})
 
+# Names of the confidence strata (D3). The strata themselves are the relations
+# below; these are the labels consumers use when they must *say* which stratum an
+# edge came from (a graph edge attribute, a rendered line style, a report line).
+RESOLVED = "resolved"
+ASSUMED = "assumed"
+UNRESOLVED = "unresolved"
+
 
 @dataclass(frozen=True)
 class Signature:
@@ -138,6 +145,24 @@ class IR:
     def calls_must(self) -> set[tuple[EntityId, EntityId]]:
         """The *must*-call relation: the under-approximation (resolved only)."""
         return self.calls_resolved
+
+    def call_confidence(self, caller: EntityId, callee: EntityId) -> Optional[str]:
+        """Which stratum a single call edge came from, or ``None`` if not a call.
+
+        A computed view, not a stored tuple attribute — confidence stays modeled
+        as stratified relations (principle #2). Provided because consumers that
+        *label* edges (graph attributes, rendering) would otherwise each
+        re-implement the same three membership tests. The strata are disjoint in
+        practice; should an edge appear in more than one, the most confident wins.
+        """
+        pair = (caller, callee)
+        if pair in self.calls_resolved:
+            return RESOLVED
+        if pair in self.calls_assumed:
+            return ASSUMED
+        if pair in self.calls_unresolved:
+            return UNRESOLVED
+        return None
 
     # ------------------------------------------------------------------ #
     # Entity-set views (unary relations)
