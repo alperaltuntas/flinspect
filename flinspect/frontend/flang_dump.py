@@ -1394,7 +1394,7 @@ class ParseTree:
                 if any(n != "*" and n.lower() == name.lower() for n in names):
                     modules.add(used_mod.name)
             for used_mod, renames in getattr(s, "used_renames_lists", {}).items():
-                for alias, _original in renames:
+                for alias, _ in renames:
                     if alias.lower() == name.lower():
                         modules.add(used_mod.name)
         return modules.pop() if len(modules) == 1 else None

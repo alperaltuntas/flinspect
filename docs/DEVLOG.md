@@ -11,6 +11,97 @@
 
 ---
 
+## 2026-07-30 — Phase 3 landed: the Explorer shows what it knows (and what it doesn't)
+
+**What:** completed Phase 3 (DESIGN §4) — Explorer correctness. W5 is closed, the
+D3 confidence strata are now visible rather than merely stored, and the part of
+the Explorer worth testing no longer needs a browser.
+
+- **W5 was half-fixed and the docs didn't know it.** Phase 1a's IR rewrite already
+  keyed cytoscape nodes by the scope-qualified `Entity.id` with `name` demoted to a
+  display label, so the merge bug was gone; the W-table row still cited
+  `explorer.py ('id': node.name)`. What was genuinely missing was a *pin* (the
+  Explorer had zero tests) and any display of confidence. Verified end-to-end
+  before touching anything — selector options, cytoscape node/edge data, and
+  `get_call_graph()` nodes all keep three same-named routines apart — then pinned
+  it. The row now reads "fixed in Phase 1a (identity) + Phase 3 (pinned,
+  confidence shown)".
+- **New fixture `test_name_collision`** (D7 corpus work): three modules each
+  defining `apply_bc` with an *identical* signature, so the name is all they share
+  and a name-keyed consumer would collapse three nodes into one. The caller reaches
+  each through a different USE form — wildcard-with-rename, only-list, only-list
+  with rename — which is also what keeps the file legal (three wildcard USEs would
+  make the bare name ambiguous). That closes the manifest's **USE renames** gap:
+  both rename forms had no fixture, only hand-built-registry unit tests.
+- **Found while writing it:** the only-list rename form projects onto
+  `Use(only=(), renames=(('bc_c','apply_bc'),))` — an *empty* only-list, which the
+  `Use` docstring reads as "whole module". Resolution is unaffected (it follows the
+  rename, and the corpus numbers are unchanged), so this is a fact-recording bug in
+  the projection, not a resolution bug. Out of scope here (frontend), recorded in
+  `tests/f90/MANIFEST.md`; the new test asserts the renames and deliberately not
+  the only-list, so nothing pins the wrong fact.
+- **Confidence rendering.** Call edges take their line style from the stratum
+  (solid `resolved`, dashed `assumed`, dotted + muted `unresolved`); `defined=False`
+  targets render ghosted (dashed outline, italic, low opacity) so "we never parsed
+  this" reads at a glance; interface-membership edges get their own colour and
+  arrowhead because they are structure, not calls, and carry no confidence. The
+  pre-existing direction encoding stays on the *colour* channel, so the two
+  encodings compose instead of fighting. A legend in the widget makes the whole
+  scheme discoverable — the point of the phase is that partial knowledge is
+  visible, which it isn't if you have to read the stylesheet to decode it.
+- **Extracted `flinspect/graph_view.py`** — the pure half: IR + center entity →
+  neighbourhood → list of `{'data', 'classes'}` element dicts, with no ipywidgets
+  or ipycytoscape import, hence unit-testable without a kernel or browser
+  (`tests/test_graph_view.py`). `explorer.py` keeps the stylesheet, the legend and
+  the event wiring and nothing else; rendering is not the seam (principle #10), but
+  the *content decisions* turned out to be exactly the testable part.
+- **Two bugs fell out of the extraction.** (a) `classes` is a top-level cytoscape
+  element attribute, not a data key — the old code passed `'classes': 'selected'`
+  *inside* `data`, so the `node.selected` style (the purple border on the focused
+  node) had never applied. Now set via `ipycytoscape.Node(classes=...)` and pinned.
+  (b) `enclosing_module_name` returned "Unknown Module" for entities whose scope is
+  named but not defined in the parsed set; module-qualified unresolved targets
+  (`netcdf::nf90_open`) now group under their own module.
+- **Stratum labels moved to the seam.** `RESOLVED`/`ASSUMED`/`UNRESOLVED` and a
+  per-edge `IR.call_confidence(caller, callee)` lookup now live in `ir.py` as a
+  *computed view* — the strata remain pure relations (D3 is untouched), but the two
+  consumers that must *say* which stratum an edge came from no longer each
+  re-implement three membership tests. `get_call_graph()` attaches `confidence` to
+  every NetworkX edge and gained `must_only=True` (build from `calls_must`); it
+  filters edges only, so `defined=False` targets remain as isolated nodes — the
+  node set is still "every subroutine/function in the IR".
+
+**Corpus replay (458 files, unchanged since 2026-05-28):** 0 file errors; the
+element builder ran over all 7,108 browsable entities in ~29 s producing 45,437
+resolved / 329 assumed / 3,046 unresolved call edges and 2,103 membership edges
+across the neighbourhoods (edges are counted once per neighbourhood they appear
+in), with 2,035 ghosted undefined node instances — 268 of them grouped under
+`netcdf`, courtesy of the fallback above.
+
+**One number doesn't reproduce, and it predates this phase.** Replaying the corpus
+gives `resolved 22,764 / assumed 165 / unresolved 1,527`, whereas the Phase 2 entry
+below records `22,764 / 114 / 1,578`. `resolved` matches exactly and so does
+may (24,456) — the entire difference is 51 edges sitting on the
+`assumed`↔`unresolved` boundary. Checked: the corpus files are untouched since
+May, the split is insensitive to file order (identical sorted vs. reversed), and a
+replay at `HEAD` *before* this phase's commits gives 165/1,527 too — so this is not
+a Phase 3 regression but a discrepancy in how the Phase 2 figure was captured
+(most likely measured before the last of that phase's frontend fixes landed).
+Entries are append-only, so the number below stays as written; the reproducible
+figures are these.
+
+Suite: 99 tests green (70 → 99: name-collision IR + call-graph identity, the
+graph_view element/strata/ghosting tests, the call-graph confidence attribute).
+The `assumed` stratum is pinned against a hand-built IR rather than a fixture —
+only genuine dynamic dispatch produces it and that construct still has no
+self-contained fixture (manifest gap) — which is legitimate above the seam, where
+the input is an IR, not a dump. Note `tests/test_graph_view.py` instantiates the
+widget once as a smoke test, so the whole suite now wants `PYTHONNOUSERSITE=1` on
+machines where a broken user-site pandas shadows the venv (documented in the test
+module).
+
+---
+
 ## 2026-07-29 — Phase 2 landed: sema's answers replace the hand-rolled resolver
 
 **What:** completed Phase 2 (DESIGN §4) — soundness & resolution quality. The IR's

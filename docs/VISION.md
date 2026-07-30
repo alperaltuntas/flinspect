@@ -35,8 +35,8 @@ up work, so it errs toward making implicit reasoning explicit.
 
 ## 2. What flinspect is today
 
-Pipeline, as of Phase 2 (the seam from D2 is in place; call facts carry
-confidence per D3):
+Pipeline, as of Phase 3 (the seam from D2 is in place; call facts carry
+confidence per D3, and the Explorer shows it):
 
 ```
 flang -fdebug-dump-parse-tree (with sema)  →  text dump
@@ -49,7 +49,9 @@ flang -fdebug-dump-parse-tree (with sema)  →  text dump
    └──────────────────────────────────────────────────────────────────────────┘
    →  flinspect IR: entities + relation tuple-sets           [flinspect/ir.py]
    →  ParseForest builds NetworkX module/call graphs   [parse_forest.py]
-   →  Explorer renders subgraphs in Jupyter (ipycytoscape)  [explorer.py]
+        call-graph edges carry their confidence stratum as an edge attribute
+   →  subgraph -> renderable elements, confidence-annotated  [graph_view.py]
+   →  Explorer renders them in Jupyter (ipycytoscape)  [explorer.py]
 ```
 
 Key facts about the current implementation:
@@ -79,6 +81,11 @@ Key facts about the current implementation:
   `calls_must` (must) as computed views; unresolved targets are first-class
   `defined=False` entities. On the MOM6+FMS2 corpus, `resolved` is 93% of the
   may-relation; `assumed` survives only for genuine dynamic dispatch.
+- **Confidence is visible, not just stored** (Phase 3): the Explorer draws call
+  edges solid / dashed / dotted by stratum, ghosts `defined=False` targets, and
+  ships a legend; `get_call_graph()` puts the stratum on every NetworkX edge.
+  Identity in the graph is the scope-qualified `EntityId`, so same-named routines
+  in different modules never merge (W5) — pinned by `test_name_collision`.
 
 ---
 

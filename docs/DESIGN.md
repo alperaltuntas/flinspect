@@ -20,7 +20,7 @@ From the review of the current codebase. Ordered by impact on the vision.
 | W2 | Facts are heuristically over- *and* under-approximate; unsound for a verification layer | `_types_compatible`, `resolve_interface_procedures` (all-procs fallback), `unfound_*` drops | **fixed in Phase 2** — confidence strata (D3); unresolved first-class. Residue: nested function references in argument lists still unrecorded (documented at the skip site) |
 | W3 | Brittle text scraping: exact flang node strings, `|`-counting, `assert ...not recognized`, no per-file isolation | `parse_tree.py`, `utils.level()` | D2 (seam) + Phase 1 |
 | W4 | Name-based matching ignores scope/visibility/overloading | `find_named_entity`, `get_subroutine_by_name` (`endswith`), no public/private | **fixed in Phase 2** — AccessStmt-derived visibility, use-chain lookup, `endswith` gone |
-| W5 | Explorer keys cytoscape nodes by **bare name** → distinct same-named routines silently merge | `explorer.py` (`'id': node.name`) | Phase 3 |
+| W5 | Explorer keys cytoscape nodes by **bare name** → distinct same-named routines silently merge | `explorer.py` | **fixed in Phase 1a** (identity: the IR rewrite made nodes `EntityId`-keyed, name demoted to a display label) + **Phase 3** (pinned by `test_name_collision` end-to-end — elements, selector options, call-graph nodes — and confidence now rendered) |
 | W6 | Hardcoded intrinsic list; `DoublePrecision→'r8_kind'` MOM-ism; named-kinds-only | `utils.py`, `_extract_kind_from_line` | **mostly fixed in Phase 2** — MOM-ism deleted; kinds are signature facts, not resolution inputs. The intrinsic list remains (nothing in the dump marks intrinsics); names it misses surface as unresolved atoms |
 | W7 | Three full re-parse passes per file | `parse_structure/interfaces/calls` | revisit (now three passes + a classification pass; ~30 s for the 458-file corpus) |
 | W8 | No CLI; notebook-only despite "CI-enforceable" claim | — | Phase 4 |
@@ -232,8 +232,25 @@ the real MOM6+FMS2 corpus went from 346 unparseable files to 0. See `DEVLOG.md`.
   assumed 114 / unresolved 1,578 — the drop from the Phase 1b may-count is the
   eliminated generic fan-out, verified edge-by-edge (see `DEVLOG.md`).
 
-**Phase 3 — Explorer correctness.** Scope-qualified node identity (W5); show
-confidence (e.g., assumed edges dashed).
+**Phase 3 — Explorer correctness.** — **DONE 2026-07-30.**
+- Scope-qualified node identity (W5) was already true after Phase 1a but nothing
+  pinned it; `test_name_collision` (three modules, one routine name, three USE
+  forms) now pins no-merge in the cytoscape elements, the selector options and
+  `get_call_graph`. Its USE renames also close a D7 manifest gap.
+- Confidence is rendered (D3): call-edge line style is the stratum (solid
+  resolved / dashed assumed / dotted+muted unresolved), `defined=False` targets
+  are ghosted, interface-membership edges are visually distinct (structure, not
+  calls), and a legend makes the encoding discoverable. Direction stays the
+  colour channel, so the two encodings compose.
+- The graph-element construction moved out of the widget into
+  `flinspect/graph_view.py` — pure IR → element dicts, no ipywidgets import — and
+  is unit-tested there (`tests/test_graph_view.py`); `explorer.py` keeps only the
+  stylesheet, legend and event wiring (principle #10). The stratum labels
+  `resolved|assumed|unresolved` and the per-edge lookup live at the seam
+  (`IR.call_confidence`, a computed view — the strata stay relations, per D3), so
+  no consumer re-derives set membership.
+- `ParseForest.get_call_graph()` attaches `confidence` to every NetworkX edge and
+  takes `must_only=True` to build from the must view (Phase 5 will want both).
 
 **Phase 4 — Make it CI-usable.** A CLI that runs a query/invariant over a forest
 and exits non-zero on violation — the minimum for the README's "CI-enforceable"
