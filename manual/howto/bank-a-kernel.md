@@ -1,0 +1,115 @@
+# Bank a new kernel pair
+
+"Banking" a pair means: both sides extracted and generated into the committed
+Lean modules, an equivalence theorem proved between the two generated defs,
+and the axioms audit extended. This guide assumes the kernel is **inside the
+supported subset**; if extraction refuses, see
+[Extend the construct subset](extend-subset.md) first — and read the refusal
+message, it names the construct.
+
+## 0. Check the shape
+
+The Fortran side must be a single mask-free loop nest (`do concurrent`, or a
+perfectly nested plain `do`) of assignments and structured ifs over
+`+ - * / **`, comparisons, and `abs`, with every array reference indexed
+exactly by the loop indices. The C++ side must be a TIM-style point function:
+`void`, `Real &` outputs, `const Real` inputs, `Real` locals. When in doubt,
+just try `groundline kernel show` — refusal is loud and names the problem.
+
+## 1. Add the manifest entry
+
+Add a `[[kernel]]` table to your manifest (see
+[the schema](../reference/manifest.md)); for the production instance that is
+`examples/turbo-stack.kernels.toml`:
+
+```toml
+[[kernel]]
+name = "my_kernel"
+fortran = { dump = "MOM6/MOM_something.o_ptree", subroutine = "my_kernel" }
+cpp     = { header = "mom_something_kernel.hpp", function = "my_kernel_point" }
+```
+
+A whole-subroutine kernel must be named after its subroutine (the manifest
+loader enforces this); a loop *inside* a subroutine is addressed by nest
+ordinal instead — see [Address a loop inside a subroutine](inline-loops.md).
+
+Check the addressing resolves:
+
+```console
+$ groundline kernel list
+$ groundline kernel show my_kernel
+```
+
+`show` prints both generated defs without touching any files — this is the
+moment for the **one-time by-eye audit**: hold each def against its source
+and check the expression shapes mirror it (the
+[fidelity contract](../concepts/printer-fidelity.md) is what makes this
+feasible).
+
+## 2. Generate and diff
+
+```console
+$ groundline kernel generate
+$ git diff lean/pilot/Pilot/Generated.lean lean/pilot/Pilot/GeneratedCpp.lean
+```
+
+The diff must be **purely additive** — your new defs appended, existing defs
+byte-identical. If an existing def changed, stop: something in your change
+touched shared machinery, and that needs understanding before proving
+anything.
+
+## 3. Write the equivalence theorem
+
+Create `lean/pilot/Pilot/MyKernel.lean` following the mature pattern (no
+hand-written models — relate the two *generated* defs directly; use
+`Pilot/ThicknessToDz.lean` and `Pilot/EdgeThicknessUpwind.lean` as templates):
+
+- **Point lemma** — the two generated defs agree, modulo parameter order.
+  When the bodies come out identical this is literally `:= rfl`; when shapes
+  differ, `unfold`/`simp only` plus `ring`-provable bridge identities, or
+  `split_ifs <;> rfl` for control-flow representation deltas, have covered
+  every banked kernel so far.
+- **Kernel-level theorem** — lift to whole arrays with the license matching
+  the loop form: a `do concurrent` kernel reuses the `pointwise` schema (the
+  source's independence assertion is the license); a plain-DO kernel models
+  the Fortran side honestly as `foldSeq` and instantiates
+  `foldSeq_eq_pointwiseMap` (a proof is the license). See
+  [Pointize](../concepts/pointize.md).
+
+Add the file to `lean/pilot/Pilot.lean`'s imports if you created a new module.
+
+## 4. Extend the axioms audit
+
+Append `#print axioms` lines to `lean/pilot/Pilot/AxiomsAudit.lean` for
+*every* new declaration — the generated defs, the point lemma, the kernel
+theorem:
+
+```lean
+#print axioms TrackB.Generated.my_kernel
+#print axioms TrackB.GeneratedCpp.my_kernel_point
+#print axioms TrackB.myKernel_point_equiv
+#print axioms TrackB.myKernel_kernel_equiv
+```
+
+Every line must report exactly `[propext, Classical.choice, Quot.sound]` (or
+a strict subset); see [the audit convention](../concepts/trusted-base.md).
+
+## 5. Run the gate
+
+```console
+$ groundline kernel verify
+ok [fortran]: Generated.lean matches a fresh regeneration
+ok [cpp]: GeneratedCpp.lean matches a fresh regeneration
+running `lake build` in .../lean/pilot ...
+ok [lean]: lake build succeeded
+```
+
+(Lean tier: activate a real Lean toolchain first — a bare elan shim fails the
+gate loudly.) Also run the pytest suite; the corpus golden tests import the
+manifest, so they pick up the new kernel automatically.
+
+## 6. Commit
+
+Commit the manifest row, the regenerated `Generated*.lean`, the new proof
+file, and the audit lines together — that is one reviewable unit: "this pair
+is now banked, here is the proof, here is its audit."

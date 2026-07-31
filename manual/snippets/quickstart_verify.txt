@@ -1,0 +1,2 @@
+ok [fortran]: Generated.lean matches a fresh regeneration
+ok [cpp]: GeneratedCpp.lean matches a fresh regeneration

@@ -1,0 +1,18 @@
+manifest: /glade/work/altuntas/turbo-stack/dev-utils/groundline/examples/turbo-stack.kernels.toml  (5 kernel(s))
+ppm_limit_pos
+    fortran: subroutine 'ppm_limit_pos' in MOM6/MOM_continuity_PPM.o_ptree  [ok]
+    cpp:     function 'ppm_limit_pos_point' in submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp  [ok]
+ppm_limit_cw84
+    fortran: subroutine 'ppm_limit_cw84' in MOM6/MOM_continuity_PPM.o_ptree  [ok]
+    cpp:     function 'ppm_limit_cw84_point' in submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp  [ok]
+edge_thickness_upwind
+    fortran: subroutine 'zonal_edge_thickness', loop nest 1 in MOM6/MOM_continuity_PPM.o_ptree  [ok]
+    cpp:     function 'edge_thickness_upwind_point' in submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp  [ok]
+thickness_to_dz_3d_boussinesq
+    fortran: subroutine 'thickness_to_dz_3d', loop nest 4 in MOM6/MOM_interface_heights.o_ptree  [ok]
+    cpp:     function 'thickness_to_dz_3d_boussinesq_point' in submodules/infra/TIM/mom/cpp/mom_interface_heights_kernel.hpp  [ok]
+thickness_to_dz_3d_nonboussinesq
+    fortran: subroutine 'thickness_to_dz_3d', loop nest 2 in MOM6/MOM_interface_heights.o_ptree  [ok]
+    cpp:     function 'thickness_to_dz_3d_nonboussinesq_point' in submodules/infra/TIM/mom/cpp/mom_interface_heights_kernel.hpp  [ok]
+fortran output: /glade/work/altuntas/turbo-stack/dev-utils/groundline/examples/../lean/pilot/Pilot/Generated.lean  [present]
+cpp output: /glade/work/altuntas/turbo-stack/dev-utils/groundline/examples/../lean/pilot/Pilot/GeneratedCpp.lean  [present]

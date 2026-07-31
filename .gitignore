@@ -5,3 +5,4 @@ __pycache__
 .vscode
 *egg-info
 module_dependency.html
+site/

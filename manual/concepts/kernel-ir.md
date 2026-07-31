@@ -1,0 +1,74 @@
+# The kernel IR and its refusal discipline
+
+`groundline/kir.py` defines the small vocabulary in which kernels are modeled,
+and the discipline that makes the whole method honest: **any construct outside
+the supported subset raises `UnsupportedConstruct` — the pipeline refuses,
+it never guesses.**
+
+## Why refusal is load-bearing
+
+A proof is only as good as the model it is about. If the translator met an
+unfamiliar construct and produced a *plausible* model — dropped a cast it
+didn't understand, approximated a subscript, guessed an operator — every
+theorem downstream would still compile, and would be **vacuous**: a correct
+proof about the wrong function. That is the one failure mode this design
+refuses to admit. The trade is deliberate: the subset grows only when a real
+kernel demands a construct, each extension arrives with fixtures pinning both
+the accepted and the refused shapes, and everything else fails loudly with a
+message naming the construct.
+
+The flip side of refusal is a promise: **what is accepted is modeled exactly.**
+The complete inventory of refusal sites — every trigger, in every stage — is
+in the [refusal catalog](../reference/refusals.md).
+
+## The vocabulary
+
+Expressions (frozen dataclasses, language-neutral):
+
+| Node | Meaning |
+|---|---|
+| `RealLit`, `IntLit` | literals, carrying their **source spelling** (`"3.0"`, `"2"`) |
+| `Var` | scalar variable read |
+| `ArrayRef` | array reference with subscript expressions (only until [pointize](pointize.md)) |
+| `ComponentRef` | derived-type component read `base%comp` (only until pointize) |
+| `Paren` | *source* parentheses — semantically transparent, kept for fidelity |
+| `Neg` | unary minus |
+| `BinOp` | `add / sub / mul / div / pow` |
+| `Cmp` | `lt / le / gt / ge / eq / ne` |
+| `Call` | intrinsic reference (`abs`; `min`/`max` are printable) |
+| `Cond` | inline conditional expression — created only by [functionalize](functionalize.md)'s join merge, never by a frontend |
+
+Statements: `Assign`, `If` (structured, with elseif branches and an else
+body), `DoConcurrent` (multi-index nest), `Do` (one level of a plain loop,
+no stride). A kernel is `Kernel(name, params, locals, body)` with each
+`Param` carrying its declared type, intent, and rank.
+
+Note what is *absent*: no while loops, no function calls other than a few
+intrinsics, no I/O, no pointers, no array sections, no modules or globals.
+Absence here is not an oversight — it is the subset's boundary, and crossing
+it refuses.
+
+## Two passes shape a kernel for printing
+
+1. **[pointize](pointize.md)** — strip the loop-nest wrapper and turn every
+   array reference indexed exactly by the loop indices into a scalar. This is
+   the semantic move that pairs a Fortran loop nest with an AMReX per-point
+   kernel — and the pass where the licensing question (who says the
+   iterations are independent?) lives.
+2. **[functionalize](functionalize.md)** — turn the imperative body into one
+   functional expression: locals become `let` bindings, writes to outputs
+   thread a symbolic state, and every control-flow path ends by materializing
+   the output tuple.
+
+The C++ frontend produces rank-0 kernels directly (TIM's kernels are already
+per-point functions), so pointize runs only on the Fortran side;
+functionalize and the printer are shared verbatim.
+
+## Where the honesty is checked
+
+The refusal discipline is pinned by tests, not just asserted: the conformance
+corpus (`tests/f90/`, `tests/cpp/`) contains **deliberate refusal fixtures** —
+a k-recurrence that must never pointize, joins with locals that must not
+merge, an integer literal whose implicit cast must not silently unwrap — and
+the test suite asserts the refusals fire. When an extension widens the
+subset, its refusal tests keep the old boundary honest everywhere else.

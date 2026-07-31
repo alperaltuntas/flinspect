@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Regenerate every pre-rendered command output embedded in the manual.
+#
+# The manual is built fully statically (no flang/clang/Lean at site-build
+# time): each snippet file here is the REAL output of the command that the
+# manual shows, captured by this script and committed. Rerun after any change
+# that affects CLI output, then rebuild the site. tests/test_manual.py pins
+# representative snippets against fresh runs (gated like the other
+# corpus/clang tests), so the manual cannot rot silently.
+#
+# Requirements per tier (run what your environment provides):
+#   - always:            groundline installed (pip install -e .), run from the
+#                        repo root with the venv active
+#   - quickstart C++ &   clang++ on PATH
+#     production show:   (NCAR: . /glade/work/altuntas/llvm-root/activate_llvm.sh)
+#   - production list/show: the MOM6 corpus + TIM headers referenced by
+#                        examples/turbo-stack.kernels.toml
+#   - axioms audit:      lake on PATH with the Mathlib cache provisioned
+#                        (NCAR: . /glade/work/altuntas/lean-root/activate_lean.sh)
+#
+# Machine-path hygiene: quickstart outputs elide the absolute repo prefix to
+# "…" so the committed snippets look like what any user sees; production
+# outputs keep their /glade paths verbatim — the production manifest is
+# honestly site-specific.
+
+set -euo pipefail
+cd "$(dirname "$0")/../.."          # repo root
+REPO=$(pwd)
+SNIP="$REPO/manual/snippets"
+
+elide() { sed "s|$REPO|…|g"; }
+
+# --- CLI help text (runs everywhere) ---------------------------------------
+groundline --help                 > "$SNIP/cli_help.txt"
+groundline kernel --help          > "$SNIP/cli_kernel_help.txt"
+groundline kernel list --help     > "$SNIP/cli_kernel_list_help.txt"
+groundline kernel show --help     > "$SNIP/cli_kernel_show_help.txt"
+groundline kernel generate --help > "$SNIP/cli_kernel_generate_help.txt"
+groundline kernel verify --help   > "$SNIP/cli_kernel_verify_help.txt"
+
+# --- Quickstart walkthrough (C++ side needs clang++) ------------------------
+(
+  cd examples/quickstart
+  groundline kernel list                    | elide > "$SNIP/quickstart_list.txt"
+  groundline kernel show scale_clip_acc             > "$SNIP/quickstart_show.txt"
+  groundline kernel generate                | elide > "$SNIP/quickstart_generate.txt"
+  groundline kernel verify                  | elide > "$SNIP/quickstart_verify.txt"
+)
+
+# --- Production manifest (needs the corpus; show also needs clang++) --------
+groundline kernel list --kernels examples/turbo-stack.kernels.toml \
+    > "$SNIP/production_list.txt"
+groundline kernel show ppm_limit_cw84 --kernels examples/turbo-stack.kernels.toml \
+    > "$SNIP/production_show_ppm_limit_cw84.txt"
+
+# --- A real refusal (runs everywhere; exercises the CLI error path) ---------
+# The recurrence fixture distilled from find_dz_for_eta's pressure
+# accumulation: iteration k+1 reads what iteration k wrote, so pointize
+# refuses (the manual's "boundary of the method" example).
+TMP=$(mktemp -d)
+cat > "$TMP/kernels.toml" <<EOF
+[fortran]
+corpus = "$REPO/tests/f90"
+out = "$TMP/Generated.lean"
+namespace = "Demo"
+
+[[kernel]]
+name = "accumulate"
+fortran = { dump = "test_kernel_recurrence_ptree", subroutine = "accumulate" }
+EOF
+( groundline kernel show accumulate --kernels "$TMP/kernels.toml" 2>&1 || true ) \
+    | elide | sed "s|$TMP|/tmp/demo|g" > "$SNIP/refusal_recurrence.txt"
+rm -rf "$TMP"
+
+# --- Axioms audit (needs lake + the built Lean project) ---------------------
+if command -v lake >/dev/null; then
+  # Write through a temp file so a failed lake run (e.g. a bare elan shim
+  # without a provisioned toolchain) can't truncate the committed snippet.
+  AUD=$(mktemp)
+  if ( cd lean/pilot && lake build >/dev/null 2>&1 \
+        && lake env lean Pilot/AxiomsAudit.lean ) > "$AUD"; then
+    mv "$AUD" "$SNIP/axioms_audit.txt"
+  else
+    rm -f "$AUD"
+    echo "note: lake failed (toolchain not provisioned?) — axioms_audit.txt kept as is" >&2
+  fi
+else
+  echo "note: lake not on PATH — skipping axioms_audit.txt" >&2
+fi
+
+echo "snippets rendered into $SNIP"

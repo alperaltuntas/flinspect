@@ -1,0 +1,87 @@
+site_name: groundline — Track B kernel verification
+site_description: >-
+  Machine-checked equivalence of legacy Fortran (MOM6) kernels and their
+  C++/AMReX (TIM) ports, generated from compiler syntax trees and proved in
+  Lean 4 over the reals.
+site_url: https://alperaltuntas.github.io/groundline/
+repo_url: https://github.com/alperaltuntas/groundline
+repo_name: alperaltuntas/groundline
+
+# The site source is manual/ (docs/ stays the engineering record: VISION,
+# DESIGN, DEVLOG — the site links to it on GitHub but does not absorb it).
+docs_dir: manual
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - content.code.copy
+    - toc.integrate
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      # Pre-rendered command outputs live in manual/snippets/ (see
+      # manual/snippets/render_snippets.sh for how each file is produced);
+      # committed generated Lean is included straight from the repo tree.
+      base_path: ["manual/snippets", "."]
+      check_paths: true
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Concepts:
+      - Two IRs, one frontend layer: concepts/two-irs.md
+      - The kernel IR and refusal: concepts/kernel-ir.md
+      - Pointize: concepts/pointize.md
+      - Functionalize: concepts/functionalize.md
+      - The printer's fidelity contract: concepts/printer-fidelity.md
+      - The trusted base and the axioms audit: concepts/trusted-base.md
+  - How-to guides:
+      - Bank a new kernel pair: howto/bank-a-kernel.md
+      - Address a loop inside a subroutine: howto/inline-loops.md
+      - Extend the construct subset: howto/extend-subset.md
+      - Port to a new LLVM: howto/new-llvm.md
+      - Wire verification into CI: howto/ci.md
+  - Case studies:
+      - "The pilot: PPM_limit_pos": case-studies/ppm-limit-pos.md
+      - "The control-flow join: PPM_limit_CW84": case-studies/ppm-limit-cw84.md
+      - "Assertion vs proof: thickness_to_dz": case-studies/thickness-to-dz.md
+      - "Kernels that live inside branches": case-studies/edge-thickness-upwind.md
+  - Reference:
+      - The kernel manifest (kernels.toml): reference/manifest.md
+      - CLI: reference/cli.md
+      - The kir API: reference/kir-api.md
+      - The two frontends: reference/frontends.md
+      - Printer behavior: reference/printer.md
+      - The Lean project: reference/lean-project.md
+      - Refusal catalog: reference/refusals.md
+  - Limits & roadmap: limits.md
+  - The relational track: relational.md

@@ -1,0 +1,11 @@
+usage: groundline [-h] COMMAND ...
+
+structural inspection and machine-checked kernel equivalence for Fortran HPC
+codebases, built on compiler syntax trees (flang/clang)
+
+positional arguments:
+  COMMAND
+    kernel    Track B kernel bank: list, show, generate, verify
+
+options:
+  -h, --help  show this help message and exit

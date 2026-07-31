@@ -1,0 +1,9 @@
+usage: groundline kernel generate [-h] [--kernels PATH] [--skip-fortran]
+                                  [--skip-cpp]
+
+options:
+  -h, --help      show this help message and exit
+  --kernels PATH  kernel manifest (default: $GROUNDLINE_KERNELS, then
+                  ./kernels.toml)
+  --skip-fortran
+  --skip-cpp

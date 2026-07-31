@@ -1,0 +1,9 @@
+usage: groundline kernel show [-h] [--kernels PATH] NAME
+
+positional arguments:
+  NAME
+
+options:
+  -h, --help      show this help message and exit
+  --kernels PATH  kernel manifest (default: $GROUNDLINE_KERNELS, then
+                  ./kernels.toml)
