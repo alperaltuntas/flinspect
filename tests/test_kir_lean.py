@@ -394,26 +394,22 @@ def test_sequential_alias_read_threads_current_value():
 # =============================================================================
 
 CORPUS = os.environ.get("FLINSPECT_CORPUS")
-
-
-def _load_generate():
-    """Import lean/pilot/generate.py so the kernel lists and rendering come
-    from the driver itself — the golden tests can't drift from it."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "pilot_generate", REPO / "lean" / "pilot" / "generate.py")
-    generate = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(generate)
-    return generate
+MANIFEST = REPO / "examples" / "turbo-stack.kernels.toml"
 
 
 @pytest.mark.skipif(not CORPUS, reason="FLINSPECT_CORPUS not set")
 def test_generated_lean_is_current():
-    """lean/pilot/Pilot/Generated.lean must match a fresh regeneration."""
-    generate = _load_generate()
-    text = generate.render(CORPUS)
-    committed = (REPO / "lean" / "pilot" / "Pilot" / "Generated.lean").read_text()
-    assert text == committed, "Generated.lean is stale — rerun lean/pilot/generate.py"
+    """lean/pilot/Pilot/Generated.lean must match a fresh regeneration from
+    the committed production manifest — the kernel list and rendering come
+    from the same kernel-bank path the CLI runs, so they can't drift apart."""
+    from flinspect import kernel_bank
+    m = kernel_bank.load_manifest(MANIFEST)
+    if not m.fortran.corpus.is_dir():
+        pytest.skip("manifest corpus not present")
+    text = kernel_bank.render_fortran(m)
+    assert text == m.fortran.out.read_text(), \
+        ("Generated.lean is stale — rerun `flinspect kernel generate "
+         "--kernels examples/turbo-stack.kernels.toml`")
 
 
 @pytest.mark.skipif(shutil.which("clang++") is None,
@@ -423,13 +419,13 @@ def test_generated_cpp_lean_is_current():
     the C++ sibling of test_generated_lean_is_current (drift alarm for the
     committed file, the TIM header, AND the pinned clang itself, whose
     version line is stamped into the output)."""
-    generate = _load_generate()
-    if not all((Path(generate.DEFAULT_CPP_HEADER_DIR) / h).exists()
-               for h, _ in generate.CPP_KERNELS):
+    from flinspect import kernel_bank
+    m = kernel_bank.load_manifest(MANIFEST)
+    if not all(e.cpp.header.exists() for e in kernel_bank.cpp_entries(m)):
         pytest.skip("TIM kernel headers not present")
-    if not all(Path(d).exists() for d in generate.DEFAULT_CPP_INCLUDE_DIRS):
+    if not all(Path(d).exists() for d in m.cpp.include_dirs):
         pytest.skip("pinned C++ include dirs not present")
-    text = generate.render_cpp()
-    committed = (REPO / "lean" / "pilot" / "Pilot" / "GeneratedCpp.lean").read_text()
-    assert text == committed, \
-        "GeneratedCpp.lean is stale — rerun lean/pilot/generate.py"
+    text = kernel_bank.render_cpp(m)
+    assert text == m.cpp.out.read_text(), \
+        ("GeneratedCpp.lean is stale — rerun `flinspect kernel generate "
+         "--kernels examples/turbo-stack.kernels.toml`")

@@ -4,8 +4,7 @@ Two tiers, mirroring ``tests/test_kir_lean.py``:
 
 - Fixture-based tests compile the ``tests/cpp/`` conformance fixtures with
   clang at test time (the fixtures are self-contained — no includes), so they
-  are gated on ``clang++`` being on ``PATH`` (source
-  ``/glade/work/altuntas/llvm-root/activate_llvm.sh``), the C++ analogue of
+  are gated on ``clang++`` being on ``PATH``, the C++ analogue of
   the ``FLINSPECT_CORPUS`` gate. Raw JSON dumps are never golden-compared
   (node ids are memory addresses); assertions are on the extracted kernel IR
   and the printed Lean.

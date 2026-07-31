@@ -1,0 +1,81 @@
+# Track B kernel manifest — the NCAR / turbo-stack production instance.
+#
+# This file is the *site config* for the MOM6 ⇄ TIM kernel bank: every
+# machine-specific path (the /glade corpus, the AMReX install, the MPI
+# headers) lives HERE, not in flinspect code — the package itself has no
+# built-in defaults. On another site, copy this file and repoint the paths.
+#
+# Use it via any of (resolution order):
+#   flinspect kernel list --kernels examples/turbo-stack.kernels.toml
+#   export FLINSPECT_KERNELS=$PWD/examples/turbo-stack.kernels.toml
+#   cp examples/turbo-stack.kernels.toml ./kernels.toml
+#
+# String values support ${ENV_VAR} expansion; relative paths resolve against
+# this file's directory. Schema reference: flinspect/kernel_bank.py.
+
+[fortran]
+# With-sema flang parse-tree dumps of the MOM6 production build.
+corpus = "/glade/work/altuntas/turbo-stack/bin/flang_ptree/MOM6_using_FMS2"
+out = "../lean/pilot/Pilot/Generated.lean"
+namespace = "TrackB.Generated"
+blurb = """Fidelity against the hand-written pilot models is machine-checked in
+`Pilot/Fidelity.lean`."""
+
+[cpp]
+# The TIM kernel headers, and the pinned clang invocation that dumps them
+# (clang 21 via activate_llvm.sh; the include dirs are part of the kernel
+# identity — a different toolchain is a different dump).
+header_dir = "/glade/work/altuntas/turbo-stack/submodules/infra/TIM/mom/cpp"
+include_dirs = [
+  # AMReX install (AMReX_REAL.H etc.)
+  "/glade/work/altuntas/turbo-stack/bin/gnu/MOM6_using_TIM/amrex/install/include",
+  # the TIM kernel headers themselves
+  "/glade/work/altuntas/turbo-stack/submodules/infra/TIM/mom/cpp",
+  # mpi.h for AMReX's #include <mpi.h>
+  "/glade/work/altuntas/llvm-hpc/include",
+]
+clang = "clang++"
+# Headers display relative to this root in the generated provenance comments.
+provenance_root = "/glade/work/altuntas/turbo-stack"
+out = "../lean/pilot/Pilot/GeneratedCpp.lean"
+namespace = "TrackB.GeneratedCpp"
+blurb = """Fidelity against the hand-written pilot models is machine-checked in
+`Pilot/FidelityCpp.lean`."""
+
+[lean]
+# `flinspect kernel verify` runs `lake build` here (when lake is on PATH).
+lake_dir = "../lean/pilot"
+
+# --- The banked pairs (5 of 5 TIM point kernels; DEVLOG 2026-07-31) ---------
+
+[[kernel]]
+name = "ppm_limit_pos"
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_pos" }
+cpp = { header = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_pos_point" }
+
+[[kernel]]
+name = "ppm_limit_cw84"
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_cw84" }
+cpp = { header = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_cw84_point" }
+
+[[kernel]]
+# zonal_edge_thickness nest 1 = the do concurrent under CS%upwind_1st.
+name = "edge_thickness_upwind"
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "zonal_edge_thickness", nest = 1 }
+cpp = { header = "mom_continuity_ppm_kernel.hpp", function = "edge_thickness_upwind_point" }
+
+# thickness_to_dz_3d nests, in source order: 1 = do-concurrent non-Boussinesq,
+# 2 = plain-DO non-Boussinesq, 3 = do-concurrent Boussinesq, 4 = plain-DO
+# Boussinesq. The plain-DO variants (the default execution path;
+# do_offload=.false.) are the banked ones — rule A's schema lemma is their
+# license.
+
+[[kernel]]
+name = "thickness_to_dz_3d_boussinesq"
+fortran = { dump = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 4 }
+cpp = { header = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_boussinesq_point" }
+
+[[kernel]]
+name = "thickness_to_dz_3d_nonboussinesq"
+fortran = { dump = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 2 }
+cpp = { header = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_nonboussinesq_point" }
