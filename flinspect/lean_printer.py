@@ -138,7 +138,17 @@ def print_kernel(kernel: Kernel, *, provenance: str = "") -> str:
     return "\n".join([header] + _print_fun(body, 1)) + "\n"
 
 
-def print_module(kernels: list[tuple[Kernel, str]], *, namespace: str) -> str:
+# Default module-header blurb — the Fortran (flang) provenance text. A frontend
+# with different provenance (clang_kernel) passes its own via `blurb`; the
+# semantic rendering below is identical either way.
+_FLANG_BLURB = """\
+Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from flang with-sema
+parse-tree dumps. Regenerate with `lean/pilot/generate.py`. Fidelity against the
+hand-written pilot models is machine-checked in `Pilot/Fidelity.lean`."""
+
+
+def print_module(kernels: list[tuple[Kernel, str]], *, namespace: str,
+                 blurb: str = _FLANG_BLURB) -> str:
     """Render a full Lean module for generated kernels (imports + namespace)."""
     defs = "\n".join(print_kernel(k, provenance=prov) for k, prov in kernels)
     return f"""import Mathlib.Data.Real.Basic
@@ -152,9 +162,7 @@ set_option linter.style.longLine false
 /-!
 # GENERATED FILE — do not edit
 
-Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from flang with-sema
-parse-tree dumps. Regenerate with `lean/pilot/generate.py`. Fidelity against the
-hand-written pilot models is machine-checked in `Pilot/Fidelity.lean`.
+{blurb}
 -/
 
 namespace {namespace}

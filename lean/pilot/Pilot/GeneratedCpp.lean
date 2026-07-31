@@ -1,0 +1,62 @@
+import Mathlib.Data.Real.Basic
+import Mathlib.Tactic.Ring
+
+set_option linter.style.header false
+-- Generated code keeps each expression on one line (merged-join tuples can be
+-- arbitrarily wide), so the line-length style lint does not apply.
+set_option linter.style.longLine false
+
+/-!
+# GENERATED FILE — do not edit
+
+Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from clang JSON ASTs
+(`flinspect.frontend.clang_kernel`). Regenerate with `lean/pilot/generate.py`.
+Fidelity against the hand-written pilot models is machine-checked in
+`Pilot/FidelityCpp.lean`.
+
+Extraction provenance (pinned):
+  clang version 21.0.0git (https://github.com/llvm/llvm-project.git bb982e733cfcda7e4cfb0583544f68af65211ed1)
+  -std=c++20 -fsyntax-only -Xclang -ast-dump=json -Xclang -ast-dump-filter
+  -I/glade/work/altuntas/turbo-stack/bin/gnu/MOM6_using_TIM/amrex/install/include
+  -I/glade/work/altuntas/turbo-stack/submodules/infra/TIM/mom/cpp
+  -I/glade/work/altuntas/llvm-hpc/include
+-/
+
+namespace TrackB.GeneratedCpp
+
+noncomputable section
+
+/-- Generated from `ppm_limit_pos_point` in `submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp` (clang JSON AST).
+Outputs `(h_L, h_R)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def ppm_limit_pos_point (h_L h_R h_in h_min : ℝ) : ℝ × ℝ :=
+  let curv := 3 * ((h_L + h_R) - 2 * h_in)
+  if curv > 0 then
+    let dh := h_R - h_L
+    if |dh| < curv then
+      if h_in ≤ h_min then
+        (h_in, h_in)
+      else if 12 * curv * (h_in - h_min) < ((curv * curv) + (3 * (dh * dh))) then
+        let scale := 12 * curv * (h_in - h_min) / ((curv * curv) + (3 * (dh * dh)))
+        (h_in + scale * (h_L - h_in), h_in + scale * (h_R - h_in))
+      else (h_L, h_R)
+    else (h_L, h_R)
+  else (h_L, h_R)
+
+/-- Generated from `ppm_limit_cw84_point` in `submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp` (clang JSON AST).
+Outputs `(h_L, h_R)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def ppm_limit_cw84_point (h_L h_R h_in : ℝ) : ℝ × ℝ :=
+  let h_i := h_in
+  if (h_R - h_i) * (h_i - h_L) ≤ 0 then
+    (h_i, h_i)
+  else
+    let RLdiff := h_R - h_L
+    let RLmean := 0.5 * (h_R + h_L)
+    let FunFac := 6 * RLdiff * (h_i - RLmean)
+    let RLdiff2 := RLdiff * RLdiff
+    if FunFac < -RLdiff2 then
+      (if FunFac > RLdiff2 then 3 * h_i - 2 * h_R else h_L, 3 * h_i - 2 * (if FunFac > RLdiff2 then 3 * h_i - 2 * h_R else h_L))
+    else (if FunFac > RLdiff2 then 3 * h_i - 2 * h_R else h_L, h_R)
+
+end
+
+end TrackB.GeneratedCpp

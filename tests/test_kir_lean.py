@@ -9,6 +9,7 @@ Lean is checked *in Lean* (``lean/pilot/Pilot/Fidelity.lean``), not here.
 """
 
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -195,17 +196,39 @@ def test_sequential_alias_read_threads_current_value():
 CORPUS = os.environ.get("FLINSPECT_CORPUS")
 
 
-@pytest.mark.skipif(not CORPUS, reason="FLINSPECT_CORPUS not set")
-def test_generated_lean_is_current():
-    """lean/pilot/Pilot/Generated.lean must match a fresh regeneration.
-
-    The kernel list and rendering come from lean/pilot/generate.py itself
-    (its KERNELS/render), so this test can't drift from the driver."""
+def _load_generate():
+    """Import lean/pilot/generate.py so the kernel lists and rendering come
+    from the driver itself — the golden tests can't drift from it."""
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         "pilot_generate", REPO / "lean" / "pilot" / "generate.py")
     generate = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generate)
+    return generate
+
+
+@pytest.mark.skipif(not CORPUS, reason="FLINSPECT_CORPUS not set")
+def test_generated_lean_is_current():
+    """lean/pilot/Pilot/Generated.lean must match a fresh regeneration."""
+    generate = _load_generate()
     text = generate.render(CORPUS)
     committed = (REPO / "lean" / "pilot" / "Pilot" / "Generated.lean").read_text()
     assert text == committed, "Generated.lean is stale — rerun lean/pilot/generate.py"
+
+
+@pytest.mark.skipif(shutil.which("clang++") is None,
+                    reason="clang++ not on PATH (source activate_llvm.sh)")
+def test_generated_cpp_lean_is_current():
+    """lean/pilot/Pilot/GeneratedCpp.lean must match a fresh regeneration —
+    the C++ sibling of test_generated_lean_is_current (drift alarm for the
+    committed file, the TIM header, AND the pinned clang itself, whose
+    version line is stamped into the output)."""
+    generate = _load_generate()
+    if not Path(generate.DEFAULT_CPP_HEADER).exists():
+        pytest.skip("TIM kernel header not present")
+    if not all(Path(d).exists() for d in generate.DEFAULT_CPP_INCLUDE_DIRS):
+        pytest.skip("pinned C++ include dirs not present")
+    text = generate.render_cpp()
+    committed = (REPO / "lean" / "pilot" / "Pilot" / "GeneratedCpp.lean").read_text()
+    assert text == committed, \
+        "GeneratedCpp.lean is stale — rerun lean/pilot/generate.py"
