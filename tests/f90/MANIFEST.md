@@ -44,6 +44,7 @@ Two assertion tiers per construct:
 | Track B rule A REFUSAL: cross-iteration recurrence (`p(i,K+1) = p(i,K) + …`, distilled from `find_dz_for_eta`) — offset subscript fails the gate; also pins dump lowercasing (`K` ≡ `k`) | `test_kernel_recurrence` | `kir.pointize` (subscript gate) |
 | Track B rule B: inline-loop addressing — two nests in one subroutine (do-concurrent + plain DO, inside IF branches), each extracted by source-order ordinal; whole-subroutine mode keeps refusing | `test_kernel_inline_nests` | `flang_kernel.extract_loop_kernel` (`_collect_do_nests`, tolerant decls) |
 | Track B rule B: derived-type component reads (dump: `StructureComponent`) — loop-invariant scalar (`cfg%fac`) + loop-indexed component array (`cfg%w(i)`) → synthesized scalar in-params; naming-collision refusal (`collide`) | `test_kernel_component` | `flang_kernel._extract_dataref` (StructureComponent), `kir.pointize` (component synthesis) |
+| Track B packaging: manifest-driven extraction end-to-end over a committed dump living OUTSIDE `tests/f90` — the quickstart toy pair (`examples/quickstart/toy_kernel_ptree`, with its own `PROVENANCE` mirroring this directory's convention) | `examples/quickstart/toy_kernel.f90` | `kernel_bank.load_manifest`/`render_fortran`, `flang_kernel.FlangKernelFrontend`; pinned by `tests/test_kernel_bank.py` (`TestQuickstart`) |
 
 ## Known gaps (parser paths with no fixture yet)
 

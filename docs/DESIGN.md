@@ -333,6 +333,22 @@ frontier-and-gate story real).
   All three point lemmas are `rfl` between the two generated sides; the C++
   frontend needed nothing. See the DEVLOG entry for the branch↔kernel
   pairings and the two source-vs-prompt discrepancies it records.
+  **Conclusion / packaging landed 2026-07-31** (no new proof content): the
+  pipeline is now config-driven and portable. The banked pairs live in a
+  declarative kernel manifest (`kernels.toml`; production instance
+  `examples/turbo-stack.kernels.toml` — the only place machine paths exist;
+  the package has no built-in defaults), both frontends sit behind a uniform
+  `KernelFrontend` seam (`frontend/kernel_base.py`: typed
+  `FortranKernelSpec`/`CppKernelSpec`, one `extract(spec) -> Kernel` method,
+  mirroring the relational `Frontend`), and the old `lean/pilot/generate.py`
+  driver is replaced by `flinspect/kernel_bank.py` plus a `flinspect` console
+  script (`flinspect kernel list/show/generate/verify`; `verify` — regenerate,
+  byte-diff against the committed files, `lake build` — is the CI gate). All
+  generated defs verified byte-identical across the migration.
+  `examples/quickstart/` is the committed portability proof (toy pair, its
+  with-sema dump committed, AMReX-free standalone C++ header), validated by a
+  bare-clone + fresh-venv acceptance run outside turbo-stack. See the DEVLOG
+  entry.
 - *Later:* kernels with cross-iteration structure (k-recurrences → induction —
   the genuinely sequential shapes the plain-DO gate refuses, e.g.
   `find_dz_for_eta`'s pressure accumulation), reductions (scalar

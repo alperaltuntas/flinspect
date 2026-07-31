@@ -11,6 +11,92 @@
 
 ---
 
+## 2026-07-31 — Track B conclusion (1 of 2): manifest, uniform frontend seam, `flinspect kernel` CLI, bare-clone portability
+
+**What:** packaging, not proof content — the kernel-verification pipeline is
+now config-driven, uniform across the two frontends, and driven by a console
+script. The load-bearing invariant, checked rather than claimed: across the
+whole migration **every generated def is byte-identical**; only the module
+header comments changed (the "Regenerate with ..." provenance lines now name
+the new command). `lake build` green after regeneration (798 jobs, axioms
+audit clean). Tests 151 → 179 with gates on (167 pass / 12 skip bare — the
+gated tests skip, never fail).
+
+- **Kernel manifest (`kernels.toml`).** The banked pairs, previously two
+  differently-shaped hardcoded lists in `lean/pilot/generate.py` (now
+  deleted), are a declarative TOML file parsed with stdlib `tomllib` (no new
+  deps). Schema (documented in `flinspect/kernel_bank.py`): `[fortran]`
+  corpus/out/namespace (+ optional blurb), `[cpp]` header_dir/include_dirs/
+  clang/out/namespace (+ optional provenance_root, so header paths display
+  relative to a chosen root — what keeps the generated doc comments
+  byte-stable across machines), optional `[lean] lake_dir` for the verify
+  gate, and one `[[kernel]]` table per pair — `fortran = { dump, subroutine
+  [, nest] }` (rule-B inline loops take the entry's `name` as the generated
+  def name), `cpp = { header, function }`. String values expand `${ENV_VAR}`
+  (unset refuses); relative paths resolve against the manifest's directory;
+  unknown keys refuse (the manifest is trusted-base adjacent: refuse, don't
+  guess). Resolution order everywhere: `--kernels` flag >
+  `$FLINSPECT_KERNELS` > `./kernels.toml`. **There is no built-in /glade
+  default anywhere anymore** — the machine paths moved into the committed
+  production instance `examples/turbo-stack.kernels.toml`, and
+  `grep -rn glade --include='*.py'` is clean.
+- **Uniform frontend seam.** `frontend/kernel_base.py` mirrors the relational
+  `Frontend` protocol for Track B: `KernelFrontend.extract(spec) -> Kernel`,
+  with typed specs — `FortranKernelSpec(dump, subroutine, nest?, def_name?)`
+  (whole-subroutine and rule-B inline-loop addressing folded into one path;
+  the spec validates that nest and def_name travel together) and
+  `CppKernelSpec(header, function, include_dirs, clang)` (the clang
+  invocation config moved out of function kwargs into the spec — the
+  toolchain is part of the kernel's address). `FlangKernelFrontend` /
+  `ClangKernelFrontend` implement it; the old module-level functions remain
+  as the implementation and stay importable (the fixture tests pin them
+  directly; equivalence of the two paths is itself pinned in
+  `tests/test_kernel_bank.py`).
+- **Library + CLI.** `flinspect/kernel_bank.py` owns manifest loading and the
+  extract-both-sides → render-both-modules pipeline; `flinspect/cli.py` +
+  `[project.scripts]` provide the `flinspect` console script (argparse only,
+  widget-free — pinned by a subprocess test) with the `kernel` group:
+  `list` (entries + basic status), `show NAME` (both generated defs, C++
+  side skipped with a note when clang is absent), `generate`
+  (`--skip-fortran/--skip-cpp`), and `verify` — regenerate, byte-diff
+  against the committed files (drift → non-zero exit + a diff excerpt +
+  the fresh copy parked in a temp file), then `lake build` in `[lean]
+  lake_dir` when `lake` is on PATH (clear note when absent). `verify` is
+  Track B's CI gate. `cli.py`'s `main()` marks where the relational track's
+  `check`/`report` groups plug in as siblings (phase45_prompt.md updated
+  accordingly, as was the bank-kernel skill). One environment honesty note:
+  a bare elan `lake` shim on PATH without a provisioned toolchain fails the
+  gate loudly (observed: elan tried to download a toolchain into the
+  quota-full home dir) — activating the Lean env first (`activate_lean.sh`)
+  is what makes the lake tier meaningful.
+- **Quickstart (`examples/quickstart/`) — the committed portability proof.**
+  A toy in-subset pair: `toy_kernel.f90` (do-concurrent point kernel) with
+  its with-sema dump COMMITTED next to it (+ `PROVENANCE`, mirroring
+  `tests/f90`'s convention — the Fortran side works with pip alone, no
+  flang), and `toy_kernel.hpp`, a deliberately standalone header (`using
+  Real = double;`, reference params, zero includes). The clang frontend
+  needed **no changes** for the AMReX-free header — as hoped, the intent
+  mapping keys on the `Real &`/`const Real` qualType spellings, not on
+  where the alias comes from; no portability bug existed. Its generated
+  Lean modules are committed and golden-tested everywhere (the C++ golden
+  compares defs only — the module header stamps the local clang version by
+  design). The two toy defs come out with identical bodies, which makes the
+  quickstart a readable demo of what the production instance proves in Lean.
+- **Bare-clone acceptance (the definition of done), executed:** the repo
+  cloned to a scratch directory outside turbo-stack, a fresh venv,
+  `PYTHONNOUSERSITE=1 pip install -e .`; then, in the clone's quickstart:
+  `flinspect kernel list` / `show` / `generate --skip-cpp` / `verify
+  --skip-cpp` all green *without* clang (the C++ side degrades to a clear
+  note), and with clang 21 activated, full `generate` + `verify` green.
+  Clone suite: 178 pass / 1 skip (the corpus golden, `FLINSPECT_CORPUS`
+  unset — correct). Real-repo suite with gates on: **179 pass, 0 skip**;
+  baseline 151 not regressed.
+- **Not done here, deliberately:** no `check`/`report` CLI (relational
+  Phase 4 extends this same script), no user manual (next session), no new
+  proof content, no dependency changes.
+
+---
+
 ## 2026-07-31 — Track B 5-of-5: the remaining TIM point kernels banked; plain DO licensed by proof
 
 **What:** the three remaining TIM point kernels —
