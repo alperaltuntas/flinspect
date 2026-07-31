@@ -5,6 +5,10 @@ set_option linter.style.header false
 -- Generated code keeps each expression on one line (merged-join tuples can be
 -- arbitrarily wide), so the line-length style lint does not apply.
 set_option linter.style.longLine false
+-- Generated defs keep every parameter positionally (inout/out outputs are
+-- also inputs); a kernel that never reads an output's incoming value leaves
+-- its binder unused by design.
+set_option linter.unusedVariables false
 
 /-!
 # GENERATED FILE — do not edit
@@ -56,6 +60,21 @@ def ppm_limit_cw84_point (h_L h_R h_in : ℝ) : ℝ × ℝ :=
     if FunFac < -RLdiff2 then
       (if FunFac > RLdiff2 then 3 * h_i - 2 * h_R else h_L, 3 * h_i - 2 * (if FunFac > RLdiff2 then 3 * h_i - 2 * h_R else h_L))
     else (if FunFac > RLdiff2 then 3 * h_i - 2 * h_R else h_L, h_R)
+
+/-- Generated from `edge_thickness_upwind_point` in `submodules/infra/TIM/mom/cpp/mom_continuity_ppm_kernel.hpp` (clang JSON AST).
+Outputs `(h_L, h_R)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def edge_thickness_upwind_point (h_L h_R h_in : ℝ) : ℝ × ℝ :=
+  (h_in, h_in)
+
+/-- Generated from `thickness_to_dz_3d_boussinesq_point` in `submodules/infra/TIM/mom/cpp/mom_interface_heights_kernel.hpp` (clang JSON AST).
+Outputs `(dz)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def thickness_to_dz_3d_boussinesq_point (dz h h_to_z : ℝ) : ℝ :=
+  h_to_z * h
+
+/-- Generated from `thickness_to_dz_3d_nonboussinesq_point` in `submodules/infra/TIM/mom/cpp/mom_interface_heights_kernel.hpp` (clang JSON AST).
+Outputs `(dz)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def thickness_to_dz_3d_nonboussinesq_point (dz h spv h_to_rz : ℝ) : ℝ :=
+  h_to_rz * h * spv
 
 end
 

@@ -1,0 +1,173 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'kernel_component_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| | DeclarationConstruct -> SpecificationConstruct -> DerivedTypeDef
+| | | DerivedTypeStmt
+| | | | Name = 'cfg_t'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'fac'
+| | | ComponentDefStmt -> DataComponentDefStmt
+| | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | ComponentOrFill -> ComponentDecl
+| | | | | Name = 'w'
+| | | | | ComponentArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | EndTypeStmt -> Name = 'cfg_t'
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'apply_cfg'
+| | | | DummyArg -> Name = 'cfg'
+| | | | DummyArg -> Name = 'a'
+| | | | DummyArg -> Name = 'b'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Type
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'cfg_t'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'cfg'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'a'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'b'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | NonLabelDoStmt
+| | | | | | LoopControl -> LoopBounds
+| | | | | | | Scalar -> Name = 'i'
+| | | | | | | Scalar -> Expr = '1_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | Scalar -> Expr = 'n'
+| | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'b(int(i,kind=8))=cfg%fac*a(int(i,kind=8))+cfg%w(int(i,kind=8))'
+| | | | | | | Variable = 'b(int(i,kind=8))'
+| | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | DataRef -> Name = 'b'
+| | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | Expr = 'cfg%fac*a(int(i,kind=8))+cfg%w(int(i,kind=8))'
+| | | | | | | | Add
+| | | | | | | | | Expr = 'cfg%fac*a(int(i,kind=8))'
+| | | | | | | | | | Multiply
+| | | | | | | | | | | Expr = 'cfg%fac'
+| | | | | | | | | | | | Designator -> DataRef -> StructureComponent
+| | | | | | | | | | | | | DataRef -> Name = 'cfg'
+| | | | | | | | | | | | | Name = 'fac'
+| | | | | | | | | | | Expr = 'a(int(i,kind=8))'
+| | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | DataRef -> Name = 'a'
+| | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | Expr = 'cfg%w(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> StructureComponent
+| | | | | | | | | | | | DataRef -> Name = 'cfg'
+| | | | | | | | | | | | Name = 'w'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | EndDoStmt -> 
+| | | EndSubroutineStmt -> Name = 'apply_cfg'
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'collide'
+| | | | DummyArg -> Name = 'cfg'
+| | | | DummyArg -> Name = 'fac'
+| | | | DummyArg -> Name = 'b'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> Type
+| | | | | | DerivedTypeSpec
+| | | | | | | Name = 'cfg_t'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'cfg'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'fac'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'b'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | NonLabelDoStmt
+| | | | | | LoopControl -> LoopBounds
+| | | | | | | Scalar -> Name = 'i'
+| | | | | | | Scalar -> Expr = '1_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | Scalar -> Expr = 'n'
+| | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'b(int(i,kind=8))=cfg%fac*fac+b(int(i,kind=8))'
+| | | | | | | Variable = 'b(int(i,kind=8))'
+| | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | DataRef -> Name = 'b'
+| | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | Expr = 'cfg%fac*fac+b(int(i,kind=8))'
+| | | | | | | | Add
+| | | | | | | | | Expr = 'cfg%fac*fac'
+| | | | | | | | | | Multiply
+| | | | | | | | | | | Expr = 'cfg%fac'
+| | | | | | | | | | | | Designator -> DataRef -> StructureComponent
+| | | | | | | | | | | | | DataRef -> Name = 'cfg'
+| | | | | | | | | | | | | Name = 'fac'
+| | | | | | | | | | | Expr = 'fac'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'fac'
+| | | | | | | | | Expr = 'b(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'b'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | EndDoStmt -> 
+| | | EndSubroutineStmt -> Name = 'collide'
+| EndModuleStmt -> Name = 'kernel_component_mod'

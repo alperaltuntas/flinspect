@@ -5,6 +5,10 @@ set_option linter.style.header false
 -- Generated code keeps each expression on one line (merged-join tuples can be
 -- arbitrarily wide), so the line-length style lint does not apply.
 set_option linter.style.longLine false
+-- Generated defs keep every parameter positionally (inout/out outputs are
+-- also inputs); a kernel that never reads an output's incoming value leaves
+-- its binder unused by design.
+set_option linter.unusedVariables false
 
 /-!
 # GENERATED FILE — do not edit
@@ -48,6 +52,21 @@ def ppm_limit_cw84 (h_in h_l h_r : ℝ) : ℝ × ℝ :=
     if funfac < -rldiff2 then
       (if funfac > rldiff2 then 3 * h_i - 2 * h_r else h_l, 3 * h_i - 2 * (if funfac > rldiff2 then 3 * h_i - 2 * h_r else h_l))
     else (if funfac > rldiff2 then 3 * h_i - 2 * h_r else h_l, h_r)
+
+/-- Generated from loop nest 1 of `zonal_edge_thickness` in `MOM6/MOM_continuity_PPM.o_ptree` (flang with-sema dump).
+Outputs `(h_w, h_e)` — the `intent(out)` arguments, modeled functionally over ℝ. -/
+def edge_thickness_upwind (h_in h_w h_e : ℝ) : ℝ × ℝ :=
+  (h_in, h_in)
+
+/-- Generated from loop nest 4 of `thickness_to_dz_3d` in `MOM6/MOM_interface_heights.o_ptree` (flang with-sema dump).
+Outputs `(dz)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def thickness_to_dz_3d_boussinesq (h dz h_to_z : ℝ) : ℝ :=
+  h_to_z * h
+
+/-- Generated from loop nest 2 of `thickness_to_dz_3d` in `MOM6/MOM_interface_heights.o_ptree` (flang with-sema dump).
+Outputs `(dz)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def thickness_to_dz_3d_nonboussinesq (h dz h_to_rz spv_avg : ℝ) : ℝ :=
+  h_to_rz * h * spv_avg
 
 end
 

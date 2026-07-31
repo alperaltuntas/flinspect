@@ -1,0 +1,116 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'kernel_recurrence_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'accumulate'
+| | | | DummyArg -> Name = 'p'
+| | | | DummyArg -> Name = 'h'
+| | | | DummyArg -> Name = 'g'
+| | | | DummyArg -> Name = 'n'
+| | | | DummyArg -> Name = 'nz'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | | EntityDecl
+| | | | | | Name = 'nz'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'nz'
+| | | | | | | Designator -> DataRef -> Name = 'nz'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'h'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'nz+1_4'
+| | | | | | | Add
+| | | | | | | | Expr = 'nz'
+| | | | | | | | | Designator -> DataRef -> Name = 'nz'
+| | | | | | | | Expr = '1_4'
+| | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'p'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'g'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | | | EntityDecl
+| | | | | | Name = 'k'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | NonLabelDoStmt
+| | | | | | LoopControl -> LoopBounds
+| | | | | | | Scalar -> Name = 'k'
+| | | | | | | Scalar -> Expr = '1_4'
+| | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | Scalar -> Expr = 'nz'
+| | | | | | | | Designator -> DataRef -> Name = 'nz'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | | | NonLabelDoStmt
+| | | | | | | | LoopControl -> LoopBounds
+| | | | | | | | | Scalar -> Name = 'i'
+| | | | | | | | | Scalar -> Expr = '1_4'
+| | | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | | | Scalar -> Expr = 'n'
+| | | | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | | | Block
+| | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'p(int(i,kind=8),int(k+1_4,kind=8))=p(int(i,kind=8),int(k,kind=8))+g*h(int(i,kind=8),int(k,kind=8))'
+| | | | | | | | | Variable = 'p(int(i,kind=8),int(k+1_4,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'p'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'k+1_4'
+| | | | | | | | | | | | Add
+| | | | | | | | | | | | | Expr = 'k'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'k'
+| | | | | | | | | | | | | Expr = '1_4'
+| | | | | | | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | | | Expr = 'p(int(i,kind=8),int(k,kind=8))+g*h(int(i,kind=8),int(k,kind=8))'
+| | | | | | | | | | Add
+| | | | | | | | | | | Expr = 'p(int(i,kind=8),int(k,kind=8))'
+| | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | DataRef -> Name = 'p'
+| | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'k'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'k'
+| | | | | | | | | | | Expr = 'g*h(int(i,kind=8),int(k,kind=8))'
+| | | | | | | | | | | | Multiply
+| | | | | | | | | | | | | Expr = 'g'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'g'
+| | | | | | | | | | | | | Expr = 'h(int(i,kind=8),int(k,kind=8))'
+| | | | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | | | DataRef -> Name = 'h'
+| | | | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'k'
+| | | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'k'
+| | | | | | | EndDoStmt -> 
+| | | | | EndDoStmt -> 
+| | | EndSubroutineStmt -> Name = 'accumulate'
+| EndModuleStmt -> Name = 'kernel_recurrence_mod'

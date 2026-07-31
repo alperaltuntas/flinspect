@@ -40,6 +40,10 @@ Two assertion tiers per construct:
 | Track B kernel subset: `do concurrent` point kernel — assignment, if/elseif/else, arithmetic (`+ - * / **`), comparisons, `abs`, array refs at loop indices, local scalars | `test_kernel_doconcurrent` | `frontend/flang_kernel.py` (whole module), `kir.pointize`/`functionalize`, `lean_printer` |
 | Track B: logical IF statement (R1139, dump: `ActionStmt -> IfStmt`) + the sequential guarded control-flow join (second guard's RHS reads the first's target — merged-state threading) | `test_kernel_ifstmt_join` | `flang_kernel._extract_action` (IfStmt branch), `kir.functionalize` (`merge_if`), `lean_printer` (`Cond`) |
 | Track B: unary minus (dump: `Negate`) — bare leaf, compound operand needing printer parens, negated source parens | `test_kernel_negate` | `flang_kernel._extract_expr_inner` (Negate), `lean_printer` (`Neg`) |
+| Track B rule A: plain, perfectly nested `do` nest as a point kernel (dump: `LoopControl -> LoopBounds`) — pointized under the array-index gate; semantic license is the Lean schema lemma (`Pilot/SeqSchema.lean`) | `test_kernel_plaindo` | `flang_kernel._extract_do` (LoopBounds branch), `kir.pointize` (plain-DO path) |
+| Track B rule A REFUSAL: cross-iteration recurrence (`p(i,K+1) = p(i,K) + …`, distilled from `find_dz_for_eta`) — offset subscript fails the gate; also pins dump lowercasing (`K` ≡ `k`) | `test_kernel_recurrence` | `kir.pointize` (subscript gate) |
+| Track B rule B: inline-loop addressing — two nests in one subroutine (do-concurrent + plain DO, inside IF branches), each extracted by source-order ordinal; whole-subroutine mode keeps refusing | `test_kernel_inline_nests` | `flang_kernel.extract_loop_kernel` (`_collect_do_nests`, tolerant decls) |
+| Track B rule B: derived-type component reads (dump: `StructureComponent`) — loop-invariant scalar (`cfg%fac`) + loop-indexed component array (`cfg%w(i)`) → synthesized scalar in-params; naming-collision refusal (`collide`) | `test_kernel_component` | `flang_kernel._extract_dataref` (StructureComponent), `kir.pointize` (component synthesis) |
 
 ## Known gaps (parser paths with no fixture yet)
 

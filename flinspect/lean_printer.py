@@ -12,9 +12,9 @@ enough to audit line by line against ``kir.py``.
 from __future__ import annotations
 
 from flinspect.kir import (
-    ArrayRef, BinOp, Call, Cmp, Cond, Expr, FunExpr, IfExpr, IntLit, Kernel,
-    Let, Neg, Param, Paren, RealLit, Tuple_, UnsupportedConstruct, Var,
-    functionalize,
+    ArrayRef, BinOp, Call, Cmp, ComponentRef, Cond, Expr, FunExpr, IfExpr,
+    IntLit, Kernel, Let, Neg, Param, Paren, RealLit, Tuple_,
+    UnsupportedConstruct, Var, functionalize,
 )
 
 # Operator spelling and precedence (higher binds tighter). Lean and Fortran
@@ -81,6 +81,9 @@ def print_expr(e: Expr, parent_prec: int = 0, right: bool = False) -> str:
         return f"({s})" if parent_prec > 0 else s
     if isinstance(e, ArrayRef):
         raise UnsupportedConstruct(f"array reference '{e.name}' survived pointization")
+    if isinstance(e, ComponentRef):
+        raise UnsupportedConstruct(
+            f"component reference '{e.base}%{e.comp}' survived pointization")
     raise UnsupportedConstruct(f"cannot print {type(e).__name__}")
 
 
@@ -131,8 +134,14 @@ def print_kernel(kernel: Kernel, *, provenance: str = "") -> str:
             f"{[p.name for p in non_real]}")
     args = " ".join(p.name for p in params)
     ret = " × ".join("ℝ" for _ in outputs)
+    # Name the outputs by their actual intents (dedup, declaration order).
+    intents = []
+    for p in params:
+        if p.intent in ("inout", "out") and p.intent not in intents:
+            intents.append(p.intent)
+    kinds = "/".join(f"`intent({i})`" for i in intents)
     doc = (f"/-- Generated from {provenance}.\n"
-           f"Outputs `({', '.join(outputs)})` — the `intent(inout)` arguments, "
+           f"Outputs `({', '.join(outputs)})` — the {kinds} arguments, "
            f"modeled functionally over ℝ. -/\n") if provenance else ""
     header = f"{doc}def {kernel.name} ({args} : ℝ) : {ret} :="
     return "\n".join([header] + _print_fun(body, 1)) + "\n"
@@ -158,6 +167,10 @@ set_option linter.style.header false
 -- Generated code keeps each expression on one line (merged-join tuples can be
 -- arbitrarily wide), so the line-length style lint does not apply.
 set_option linter.style.longLine false
+-- Generated defs keep every parameter positionally (inout/out outputs are
+-- also inputs); a kernel that never reads an output's incoming value leaves
+-- its binder unused by design.
+set_option linter.unusedVariables false
 
 /-!
 # GENERATED FILE — do not edit

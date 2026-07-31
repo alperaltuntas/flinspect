@@ -1,0 +1,124 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'kernel_inline_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'two_nests'
+| | | | DummyArg -> Name = 'a'
+| | | | DummyArg -> Name = 'b'
+| | | | DummyArg -> Name = 'c'
+| | | | DummyArg -> Name = 'q'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'q'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'a'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = Out
+| | | | | EntityDecl
+| | | | | | Name = 'b'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = Out
+| | | | | EntityDecl
+| | | | | | Name = 'c'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> IfConstruct
+| | | | | IfThenStmt
+| | | | | | Scalar -> Logical -> Expr = 'q>0._4'
+| | | | | | | GT
+| | | | | | | | Expr = 'q'
+| | | | | | | | | Designator -> DataRef -> Name = 'q'
+| | | | | | | | Expr = '0._4'
+| | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | Real = '0.0'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | | | NonLabelDoStmt
+| | | | | | | | LoopControl -> Concurrent
+| | | | | | | | | ConcurrentHeader
+| | | | | | | | | | ConcurrentControl
+| | | | | | | | | | | Name = 'i'
+| | | | | | | | | | | Scalar -> Integer -> Expr = '1_4'
+| | | | | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | | | | | Scalar -> Integer -> Expr = 'n'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | | | Block
+| | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'b(int(i,kind=8))=q*a(int(i,kind=8))'
+| | | | | | | | | Variable = 'b(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'b'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | Expr = 'q*a(int(i,kind=8))'
+| | | | | | | | | | Multiply
+| | | | | | | | | | | Expr = 'q'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'q'
+| | | | | | | | | | | Expr = 'a(int(i,kind=8))'
+| | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | DataRef -> Name = 'a'
+| | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | EndDoStmt -> 
+| | | | | ElseBlock
+| | | | | | ElseStmt -> 
+| | | | | | Block
+| | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | | | | NonLabelDoStmt
+| | | | | | | | | LoopControl -> LoopBounds
+| | | | | | | | | | Scalar -> Name = 'i'
+| | | | | | | | | | Scalar -> Expr = '1_4'
+| | | | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | | | | Scalar -> Expr = 'n'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | | | | Block
+| | | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'c(int(i,kind=8))=a(int(i,kind=8))-q'
+| | | | | | | | | | Variable = 'c(int(i,kind=8))'
+| | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | DataRef -> Name = 'c'
+| | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | Expr = 'a(int(i,kind=8))-q'
+| | | | | | | | | | | Subtract
+| | | | | | | | | | | | Expr = 'a(int(i,kind=8))'
+| | | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | | DataRef -> Name = 'a'
+| | | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | | | Expr = 'q'
+| | | | | | | | | | | | | Designator -> DataRef -> Name = 'q'
+| | | | | | | | EndDoStmt -> 
+| | | | | EndIfStmt -> 
+| | | EndSubroutineStmt -> Name = 'two_nests'
+| EndModuleStmt -> Name = 'kernel_inline_mod'

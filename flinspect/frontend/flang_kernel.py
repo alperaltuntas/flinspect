@@ -1,4 +1,5 @@
-"""Kernel-IR frontend: extract one subroutine from a with-sema flang parse-tree
+"""Kernel-IR frontend: extract one subroutine — or one addressed loop nest of a
+subroutine (:func:`extract_loop_kernel`) — from a with-sema flang parse-tree
 dump into the Track B kernel IR (``flinspect/kir.py``).
 
 Below the seam (DESIGN §2.3): everything flang-dump-specific about *kernel
@@ -20,8 +21,9 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from flinspect.kir import (
-    ArrayRef, Assign, BinOp, Call, Cmp, DoConcurrent, Expr, If, IntLit, Kernel,
-    Neg, Param, Paren, RealLit, Stmt, UnsupportedConstruct, Var,
+    ArrayRef, Assign, BinOp, Call, Cmp, ComponentRef, Do, DoConcurrent, Expr,
+    If, IntLit, Kernel, Neg, Param, Paren, RealLit, Stmt, UnsupportedConstruct,
+    Var,
 )
 from flinspect.frontend._flang_text import level
 
@@ -179,14 +181,31 @@ def _extract_dataref(n: Node) -> Expr:
     inner = n.only_child()
     if inner.name == "Name":
         return Var(inner.payload)
+    if inner.name == "StructureComponent":
+        return _extract_component(inner, ())
     if inner.name == "ArrayElement":
-        base = inner.child("DataRef").child("Name").payload
         subs = tuple(extract_expr(s.child("Integer").child("Expr"))
                      if s.children and s.children[0].name == "Integer"
                      else extract_expr(_descend_subscript(s))
                      for s in inner.children_named("SectionSubscript"))
-        return ArrayRef(base, subs)
+        base = inner.child("DataRef").only_child()
+        if base.name == "Name":
+            return ArrayRef(base.payload, subs)
+        if base.name == "StructureComponent":
+            return _extract_component(base, subs)
+        raise UnsupportedConstruct(f"array-element base '{base.name}'")
     raise UnsupportedConstruct(f"data reference '{inner.name}'")
+
+
+def _extract_component(sc: Node, subscripts: tuple[Expr, ...]) -> ComponentRef:
+    """``base%comp`` (dump: ``DataRef -> StructureComponent`` holding the base
+    ``DataRef`` and the component ``Name``). Single level only — a chained
+    ``a%b%c`` has a StructureComponent base and refuses."""
+    base = sc.child("DataRef").only_child()
+    if base.name != "Name":
+        raise UnsupportedConstruct(
+            f"component base '{base.name}' (only single-level base%comp is supported)")
+    return ComponentRef(base.payload, sc.child("Name").payload, subscripts)
 
 
 def _descend_subscript(s: Node) -> Node:
@@ -261,58 +280,103 @@ def _extract_if(n: Node) -> If:
     return If(tuple(branches), orelse)
 
 
-def _extract_do(n: Node) -> DoConcurrent:
+def _extract_do(n: Node) -> Stmt:
     do_stmt = n.child("NonLabelDoStmt")
     loop = do_stmt.child("LoopControl").only_child()
-    if loop.name != "Concurrent":
-        raise UnsupportedConstruct("only do-concurrent loops are supported")
-    header = loop.child("ConcurrentHeader")
-    controls = []
-    for cc in header.children_named("ConcurrentControl"):
-        idx = cc.child("Name").payload
-        bounds = [extract_expr(_descend_subscript(sc))
-                  for sc in cc.children_named("Scalar")]
+    if loop.name == "Concurrent":
+        header = loop.child("ConcurrentHeader")
+        controls = []
+        for cc in header.children_named("ConcurrentControl"):
+            idx = cc.child("Name").payload
+            bounds = [extract_expr(_descend_subscript(sc))
+                      for sc in cc.children_named("Scalar")]
+            if len(bounds) != 2:
+                raise UnsupportedConstruct("do-concurrent with a stride is unsupported")
+            controls.append((idx, bounds[0], bounds[1]))
+        body = extract_block(n.child("Block"))
+        return DoConcurrent(tuple(controls), body)
+    if loop.name == "LoopBounds":
+        # Plain do (R1119): the dump lists the index and both bounds as
+        # sibling Scalar nodes — `Scalar -> Name` for the loop variable,
+        # then `Scalar -> Expr` for lower and upper (a third one is a stride).
+        scalars = loop.children_named("Scalar")
+        if not scalars or scalars[0].only_child().name != "Name":
+            raise UnsupportedConstruct("LoopBounds without a leading index Name")
+        idx = scalars[0].only_child().payload
+        bounds = [extract_expr(_descend_subscript(sc)) for sc in scalars[1:]]
         if len(bounds) != 2:
-            raise UnsupportedConstruct("do-concurrent with a stride is unsupported")
-        controls.append((idx, bounds[0], bounds[1]))
-    body = extract_block(n.child("Block"))
-    return DoConcurrent(tuple(controls), body)
+            raise UnsupportedConstruct("plain do with a stride is unsupported")
+        body = extract_block(n.child("Block"))
+        return Do((idx, bounds[0], bounds[1]), body)
+    raise UnsupportedConstruct(f"loop control '{loop.name}'")
 
 
 # --------------------------------------------------------------------------- #
 # Declarations + kernel assembly
 # --------------------------------------------------------------------------- #
 
-def _extract_decls(spec: Node) -> list[Param]:
-    decls: list[Param] = []
+def _parse_type_decl(tds: Node) -> list[Param]:
+    """One ``TypeDeclarationStmt`` → the Params it declares (refusing outside
+    the subset)."""
+    dts = tds.child("DeclarationTypeSpec").only_child()
+    if dts.name == "IntrinsicTypeSpec":
+        base = dts.only_child().name
+        type_ = {"Real": "real", "IntegerTypeSpec": "integer"}.get(base)
+        if type_ is None:
+            raise UnsupportedConstruct(f"intrinsic type '{base}'")
+    elif dts.name == "Type":
+        type_ = "derived:" + dts.child("DerivedTypeSpec").child("Name").payload
+    else:
+        raise UnsupportedConstruct(f"type spec '{dts.name}'")
+    intent = None
+    rank = 0
+    for attr in tds.children_named("AttrSpec"):
+        kid = attr.only_child()
+        if kid.name == "IntentSpec":
+            intent = kid.child("Intent").payload.lower()
+        elif kid.name == "ArraySpec":
+            rank = len(kid.children_named("ExplicitShapeSpec"))
+        else:
+            raise UnsupportedConstruct(f"attribute '{kid.name}'")
+    return [Param(ent.child("Name").payload, type_, intent, rank)
+            for ent in tds.children_named("EntityDecl")]
+
+
+def _type_decls(spec: Node):
     for dc in spec.children_named("DeclarationConstruct"):
         try:
-            tds = dc.child("SpecificationConstruct").child("TypeDeclarationStmt")
+            yield dc.child("SpecificationConstruct").child("TypeDeclarationStmt")
         except UnsupportedConstruct:
             continue
-        dts = tds.child("DeclarationTypeSpec").only_child()
-        if dts.name == "IntrinsicTypeSpec":
-            base = dts.only_child().name
-            type_ = {"Real": "real", "IntegerTypeSpec": "integer"}.get(base)
-            if type_ is None:
-                raise UnsupportedConstruct(f"intrinsic type '{base}'")
-        elif dts.name == "Type":
-            type_ = "derived:" + dts.child("DerivedTypeSpec").child("Name").payload
-        else:
-            raise UnsupportedConstruct(f"type spec '{dts.name}'")
-        intent = None
-        rank = 0
-        for attr in tds.children_named("AttrSpec"):
-            kid = attr.only_child()
-            if kid.name == "IntentSpec":
-                intent = kid.child("Intent").payload.lower()
-            elif kid.name == "ArraySpec":
-                rank = len(kid.children_named("ExplicitShapeSpec"))
-            else:
-                raise UnsupportedConstruct(f"attribute '{kid.name}'")
-        for ent in tds.children_named("EntityDecl"):
-            decls.append(Param(ent.child("Name").payload, type_, intent, rank))
+
+
+def _extract_decls(spec: Node) -> list[Param]:
+    decls: list[Param] = []
+    for tds in _type_decls(spec):
+        decls.extend(_parse_type_decl(tds))
     return decls
+
+
+def _extract_decls_tolerant(spec: Node) -> tuple[list[Param], dict[str, str]]:
+    """Like :func:`_extract_decls`, but a declaration outside the subset does
+    not abort the extraction: its entity names are recorded as *poisoned*
+    (name → reason), and the caller refuses iff the loop nest actually
+    references one of them. If a failing declaration's entity names cannot
+    even be harvested, the extraction refuses outright — better a spurious
+    refusal than a silently missing declaration."""
+    decls: list[Param] = []
+    poisoned: dict[str, str] = {}
+    for tds in _type_decls(spec):
+        try:
+            decls.extend(_parse_type_decl(tds))
+        except UnsupportedConstruct as e:
+            names = [ent.child("Name").payload
+                     for ent in tds.children_named("EntityDecl")]
+            if not names:
+                raise
+            for nm in names:
+                poisoned[nm] = str(e)
+    return decls, poisoned
 
 
 def extract_kernel(dump_path: Path, subroutine: str) -> Kernel:
@@ -331,3 +395,113 @@ def extract_kernel(dump_path: Path, subroutine: str) -> Kernel:
     locals_ = tuple(d for d in decls if d.name not in set(arg_order))
     body = extract_block(sub.child("ExecutionPart").child("Block"))
     return Kernel(subroutine, params, locals_, body)
+
+
+# --------------------------------------------------------------------------- #
+# Inline-loop addressing (rule B): extract loop nest #N of a subroutine
+# --------------------------------------------------------------------------- #
+
+def _collect_do_nests(n: Node) -> list[Node]:
+    """All outermost ``DoConstruct`` nodes under ``n``, in source order (the
+    dump's document order). The walk descends into every other construct —
+    IF branches included — but never into a ``DoConstruct``: its inner do
+    levels belong to the same nest, so each nest counts exactly once."""
+    out: list[Node] = []
+    for c in n.children:
+        if c.name == "DoConstruct":
+            out.append(c)
+        else:
+            out.extend(_collect_do_nests(c))
+    return out
+
+
+def _names_in_expr(e: Expr, out: set[str]) -> None:
+    if isinstance(e, Var):
+        out.add(e.name)
+    elif isinstance(e, ArrayRef):
+        out.add(e.name)
+        for s in e.subscripts:
+            _names_in_expr(s, out)
+    elif isinstance(e, ComponentRef):
+        out.add(e.base)          # the component name is not a variable
+        for s in e.subscripts:
+            _names_in_expr(s, out)
+    elif isinstance(e, (Paren, Neg)):
+        _names_in_expr(e.inner, out)
+    elif isinstance(e, (BinOp, Cmp)):
+        _names_in_expr(e.lhs, out)
+        _names_in_expr(e.rhs, out)
+    elif isinstance(e, Call):
+        for a in e.args:
+            _names_in_expr(a, out)
+
+
+def _names_in_stmt(s: Stmt, out: set[str]) -> None:
+    if isinstance(s, Assign):
+        _names_in_expr(s.target, out)
+        _names_in_expr(s.value, out)
+    elif isinstance(s, If):
+        for (c, body) in s.branches:
+            _names_in_expr(c, out)
+            for x in body:
+                _names_in_stmt(x, out)
+        for x in s.orelse:
+            _names_in_stmt(x, out)
+    elif isinstance(s, DoConcurrent):
+        for (idx, lo, hi) in s.controls:
+            out.add(idx)
+            _names_in_expr(lo, out)
+            _names_in_expr(hi, out)
+        for x in s.body:
+            _names_in_stmt(x, out)
+    elif isinstance(s, Do):
+        idx, lo, hi = s.control
+        out.add(idx)
+        _names_in_expr(lo, out)
+        _names_in_expr(hi, out)
+        for x in s.body:
+            _names_in_stmt(x, out)
+
+
+def extract_loop_kernel(dump_path: Path, subroutine: str, nest: int,
+                        name: str) -> Kernel:
+    """Extract loop nest #``nest`` (1-based, source order) of ``subroutine``
+    from the with-sema dump, as a kernel named ``name``.
+
+    Inline-loop addressing: the dump carries no line numbers, so the
+    deterministic address of a loop living inside a larger subroutine is its
+    source-order ordinal among the subroutine's outermost do-constructs —
+    counting both do-concurrent and plain-DO nests (see
+    :func:`_collect_do_nests`). The enclosing subroutine's SpecificationPart
+    supplies the declarations, extracted tolerantly: a declaration outside
+    the subset only poisons its own names, and extraction refuses iff the
+    nest references a poisoned (or undeclared) name. The kernel's name is
+    caller-supplied — an inline loop has no name of its own; the driver
+    records the pairing. The whole-subroutine mode (:func:`extract_kernel`)
+    is unchanged.
+    """
+    with open(dump_path) as f:
+        root = parse_dump_lines(f)
+    sub = find_subroutine(root, subroutine)
+    nests = _collect_do_nests(sub.child("ExecutionPart"))
+    if not 1 <= nest <= len(nests):
+        raise UnsupportedConstruct(
+            f"{subroutine}: loop nest {nest} requested, but the subroutine "
+            f"has {len(nests)} do-construct nest(s)")
+    loop = _extract_do(nests[nest - 1])
+
+    stmt = sub.child("SubroutineStmt")
+    arg_order = [d.child("Name").payload for d in stmt.children_named("DummyArg")]
+    decls, poisoned = _extract_decls_tolerant(sub.child("SpecificationPart"))
+    by_name = {d.name: d for d in decls}
+
+    used: set[str] = set()
+    _names_in_stmt(loop, used)
+    for n in sorted(used - by_name.keys()):
+        reason = poisoned.get(n, "no declaration found")
+        raise UnsupportedConstruct(
+            f"{subroutine}: loop nest {nest} references '{n}' — {reason}")
+    params = tuple(by_name[a] for a in arg_order if a in used)
+    locals_ = tuple(d for d in decls
+                    if d.name in used and d.name not in set(arg_order))
+    return Kernel(name, params, locals_, (loop,))

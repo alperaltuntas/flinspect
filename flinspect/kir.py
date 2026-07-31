@@ -13,12 +13,47 @@ small enough to audit. A construct outside the supported subset raises
 
 Passes:
 
-- :func:`pointize` — strip a single ``do concurrent`` wrapper and turn every
-  array reference indexed *exactly* by the loop indices into a scalar. This is
-  the semantic move that pairs a Fortran loop nest with an AMReX per-point
-  kernel; it is valid precisely because ``do concurrent`` asserts iteration
-  independence. Any other subscript pattern (offsets, masks, partial indexing)
-  is refused.
+- :func:`pointize` — strip a single loop-nest wrapper and turn every array
+  reference indexed *exactly* by the loop indices into a scalar. This is the
+  semantic move that pairs a Fortran loop nest with an AMReX per-point kernel.
+  Two nest forms are admitted, with two different licenses:
+
+  * ``do concurrent`` — the *source* asserts iteration independence; that
+    assertion is the license for the pointwise model. Any other subscript
+    pattern (offsets, masks, partial indexing) is refused.
+  * a plain, PERFECTLY nested ``do`` nest (each level's body is exactly one
+    inner ``do`` until the innermost) — the source asserts nothing, so the
+    license is a *proof*: the schema lemma ``foldSeq f enum = pointwise f``
+    (``lean/pilot/Pilot/SeqSchema.lean``) shows the honest sequential-fold
+    semantics of such a nest equals the pointwise map, for any duplicate-free
+    enumeration of the index box. The gate here is what guarantees the
+    lemma's setting applies — it does not itself justify the reordering:
+    every array reference must be indexed exactly by the loop indices, and
+    every write must land in the iteration's own array cell (an assignment
+    to a scalar parameter is an accumulator/reduction shape and refuses;
+    reductions and cross-iteration recurrences are not point-local and stay
+    out of the subset). The one cross-iteration channel this gate does not
+    itself refuse — a local scalar read before its first write, which in a
+    plain DO would carry the previous iteration's value — cannot produce a
+    wrong model either: :func:`functionalize` binds locals per iteration via
+    ``Let``, so such a read prints as an unbound name and the generated Lean
+    fails to elaborate (refusal by the checker, loud).
+
+  Derived-type component reads (rule B) are admitted in exactly two shapes,
+  both becoming synthesized scalar ``in`` parameters of the pointized kernel:
+  a loop-invariant scalar component (``gv%h_to_z``; loop-invariant because
+  the base must be an ``intent(in)`` derived-type dummy argument, which
+  Fortran forbids modifying, and component writes refuse), and a component
+  array indexed exactly by the loop indices (``tv%spv_avg(i,j,k)``). The
+  synthesized parameter takes the component's own name (``gv%h_to_z`` →
+  ``h_to_z``) and is modeled as a real scalar — the one-time by-eye audit of
+  each generated def against its source covers the component's actual type.
+  Naming is deterministic and collision-checked: if the component name
+  collides with an existing parameter, local, loop index, or another
+  synthesized name from a different component, the extraction refuses rather
+  than renames. Synthesized parameters append after the real parameters in
+  first-use order (the order the scalarization walk first meets them). A
+  component read in any other shape refuses.
 - :func:`functionalize` — turn the imperative body (assignments + structured
   ifs) into a single functional expression tree: local assignments become
   ``Let`` bindings, assignments to inout arguments update a symbolic state, and
@@ -69,6 +104,19 @@ class ArrayRef:
 
 
 @dataclass(frozen=True)
+class ComponentRef:
+    """Derived-type component read ``base%comp`` (single level only);
+    ``subscripts`` is ``()`` for a scalar component, or the section subscripts
+    for a component array reference. Consumed only by :func:`pointize`, which
+    synthesizes a scalar ``in`` parameter for the supported shapes (see the
+    module docstring) — a ``ComponentRef`` never survives into the printed
+    model."""
+    base: str
+    comp: str
+    subscripts: tuple["Expr", ...]
+
+
+@dataclass(frozen=True)
 class Paren:
     """Source parentheses — semantically transparent, kept so the printed model
     mirrors the source's own grouping (the pilot's fidelity principle)."""
@@ -114,7 +162,8 @@ class Cond:
     orelse: "Expr"
 
 
-Expr = Union[RealLit, IntLit, Var, ArrayRef, Paren, Neg, BinOp, Cmp, Call, Cond]
+Expr = Union[RealLit, IntLit, Var, ArrayRef, ComponentRef, Paren, Neg, BinOp,
+             Cmp, Call, Cond]
 
 
 # --------------------------------------------------------------------------- #
@@ -143,7 +192,16 @@ class DoConcurrent:
     body: tuple["Stmt", ...]
 
 
-Stmt = Union[Assign, If, DoConcurrent]
+@dataclass(frozen=True)
+class Do:
+    """One level of a plain ``do`` loop (no stride): control is
+    (index_name, lower, upper). A perfectly nested plain nest arrives as
+    ``Do(k, (Do(j, (Do(i, body),)),))`` — :func:`pointize` unwraps it."""
+    control: tuple[str, Expr, Expr]
+    body: tuple["Stmt", ...]
+
+
+Stmt = Union[Assign, If, DoConcurrent, Do]
 
 
 # --------------------------------------------------------------------------- #
@@ -171,20 +229,84 @@ class Kernel:
 # --------------------------------------------------------------------------- #
 
 def pointize(kernel: Kernel) -> Kernel:
-    """Strip a single top-level ``do concurrent`` wrapper; scalarize arrays.
+    """Strip a single top-level loop-nest wrapper; scalarize arrays.
 
-    Every ``ArrayRef`` whose subscripts are exactly the concurrent indices (as
-    plain ``Var``s, in the same order per array) becomes ``Var(name)``. The
-    loop indices, the bound variables, and any parameter no longer referenced
-    by the pointized body (grid structs, index ranges) are dropped.
+    Every ``ArrayRef`` whose subscripts are exactly the loop indices (as plain
+    ``Var``s) becomes ``Var(name)``; the supported ``ComponentRef`` shapes
+    become synthesized scalar ``in`` parameters (rule B — see the module
+    docstring for the naming/collision/ordering rules). The loop indices, the
+    bound variables, and any parameter no longer referenced by the pointized
+    body (grid structs, index ranges) are dropped.
+
+    The nest may be a ``do concurrent`` (license: the source's independence
+    assertion) or a plain, perfectly nested ``do`` (license: the schema lemma
+    — see the module docstring). The plain-DO path additionally refuses any
+    write that does not land in the iteration's own array cell: an assignment
+    to a scalar parameter is a reduction/accumulator, which is not point-local.
     """
-    if len(kernel.body) != 1 or not isinstance(kernel.body[0], DoConcurrent):
+    if len(kernel.body) != 1 or not isinstance(kernel.body[0], (DoConcurrent, Do)):
         raise UnsupportedConstruct(
-            f"{kernel.name}: pointize expects the body to be exactly one do-concurrent nest")
+            f"{kernel.name}: pointize expects the body to be exactly one "
+            f"do-concurrent or plain-do nest")
     loop = kernel.body[0]
-    indices = tuple(name for (name, _, _) in loop.controls)
+    if isinstance(loop, DoConcurrent):
+        plain = False
+        indices = tuple(name for (name, _, _) in loop.controls)
+        loop_body = loop.body
+    else:
+        # Rule A: unwrap a PERFECTLY nested plain-do nest — each level's body
+        # must be exactly one inner do until the innermost. (A do remaining
+        # anywhere in the innermost body is an imperfect nest and refuses in
+        # scalarize_stmt below.)
+        plain = True
+        names = [loop.control[0]]
+        loop_body = loop.body
+        while len(loop_body) == 1 and isinstance(loop_body[0], Do):
+            names.append(loop_body[0].control[0])
+            loop_body = loop_body[0].body
+        if len(set(names)) != len(names):
+            raise UnsupportedConstruct(
+                f"{kernel.name}: duplicate loop index in a plain-do nest {names}")
+        indices = tuple(names)
+
+    param_by_name = {p.name: p for p in kernel.params}
+    local_names = {p.name for p in kernel.locals}
+    # Rule B: synthesized scalar params for component reads, keyed by
+    # (base, comp); insertion order = first-use order (the walk below is the
+    # deterministic statement/left-to-right expression order).
+    synth: dict[tuple[str, str], str] = {}
+
+    def synth_param(e: ComponentRef) -> Var:
+        key = (e.base, e.comp)
+        if key not in synth:
+            name = e.comp
+            if (name in param_by_name or name in local_names
+                    or name in indices or name in synth.values()):
+                raise UnsupportedConstruct(
+                    f"{kernel.name}: synthesized parameter '{name}' for the "
+                    f"component read {e.base}%{e.comp} collides with an "
+                    f"existing name")
+            synth[key] = name
+        return Var(synth[key])
 
     def scalarize_expr(e: Expr) -> Expr:
+        if isinstance(e, ComponentRef):
+            base = param_by_name.get(e.base)
+            if (base is None or not base.type.startswith("derived:")
+                    or base.intent != "in"):
+                raise UnsupportedConstruct(
+                    f"{kernel.name}: component read {e.base}%{e.comp} — the "
+                    f"base must be an intent(in) derived-type dummy argument")
+            if e.subscripts == ():
+                return synth_param(e)      # loop-invariant scalar component
+            subs = tuple(s.name if isinstance(s, Var) else None
+                         for s in e.subscripts)
+            if set(subs) == set(indices) and None not in subs:
+                return synth_param(e)      # component array at the own index
+            raise UnsupportedConstruct(
+                f"{kernel.name}: component read {e.base}%{e.comp}{subs} is "
+                f"neither a loop-invariant scalar nor a component array "
+                f"indexed exactly by the loop indices {indices}")
         if isinstance(e, (RealLit, IntLit, Var)):
             return e
         if isinstance(e, ArrayRef):
@@ -193,7 +315,7 @@ def pointize(kernel: Kernel) -> Kernel:
                 return Var(e.name)
             raise UnsupportedConstruct(
                 f"{kernel.name}: array reference {e.name}{subs} is not indexed "
-                f"exactly by the concurrent indices {indices}")
+                f"exactly by the loop indices {indices}")
         if isinstance(e, Paren):
             return Paren(scalarize_expr(e.inner))
         if isinstance(e, Neg):
@@ -208,6 +330,16 @@ def pointize(kernel: Kernel) -> Kernel:
 
     def scalarize_stmt(s: Stmt) -> Stmt:
         if isinstance(s, Assign):
+            if isinstance(s.target, ComponentRef):
+                raise UnsupportedConstruct(
+                    f"{kernel.name}: assignment to derived-type component "
+                    f"{s.target.base}%{s.target.comp} is unsupported")
+            if plain and isinstance(s.target, Var) and s.target.name in param_by_name:
+                raise UnsupportedConstruct(
+                    f"{kernel.name}: assignment to scalar parameter "
+                    f"'{s.target.name}' inside a plain-do nest is a "
+                    f"reduction/accumulator shape — every write must land in "
+                    f"the iteration's own array cell")
             tgt = scalarize_expr(s.target)
             if not isinstance(tgt, Var):
                 raise UnsupportedConstruct(f"{kernel.name}: unsupported assignment target")
@@ -217,10 +349,14 @@ def pointize(kernel: Kernel) -> Kernel:
                 tuple((scalarize_expr(c), tuple(scalarize_stmt(b) for b in body))
                       for (c, body) in s.branches),
                 tuple(scalarize_stmt(b) for b in s.orelse))
+        if isinstance(s, (Do, DoConcurrent)):
+            raise UnsupportedConstruct(
+                f"{kernel.name}: a do-construct inside the loop body — the "
+                f"nest is not perfectly nested")
         raise UnsupportedConstruct(
-            f"{kernel.name}: {type(s).__name__} inside the concurrent body is unsupported")
+            f"{kernel.name}: {type(s).__name__} inside the loop body is unsupported")
 
-    body = tuple(scalarize_stmt(s) for s in loop.body)
+    body = tuple(scalarize_stmt(s) for s in loop_body)
 
     used: set[str] = set()
 
@@ -253,6 +389,9 @@ def pointize(kernel: Kernel) -> Kernel:
 
     params = tuple(Param(p.name, p.type, p.intent, 0)
                    for p in kernel.params if p.name in used and p.name not in indices)
+    # Rule B: synthesized params append after the real params, in first-use
+    # order. Modeled as real scalars (see the module docstring).
+    params += tuple(Param(n, "real", "in", 0) for n in synth.values())
     locals_ = tuple(Param(p.name, p.type, None, 0)
                     for p in kernel.locals if p.name in used and p.name not in indices)
     return Kernel(kernel.name, params, locals_, body)
