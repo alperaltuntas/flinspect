@@ -1,0 +1,50 @@
+# Conformance corpus manifest — C++ side (D7)
+
+The clang-frontend sibling of `tests/f90/MANIFEST.md`, kept as a separate file
+deliberately: the f90 manifest defends against *flang dump-format* drift with
+committed `*_ptree` snapshots, while this corpus has **no committed dumps at
+all** — clang JSON node `id` fields are memory addresses, nondeterministic
+across runs, so raw dumps are never golden-compared. Here the fixtures are the
+committed `.cpp` sources themselves; extraction happens at test time, and the
+assertions live on the extracted kernel IR and the printed Lean
+(`tests/frontend/test_clang_kernel.py`). The drift axis this corpus defends is
+the **clang JSON AST schema**: on an LLVM upgrade, rerun the gated tests and
+failures localize which constructs' JSON shape moved.
+
+## Running the tests
+
+The fixtures are self-contained (each carries a tiny prelude mirroring
+`amrex::Real` / `amrex::literals` / `amrex::Math::abs`) — **no include paths
+are needed**; `clang++` alone suffices. Tests are skipped unless `clang++` is
+on `PATH`:
+
+```bash
+. /glade/work/altuntas/llvm-root/activate_llvm.sh   # clang 21
+PYTHONNOUSERSITE=1 python -m pytest tests/frontend/test_clang_kernel.py
+```
+
+The *production* extraction (the real TIM header, which includes AMReX) is
+driven by `lean/pilot/generate.py`, where the include paths are pinned; its
+golden test sits in `tests/test_kir_lean.py` next to its Fortran sibling.
+
+| Construct | Fixture / function | Extractor code path (`flinspect/frontend/clang_kernel.py`) |
+|---|---|---|
+| Composite point kernel: `Real&`/`Real const` intent mapping, local decl-with-init, if / else if / else, `_rt` literals, `+ - * /`, comparisons, `abs` call, skipped decl attribute | `test_kernel_point.cpp` / `clamp_scale_point` | `extract_kernel_from_decl`, `_extract_param`, `_extract_vardecl`, `_extract_if`, `_extract_call`, `_extract_udl` |
+| Sequential guarded pair (the `ppm_limit_cw84_point` shape): two braceless guarded assignments, the second reading the first's target — merged-state threading | `test_kernel_guard_join.cpp` / `guard_pair_point` | `_extract_if` (braceless branch), `_extract_stmts` (`=` branch); join merge in `kir.functionalize` (reused unchanged) |
+| Unary minus, incl. the C++/Fortran parse asymmetry (`-2.0_rt * x` = `(-2) * x`, not R1008's `-(2 * x)`) | `test_kernel_negate.cpp` / `neg_clip_point` | `extract_expr` (UnaryOperator branch) |
+| Refusal: compound assignment (`+=`) | `test_kernel_refusals.cpp` / `refuse_plus_equal` | `_extract_stmts` fall-through |
+| Refusal: loop statement (`for`) | `test_kernel_refusals.cpp` / `refuse_for_loop` | `_extract_stmts` fall-through |
+| Refusal: non-Real parameter (`int const`) | `test_kernel_refusals.cpp` / `refuse_int_param` | `_extract_param` |
+| Refusal: value-changing implicit cast (`IntegralToFloating` from an int literal) — pins the cast allowlist itself | `test_kernel_refusals.cpp` / `refuse_int_literal` | `extract_expr` (`_TRANSPARENT_CASTS`) |
+| Node-level allowlists (no clang needed): unlisted cast kinds, non-`abs` callees, unlisted opcodes, non-local DeclRefExpr, non-`_rt` literal suffixes | hand-built JSON dicts in `TestExprAllowlists` | `extract_expr`, `_extract_call`, `_extract_udl` |
+
+## Known gaps (extractor paths with no fixture yet)
+
+- **`Real` by-value non-const parameter** (would be locally mutable; refused) —
+  covered only by the `_extract_param` fall-through, no dedicated fixture.
+- **Default arguments** — `_extract_param` refuses a `ParmVarDecl` carrying an
+  initializer; no fixture.
+- **`if` with init-statement / condition variable / `constexpr if`** —
+  `_extract_if` refuses on the JSON flags; no fixture.
+- **Local redeclaration in sibling scopes** (C++ block scoping vs the flat Let
+  model; refused in `_extract_vardecl`) — no fixture.
