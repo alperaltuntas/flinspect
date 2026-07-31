@@ -278,6 +278,12 @@ frontier-and-gate story real).
   and the honest caveats (hand-written models; friendliest kernel shape).
 - *Then:* automate the printer (deterministic dump → kernel IR → Lean; §2.3), one
   construct at a time in the D7 corpus style (construct → golden Lean model).
+  **First milestone landed 2026-07-30:** `flinspect/kir.py` +
+  `frontend/flang_kernel.py` + `lean_printer.py` regenerate the pilot model from
+  the *production* MOM6 dump, and `Pilot/Fidelity.lean` proves generated ≡
+  hand-written **by `rfl`** — so generated-from-dump ≡ C++ port, transitively,
+  all machine-checked. Supported subset = the pilot kernel's shape; everything
+  else refuses (`UnsupportedConstruct`). See the DEVLOG entry.
 - *Later:* kernels with cross-iteration structure (k-recurrences → induction),
   masks/wet-dry logic, and the clang-side ingestion (`-ast-dump=json` or libclang).
 

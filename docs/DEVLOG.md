@@ -11,6 +11,59 @@
 
 ---
 
+## 2026-07-30 — Track B printer: generated-from-dump model ≡ C++ port, every link machine-checked
+
+**What:** the first milestone of Track B's printer step (DESIGN §4 "*Then:*
+automate the printer") — a deterministic dump → kernel-IR → Lean pipeline whose
+output is proved, in Lean, to match the pilot's hand-written model **by `rfl`**
+(definitional equality: zero semantic drift). The full chain is now:
+
+```
+MOM6 production with-sema dump ──(flang_kernel)──▶ kernel IR
+  ──(pointize · functionalize · lean_printer)──▶ Pilot/Generated.lean
+  ──(Fidelity.lean: rfl)──▶ ≡ hand-written ppmLimitPosF
+  ──(pilot's point lemma)──▶ ≡ C++ ppm_limit_pos_point      (generated_matches_cpp)
+```
+
+All five audited declarations rest on `[propext, Classical.choice, Quot.sound]`.
+
+- **New modules** (per §2.3's two-IR rule — nothing touches `ir.py`):
+  `flinspect/kir.py` — kernel-IR types + the two passes: *pointize* (strip one
+  `do concurrent` nest; arrays indexed exactly by the loop indices become
+  scalars; loop/bounds/grid params dropped) and *functionalize* (locals →
+  `let`, inout assignments → symbolic state, paths end by materializing the
+  output tuple). `flinspect/frontend/flang_kernel.py` — dump subtree → kernel
+  IR, structural (expressions come from the tree, never re-parsed from unparse
+  text). `flinspect/lean_printer.py` — kernel IR → Lean, preserving the
+  source's own grouping (`Paren` nodes) so the model mirrors what the code
+  says. Trusted-base rule enforced throughout: any construct outside the
+  subset raises `UnsupportedConstruct` — refusal, never a guess (offset
+  subscripts, statements after an IF join, non-intrinsic calls all refuse).
+- **Driver + regeneration:** `lean/pilot/generate.py` (deterministic; same
+  dump in, same Lean out). The extractor consumed the *production*
+  `MOM_continuity_PPM.o_ptree` unmodified and correctly dropped `G`, `GV`, and
+  the six index-range args during pointization.
+- **Tests** (`tests/test_kir_lean.py`, +7 → 111 total): fixture-based
+  end-to-end on the new D7 fixture `test_kernel_doconcurrent` (the supported
+  kernel subset in miniature), pass-level refusal tests, and a corpus-gated
+  golden test asserting `Pilot/Generated.lean` matches a fresh regeneration
+  byte-for-byte (catches a stale committed file *and* dump-format drift).
+- **Dump-format notes** for the kernel face (Q1 ledger): `IfConstruct` wraps
+  else-branches in `ElseIfBlock`/`ElseBlock` containers; leaf payloads come
+  both quoted (`Name = 'x'`) and unquoted (`Intent = In`); `12.0` appears in
+  unparse text as `1.2e1_8` but the structured `Real = '12.0'` is stable —
+  another reason the extractor reads the tree, not the unparse strings.
+
+**Scope honesty:** the supported subset is exactly the pilot kernel's shape —
+one mask-free `do concurrent` nest of assignments and structured ifs over
+`+ - * / **`, comparisons, and `abs`. Everything else refuses loudly. Next
+candidates, in order of new machinery required: the C++ side
+(`clang -ast-dump=json` → the same kernel IR — closes the loop mechanically),
+more point kernels (`ppm_limit_cw84_point` needs nothing new), then the hard
+tail (k-recurrences → induction; masks).
+
+---
+
 ## 2026-07-30 — Track B pilot SUCCEEDED: `PPM_limit_pos` equivalence machine-checked over ℝ
 
 **What:** completed the Track B pilot (DESIGN §4; VISION D6) — hand-written Lean 4
