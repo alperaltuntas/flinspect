@@ -1,4 +1,5 @@
 import Pilot.PpmLimitPos
+import Pilot.PpmLimitCw84
 import Pilot.Fidelity
 
 set_option linter.style.header false
@@ -17,3 +18,7 @@ no `sorryAx`. The output is checked by eye in the build log.
 #print axioms TrackB.Generated.ppm_limit_pos
 #print axioms generated_ppm_limit_pos_fidelity
 #print axioms generated_matches_cpp
+
+#print axioms TrackB.Generated.ppm_limit_cw84
+#print axioms TrackB.ppmLimitCw84_point_equiv
+#print axioms TrackB.ppmLimitCw84_kernel_equiv
