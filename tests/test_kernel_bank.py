@@ -1,9 +1,9 @@
 """Track B packaging tests: the kernel manifest (``kernels.toml``), the
-uniform KernelFrontend spec API, and the ``flinspect kernel`` CLI.
+uniform KernelFrontend spec API, and the ``groundline kernel`` CLI.
 
 Everything here runs everywhere (no corpus, no clang, no /glade paths): the
 Fortran fixtures are the committed ``tests/f90`` dumps, and CLI tests drive
-:func:`flinspect.cli.main` in-process against manifests built in ``tmp_path``.
+:func:`groundline.cli.main` in-process against manifests built in ``tmp_path``.
 The production golden tests stay in ``tests/test_kir_lean.py``; the quickstart
 example's golden tests are in this file's quickstart section (the C++ side
 gated on clang, like every clang-tier test).
@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from flinspect import kernel_bank as kb
-from flinspect.cli import main as cli_main
-from flinspect.frontend.flang_kernel import (
+from groundline import kernel_bank as kb
+from groundline.cli import main as cli_main
+from groundline.frontend.flang_kernel import (
     FlangKernelFrontend, extract_kernel, extract_loop_kernel,
 )
-from flinspect.frontend.kernel_base import CppKernelSpec, FortranKernelSpec
+from groundline.frontend.kernel_base import CppKernelSpec, FortranKernelSpec
 
 F90_DIR = Path(__file__).parent / "f90"
 REPO = Path(__file__).parent.parent
@@ -154,7 +154,7 @@ class TestManifestLoading:
 
 
 class TestManifestResolutionOrder:
-    """CLI flag > $FLINSPECT_KERNELS > ./kernels.toml — and nothing else."""
+    """CLI flag > $GROUNDLINE_KERNELS > ./kernels.toml — and nothing else."""
 
     def test_explicit_beats_env(self, monkeypatch):
         monkeypatch.setenv(kb.MANIFEST_ENV, "/env/kernels.toml")
@@ -201,7 +201,7 @@ class TestRenderAndCli:
         text = kb.render_fortran(kb.load_manifest(mini_manifest))
         assert EXPECTED_CLAMP_SCALE_DEF in text
         assert "namespace Mini.Generated" in text
-        assert "flinspect kernel generate" in text       # provenance names the CLI
+        assert "groundline kernel generate" in text       # provenance names the CLI
         assert f"manifest: `{mini_manifest.name}`" in text
 
     def test_cli_list(self, mini_manifest, capsys):
@@ -257,7 +257,7 @@ class TestRenderAndCli:
         widget stack (ipywidgets/ipycytoscape/jupyter)."""
         import subprocess
         import sys
-        code = ("import sys; import flinspect.cli; "
+        code = ("import sys; import groundline.cli; "
                 "bad = [m for m in sys.modules "
                 "if 'ipywidgets' in m or 'ipycytoscape' in m or 'jupyter' in m]; "
                 "sys.exit(1 if bad else 0)")
@@ -279,7 +279,7 @@ class TestQuickstart:
 
     def test_fortran_golden(self, manifest):
         assert kb.render_fortran(manifest) == manifest.fortran.out.read_text(), \
-            "quickstart Generated.lean is stale — rerun `flinspect kernel generate`"
+            "quickstart Generated.lean is stale — rerun `groundline kernel generate`"
 
     @needs_clang
     def test_cpp_golden(self, manifest):
@@ -289,4 +289,4 @@ class TestQuickstart:
             return text.split("-/\n", 1)[1]
         assert defs(kb.render_cpp(manifest)) == \
             defs(manifest.cpp.out.read_text()), \
-            "quickstart GeneratedCpp.lean is stale — rerun `flinspect kernel generate`"
+            "quickstart GeneratedCpp.lean is stale — rerun `groundline kernel generate`"

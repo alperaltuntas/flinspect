@@ -7,9 +7,9 @@ strings or frontend internals (principle #5).
 import pytest
 from pathlib import Path
 
-from flinspect.frontend import FlangDumpFrontend
-from flinspect.ir import RESOLVED, UNRESOLVED
-from flinspect.parse_forest import ParseForest
+from groundline.frontend import FlangDumpFrontend
+from groundline.ir import RESOLVED, UNRESOLVED
+from groundline.parse_forest import ParseForest
 
 
 F90_DIR = Path(__file__).parent / "f90"

@@ -1,5 +1,5 @@
 """The kernel-IR frontend seam (Track B): anything that can turn one addressed
-source kernel into a :class:`~flinspect.kir.Kernel`.
+source kernel into a :class:`~groundline.kir.Kernel`.
 
 The Track B mirror of the relational seam in ``base.py`` (DESIGN §2.2/§2.3):
 one deep method, ``extract(spec) -> Kernel``, hiding everything
@@ -9,9 +9,9 @@ languages is only the *address* of a kernel, so each side has its own typed
 spec; everything downstream (``kir``, ``functionalize``, the Lean printer) is
 shared and spec-free.
 
-Implementations: :class:`~flinspect.frontend.flang_kernel.FlangKernelFrontend`
+Implementations: :class:`~groundline.frontend.flang_kernel.FlangKernelFrontend`
 (consumes pre-generated with-sema dumps) and
-:class:`~flinspect.frontend.clang_kernel.ClangKernelFrontend` (invokes clang
+:class:`~groundline.frontend.clang_kernel.ClangKernelFrontend` (invokes clang
 itself; the invocation config travels in the spec, not in function kwargs).
 """
 
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Protocol, TypeVar, runtime_checkable
 
-from flinspect.kir import Kernel
+from groundline.kir import Kernel
 
 SpecT = TypeVar("SpecT", contravariant=True)
 
@@ -61,7 +61,7 @@ class CppKernelSpec:
 
 @runtime_checkable
 class KernelFrontend(Protocol[SpecT]):
-    """Extract one :class:`~flinspect.kir.Kernel` from its typed spec."""
+    """Extract one :class:`~groundline.kir.Kernel` from its typed spec."""
 
     def extract(self, spec: SpecT) -> Kernel:
         ...

@@ -1,6 +1,6 @@
 """Track B kernel bank: the kernel manifest (``kernels.toml``) and the
 generation pipeline — load the manifest, extract both sides of every banked
-pair through the :class:`~flinspect.frontend.kernel_base.KernelFrontend` seam,
+pair through the :class:`~groundline.frontend.kernel_base.KernelFrontend` seam,
 render both generated Lean modules.
 
 This module replaces the old ``lean/pilot/generate.py`` driver. Nothing here
@@ -41,7 +41,7 @@ expansion, and relative paths resolve against the manifest file's directory)::
                 function = "ppm_limit_pos_point" }
 
 Manifest resolution order (used by the CLI): explicit ``--kernels`` flag >
-``$FLINSPECT_KERNELS`` > ``./kernels.toml`` in the current directory. There is
+``$GROUNDLINE_KERNELS`` > ``./kernels.toml`` in the current directory. There is
 deliberately no built-in default beyond that.
 
 Trusted-base note: this module is packaging, not semantics — extraction and
@@ -58,13 +58,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from flinspect.frontend.clang_kernel import ClangKernelFrontend, clang_version
-from flinspect.frontend.flang_kernel import FlangKernelFrontend
-from flinspect.frontend.kernel_base import CppKernelSpec, FortranKernelSpec
-from flinspect.kir import Kernel, pointize
-from flinspect.lean_printer import print_module
+from groundline.frontend.clang_kernel import ClangKernelFrontend, clang_version
+from groundline.frontend.flang_kernel import FlangKernelFrontend
+from groundline.frontend.kernel_base import CppKernelSpec, FortranKernelSpec
+from groundline.kir import Kernel, pointize
+from groundline.lean_printer import print_module
 
-MANIFEST_ENV = "FLINSPECT_KERNELS"
+MANIFEST_ENV = "GROUNDLINE_KERNELS"
 MANIFEST_FILENAME = "kernels.toml"
 
 
@@ -165,7 +165,7 @@ def _path(value: str, base: Path, context: str) -> Path:
 
 
 def resolve_manifest_path(explicit: Optional[str] = None) -> Path:
-    """Resolution order: explicit (CLI flag) > $FLINSPECT_KERNELS >
+    """Resolution order: explicit (CLI flag) > $GROUNDLINE_KERNELS >
     ./kernels.toml. No other default exists."""
     if explicit:
         return Path(explicit)
@@ -352,14 +352,14 @@ def extract_all_cpp(m: Manifest) -> list[tuple[Kernel, str]]:
 
 
 def _regen_line(m: Manifest) -> str:
-    return (f"Regenerate with `flinspect kernel generate` "
+    return (f"Regenerate with `groundline kernel generate` "
             f"(manifest: `{m.path.name}`).")
 
 
 def fortran_blurb(m: Manifest) -> str:
-    text = ("Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from "
+    text = ("Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from "
             "flang with-sema\nparse-tree dumps "
-            "(`flinspect.frontend.flang_kernel`).\n" + _regen_line(m))
+            "(`groundline.frontend.flang_kernel`).\n" + _regen_line(m))
     if m.fortran.blurb:
         text += "\n" + m.fortran.blurb
     return text
@@ -368,8 +368,8 @@ def fortran_blurb(m: Manifest) -> str:
 def cpp_blurb(m: Manifest) -> str:
     """The C++ module header, with the pinned clang invocation stamped as
     provenance (requires the manifest's clang on PATH)."""
-    text = ("Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from "
-            "clang JSON ASTs\n(`flinspect.frontend.clang_kernel`).\n"
+    text = ("Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from "
+            "clang JSON ASTs\n(`groundline.frontend.clang_kernel`).\n"
             + _regen_line(m))
     if m.cpp.blurb:
         text += "\n" + m.cpp.blurb

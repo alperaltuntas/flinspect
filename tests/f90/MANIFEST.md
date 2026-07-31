@@ -2,7 +2,7 @@
 
 Maps each Fortran construct the frontend parses to the fixture that pins it and
 the parser code path that consumes it (all paths in
-`flinspect/frontend/flang_dump.py` unless noted). The corpus is the
+`groundline/frontend/flang_dump.py` unless noted). The corpus is the
 format-stability defense of VISION D7: on an LLVM upgrade, regenerate with
 `./gen_ptree_files.sh` (version stamped into `PROVENANCE`) and the failures
 localize which constructs' dump format moved.

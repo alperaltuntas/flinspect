@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from flinspect.frontend._nodes import Module, Program, Subprogram, Subroutine, Function, Interface, DerivedType
+from groundline.frontend._nodes import Module, Program, Subprogram, Subroutine, Function, Interface, DerivedType
 
 @dataclass
 class NodeRegistry:

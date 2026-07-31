@@ -5,7 +5,7 @@ Two tiers, mirroring ``tests/test_kir_lean.py``:
 - Fixture-based tests compile the ``tests/cpp/`` conformance fixtures with
   clang at test time (the fixtures are self-contained — no includes), so they
   are gated on ``clang++`` being on ``PATH``, the C++ analogue of
-  the ``FLINSPECT_CORPUS`` gate. Raw JSON dumps are never golden-compared
+  the ``GROUNDLINE_CORPUS`` gate. Raw JSON dumps are never golden-compared
   (node ids are memory addresses); assertions are on the extracted kernel IR
   and the printed Lean.
 - Node-level allowlist tests run everywhere: they feed hand-built JSON dicts
@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from flinspect.kir import DoConcurrent, If, UnsupportedConstruct
-from flinspect.frontend.clang_kernel import extract_expr, extract_kernel
-from flinspect.lean_printer import print_kernel
+from groundline.kir import DoConcurrent, If, UnsupportedConstruct
+from groundline.frontend.clang_kernel import extract_expr, extract_kernel
+from groundline.lean_printer import print_kernel
 
 CPP_DIR = Path(__file__).parent.parent / "cpp"
 CLANG = shutil.which("clang++")
@@ -157,7 +157,7 @@ class TestExprAllowlists:
     def test_lvalue_to_rvalue_unwraps(self):
         node = {"kind": "ImplicitCastExpr", "castKind": "LValueToRValue",
                 "inner": [_declref("x")]}
-        from flinspect.kir import Var
+        from groundline.kir import Var
         assert extract_expr(node) == Var("x")
 
     def test_non_abs_callee_refused(self):

@@ -4,7 +4,7 @@ This directory is a self-contained instance of the Track B kernel-verification
 pipeline: a tiny Fortran `do concurrent` point kernel and its C++ point-function
 twin, banked in a `kernels.toml` manifest and rendered into two generated Lean
 modules. It exists to prove (and demo) portability: everything below works in a
-bare clone of flinspect, anywhere — no MOM6 corpus, no AMReX, no /glade paths.
+bare clone of groundline, anywhere — no MOM6 corpus, no AMReX, no /glade paths.
 
 ## What's here
 
@@ -14,17 +14,17 @@ bare clone of flinspect, anywhere — no MOM6 corpus, no AMReX, no /glade paths.
 | `toy_kernel_ptree` | Its **committed** with-sema flang dump (see `PROVENANCE`), so the Fortran side needs no flang install |
 | `toy_kernel.hpp` | The C++ twin (`scale_clip_acc_point`) — standalone: its own `using Real = double;`, no AMReX/MPI includes |
 | `kernels.toml` | The manifest pairing them and pinning outputs/namespaces |
-| `Generated.lean`, `GeneratedCpp.lean` | The committed generated models (what `flinspect kernel generate` writes) |
+| `Generated.lean`, `GeneratedCpp.lean` | The committed generated models (what `groundline kernel generate` writes) |
 
 ## Walkthrough
 
-Install flinspect (`pip install -e .` from the repo root), `cd` into this
+Install groundline (`pip install -e .` from the repo root), `cd` into this
 directory — the CLI picks up `./kernels.toml` automatically (or pass
 `--kernels examples/quickstart/kernels.toml` from anywhere; a
-`FLINSPECT_KERNELS` env var works too).
+`GROUNDLINE_KERNELS` env var works too).
 
 ```console
-$ flinspect kernel list
+$ groundline kernel list
 manifest: .../examples/quickstart/kernels.toml  (1 kernel(s))
 scale_clip_acc
     fortran: subroutine 'scale_clip_acc' in toy_kernel_ptree  [ok]
@@ -36,7 +36,7 @@ Print one kernel's generated Lean defs — both sides, straight from the sources
 (the C++ side is skipped with a note if `clang++` is not on `PATH`):
 
 ```console
-$ flinspect kernel show scale_clip_acc
+$ groundline kernel show scale_clip_acc
 def scale_clip_acc (a b s lo : ℝ) : ℝ :=
   let w := s * a
   if w < lo then
@@ -57,8 +57,8 @@ remaining gap is closed by a machine-checked Lean proof.
 Regenerate the committed modules, and check them:
 
 ```console
-$ flinspect kernel generate     # rewrites Generated.lean / GeneratedCpp.lean
-$ flinspect kernel verify       # byte-diffs a fresh regeneration against them
+$ groundline kernel generate     # rewrites Generated.lean / GeneratedCpp.lean
+$ groundline kernel verify       # byte-diffs a fresh regeneration against them
 ok [fortran]: Generated.lean matches a fresh regeneration
 ok [cpp]: GeneratedCpp.lean matches a fresh regeneration
 ```

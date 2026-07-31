@@ -1,7 +1,7 @@
 """ParseForest — a flang-agnostic consumer that builds graphs from the IR.
 
 ParseForest no longer parses anything itself: it asks a frontend for an
-:class:`~flinspect.ir.IR` and builds NetworkX graphs purely from the IR's
+:class:`~groundline.ir.IR` and builds NetworkX graphs purely from the IR's
 relations. Nothing here imports flang-specific machinery (principle #4 — graph
 vocabulary lives above the seam).
 """
@@ -9,8 +9,8 @@ vocabulary lives above the seam).
 import networkx as nx
 from pathlib import Path
 
-from flinspect.ir import IR, MODULE
-from flinspect.frontend import FlangDumpFrontend
+from groundline.ir import IR, MODULE
+from groundline.frontend import FlangDumpFrontend
 
 
 class ParseForest:
@@ -103,7 +103,7 @@ class ParseForest:
     def get_call_graph(self, *, must_only=False):
         """Directed call graph over subroutines and functions.
 
-        Nodes are IR :class:`~flinspect.ir.Entity` objects; edges are the ``calls``
+        Nodes are IR :class:`~groundline.ir.Entity` objects; edges are the ``calls``
         relation (a caller may also point at a generic interface, which is added as
         a node via the edge, matching the legacy behaviour).
 

@@ -1,4 +1,4 @@
-"""IR-level tests for flinspect.
+"""IR-level tests for groundline.
 
 These exercise the *seam*: a frontend extracts an IR from a parse-tree fixture and
 we assert on the IR (entities, signatures, relations) — never on flang strings or
@@ -9,8 +9,8 @@ separately under ``tests/frontend/``.
 import pytest
 from pathlib import Path
 
-from flinspect.frontend import FlangDumpFrontend
-from flinspect.ir import INTERFACE
+from groundline.frontend import FlangDumpFrontend
+from groundline.ir import INTERFACE
 
 
 F90_DIR = Path(__file__).parent / "f90"
@@ -256,7 +256,7 @@ class TestTypeExtends:
 
     @pytest.fixture(autouse=True)
     def setup(self):
-        from flinspect.parse_forest import ParseForest
+        from groundline.parse_forest import ParseForest
         self.forest = ParseForest(["tests/f90/test_type_extends_ptree"])
         self.ir = self.forest.ir
 

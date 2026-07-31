@@ -1,7 +1,7 @@
 ! Test AssumedShapeSpec with explicit lower bounds.
 ! Fortran allows: real, dimension(lo:, lo:) which creates an assumed-shape array
 ! with explicit lower bounds. flang represents this as AssumedShapeSpec with a
-! SpecificationExpr. flinspect must count these correctly to determine rank.
+! SpecificationExpr. groundline must count these correctly to determine rank.
 
 module assumed_shape_mod
   implicit none

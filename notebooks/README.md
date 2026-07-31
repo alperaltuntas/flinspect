@@ -1,8 +1,8 @@
-# flinspect notebooks
+# groundline notebooks
 
-An explanatory tour of flinspect, in reading order. Every notebook consumes the
-package **through the seam only** — `flinspect.{ir, parse_forest, graph_view,
-explorer}` — never `flinspect.frontend.*` (see `docs/DESIGN.md`, principles
+An explanatory tour of groundline, in reading order. Every notebook consumes the
+package **through the seam only** — `groundline.{ir, parse_forest, graph_view,
+explorer}` — never `groundline.frontend.*` (see `docs/DESIGN.md`, principles
 #4/#5). Each has a single parameter cell right after its introduction; paths are
 `pathlib` throughout.
 
@@ -19,7 +19,7 @@ The repo venv must be self-sufficient and the (possibly broken) `~/.local`
 user site must stay out of the way, so always launch with `PYTHONNOUSERSITE=1`:
 
 ```bash
-cd dev-utils/flinspect
+cd dev-utils/groundline
 PYTHONNOUSERSITE=1 .venv/bin/jupyter lab notebooks/
 ```
 
@@ -32,7 +32,7 @@ PYTHONNOUSERSITE=1 .venv/bin/pip install -e '.[dev]'
 
 Why the env var: on machines where `~/.local` holds a broken package (e.g. a
 pandas without its numpy), the user site *shadows* the venv and
-`import flinspect.explorer` fails on an unrelated pandas error. Conversely, a
+`import groundline.explorer` fails on an unrelated pandas error. Conversely, a
 venv populated *without* `PYTHONNOUSERSITE=1` can silently satisfy transitive
 dependencies from the user site and then break when it's excluded — which is
 why the install command above carries the env var too.
@@ -45,13 +45,13 @@ JavaScript is visible to it by default. A widget is two halves — Python in the
 kernel, JS in the Lab frontend — and both must be wired up, once per machine:
 
 ```bash
-cd dev-utils/flinspect
+cd dev-utils/groundline
 
 # 1. Kernel half: register the venv as a named kernel ...
 PYTHONNOUSERSITE=1 .venv/bin/python -m ipykernel install --user \
-    --name flinspect --display-name "Python (flinspect)"
+    --name groundline --display-name "Python (groundline)"
 # ... and bake PYTHONNOUSERSITE=1 into it (Hub-launched kernels won't inherit
-# your shell env), by adding to ~/.local/share/jupyter/kernels/flinspect/kernel.json:
+# your shell env), by adding to ~/.local/share/jupyter/kernels/groundline/kernel.json:
 #     "env": {"PYTHONNOUSERSITE": "1"}
 
 # 2. Frontend half: expose the cytoscape labextension to the Hub's JupyterLab.
@@ -62,9 +62,9 @@ cp -r .venv/share/jupyter/labextensions/jupyter-cytoscape \
 
 Then **restart your Jupyter server** (Hub Control Panel → Stop My Server →
 relaunch — labextensions are scanned at server start), hard-refresh the browser,
-and open notebooks with the **"Python (flinspect)"** kernel.
+and open notebooks with the **"Python (groundline)"** kernel.
 
-Symptoms if a half is missing: `ModuleNotFoundError: flinspect` or a numpy/
+Symptoms if a half is missing: `ModuleNotFoundError: groundline` or a numpy/
 pandas ImportError → wrong kernel or missing `env` entry (half 1); dropdowns
 render but the graph canvas shows *"Failed to load model class 'CytoscapeModel'
 from module 'jupyter-cytoscape'"* → missing labextension (half 2).
@@ -73,7 +73,7 @@ from module 'jupyter-cytoscape'"* → missing labextension (half 2).
 
 Notebooks 02–04 read a corpus of with-sema parse-tree dumps
 (`flang -fc1 -fdebug-dump-parse-tree`, files named `*_ptree`). The corpus root
-comes from the `FLINSPECT_CORPUS` environment variable, defaulting to the one on
+comes from the `GROUNDLINE_CORPUS` environment variable, defaulting to the one on
 NCAR's glade filesystem:
 
 ```
@@ -82,7 +82,7 @@ NCAR's glade filesystem:
 
 **There is no TIM corpus yet** — `MOM6_using_TIM/` is an empty skeleton because
 the dump-only toolchain cannot build AMReX (`docs/DEVLOG.md`, 2026-05-28). When
-one exists, point `FLINSPECT_CORPUS` at it; nothing in the notebooks is
+one exists, point `GROUNDLINE_CORPUS` at it; nothing in the notebooks is
 FMS2-specific.
 
 Without glade access, generate dumps for any Fortran tree you can compile (see
@@ -110,4 +110,4 @@ which needs no corpus at all.
 - One parameter cell per notebook, immediately after the intro; edit it (or set
   the environment variables it reads) rather than hunting for paths in the body.
 - Seam discipline: if a notebook needs a fact the IR lacks, that is a finding to
-  record (`docs/DEVLOG.md`), not a reason to import `flinspect.frontend.*`.
+  record (`docs/DEVLOG.md`), not a reason to import `groundline.frontend.*`.

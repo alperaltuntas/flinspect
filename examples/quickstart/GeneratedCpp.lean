@@ -13,9 +13,9 @@ set_option linter.unusedVariables false
 /-!
 # GENERATED FILE — do not edit
 
-Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from clang JSON ASTs
-(`flinspect.frontend.clang_kernel`).
-Regenerate with `flinspect kernel generate` (manifest: `kernels.toml`).
+Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from clang JSON ASTs
+(`groundline.frontend.clang_kernel`).
+Regenerate with `groundline kernel generate` (manifest: `kernels.toml`).
 
 Extraction provenance (pinned):
   clang version 21.0.0git (https://github.com/llvm/llvm-project.git bb982e733cfcda7e4cfb0583544f68af65211ed1)

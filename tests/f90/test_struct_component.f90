@@ -1,6 +1,6 @@
 ! Test StructureComponent type inference.
 ! When a call argument is a derived-type component access like CS%field,
-! flinspect should return unknown type (since component types are not resolved).
+! groundline should return unknown type (since component types are not resolved).
 ! This means the interface should fall back or match conservatively.
 
 module struct_comp_mod
@@ -43,11 +43,11 @@ contains
   subroutine test_struct_calls(CS)
     type(control_struct), intent(inout) :: CS
 
-    ! CS%data%scalar_val is a StructureComponent - type unknown to flinspect
+    ! CS%data%scalar_val is a StructureComponent - type unknown to groundline
     ! Should fall back to all procedures
     call update(CS%data%scalar_val, 1)
 
-    ! CS%mode is a StructureComponent - type unknown to flinspect
+    ! CS%mode is a StructureComponent - type unknown to groundline
     call update(CS%mode, 2)
 
   end subroutine

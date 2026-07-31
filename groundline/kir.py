@@ -2,8 +2,8 @@
 shape them for the Lean printer.
 
 This is the *second* IR of DESIGN §2.3: deep (typed expression/statement trees)
-exactly where the relational IR (`flinspect/ir.py`) is deliberately shallow, and
-consumed only by the Lean printer (`flinspect/lean_printer.py`). Nothing here may
+exactly where the relational IR (`groundline/ir.py`) is deliberately shallow, and
+consumed only by the Lean printer (`groundline/lean_printer.py`). Nothing here may
 leak into the relational IR, and nothing here is flang-specific — a frontend
 (`frontend/flang_kernel.py` today) populates it.
 

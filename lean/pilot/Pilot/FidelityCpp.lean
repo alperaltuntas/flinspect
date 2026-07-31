@@ -8,8 +8,8 @@ set_option linter.style.header false
 # Fidelity, C++ side: generated model ≡ hand-written model
 
 `Pilot/GeneratedCpp.lean` is emitted by the deterministic printer
-(`flinspect.lean_printer`) from clang JSON ASTs of the *production* TIM kernel
-header (`flinspect.frontend.clang_kernel`); `ppmLimitPosC` / `ppmLimitCw84C`
+(`groundline.lean_printer`) from clang JSON ASTs of the *production* TIM kernel
+header (`groundline.frontend.clang_kernel`); `ppmLimitPosC` / `ppmLimitCw84C`
 were written by hand from the C++ source during the pilot. These theorems
 check — in Lean, not by eye — that the printer's output is the same function,
 which turns the hand-written C++ models from load-bearing links into verified

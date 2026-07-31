@@ -13,9 +13,9 @@ set_option linter.unusedVariables false
 /-!
 # GENERATED FILE — do not edit
 
-Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from flang with-sema
-parse-tree dumps (`flinspect.frontend.flang_kernel`).
-Regenerate with `flinspect kernel generate` (manifest: `kernels.toml`).
+Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from flang with-sema
+parse-tree dumps (`groundline.frontend.flang_kernel`).
+Regenerate with `groundline kernel generate` (manifest: `kernels.toml`).
 -/
 
 namespace Quickstart.Generated

@@ -1,10 +1,10 @@
 [project]
-name = "flinspect"
+name = "groundline"
 version = "0.0.1"
 authors = [
   { name = "Alper Altuntas, NCAR", email = "altuntas@ucar.edu" }
 ]
-description = "A flang-based inspection tool for large Fortran HPC codebases"
+description = "Structural inspection and machine-checked kernel-equivalence tooling for Fortran HPC codebases, built on compiler syntax trees (flang/clang)"
 readme = "README.md"
 license = { file = "LICENSE.md" }
 classifiers = [
@@ -31,16 +31,19 @@ dependencies = [
 dev = [
   "pytest>=7.0",
 ]
+docs = [
+  "mkdocs-material>=9,<10",
+]
 
 [project.scripts]
-flinspect = "flinspect.cli:main"
+groundline = "groundline.cli:main"
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["flinspect*"]
+include = ["groundline*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

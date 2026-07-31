@@ -1,6 +1,6 @@
 """Tests for the pure graph-view builder (the testable half of the Explorer).
 
-These are widget-free by construction: :mod:`flinspect.graph_view` imports no
+These are widget-free by construction: :mod:`groundline.graph_view` imports no
 ipywidgets/ipycytoscape, so no kernel or browser is involved and the visual
 encoding (confidence strata, ghosted undefined targets, scope-qualified node
 identity) is asserted on plain dicts.
@@ -16,9 +16,9 @@ shadows the venv:
 import pytest
 from pathlib import Path
 
-from flinspect.frontend import FlangDumpFrontend
-from flinspect.ir import IR, Entity, MODULE, SUBROUTINE
-from flinspect.graph_view import (
+from groundline.frontend import FlangDumpFrontend
+from groundline.ir import IR, Entity, MODULE, SUBROUTINE
+from groundline.graph_view import (
     ASSUMED, CALL, INTERFACE_MEMBER, RESOLVED, UNKNOWN_MODULE, UNRESOLVED,
     enclosing_module_name, gen_subgraph, subgraph_elements,
 )
@@ -236,8 +236,8 @@ class TestExplorerWidgetLayer:
         # needed because the breakage is a transitive ImportError, not a missing
         # ipycytoscape.
         pytest.importorskip("ipycytoscape", exc_type=ImportError)
-        from flinspect.explorer import Explorer  # imports ipycytoscape
-        from flinspect.parse_forest import ParseForest
+        from groundline.explorer import Explorer  # imports ipycytoscape
+        from groundline.parse_forest import ParseForest
 
         ir = extract("test_name_collision_ptree")
         explorer = Explorer(ParseForest(ir=ir))

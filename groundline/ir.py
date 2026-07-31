@@ -1,4 +1,4 @@
-"""flinspect IR — the seam between frontends and consumers.
+"""groundline IR — the seam between frontends and consumers.
 
 The IR is a small collection of **named, typed relations over interned atoms**
 (see ``docs/DESIGN.md`` §2.1). Entity *kinds* are sets of atoms; structural facts

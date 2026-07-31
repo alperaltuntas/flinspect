@@ -7,7 +7,7 @@ set_option linter.style.header false
 # Fidelity: generated model ≡ hand-written model
 
 `Pilot/Generated.lean` is emitted by the deterministic printer
-(`flinspect.lean_printer`) from the *production* MOM6 with-sema dump;
+(`groundline.lean_printer`) from the *production* MOM6 with-sema dump;
 `Pilot/PpmLimitPos.lean` was written by hand from the Fortran source during the
 Track B pilot. This theorem checks — in Lean, not by eye — that the printer's
 output is the same function. `rfl` succeeding means the two definitions are

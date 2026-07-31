@@ -1,4 +1,4 @@
-"""The ``flinspect`` console script (argparse only; no click/typer).
+"""The ``groundline`` console script (argparse only; no click/typer).
 
 Command groups are registered side by side in :func:`main` — today only the
 Track B ``kernel`` group exists; the relational track's ``check`` / ``report``
@@ -7,15 +7,15 @@ commands (DESIGN §4 Phase 4) plug in as sibling ``_add_*_group`` calls.
 Import discipline: this module (and everything it pulls in) must stay
 widget-free — no ipywidgets/jupyter imports — so the CLI works in a bare venv.
 
-``flinspect kernel`` — the Track B kernel-verification pipeline, driven by a
-declarative manifest (``kernels.toml``; see ``flinspect/kernel_bank.py`` for
-the schema). Manifest resolution: ``--kernels PATH`` > ``$FLINSPECT_KERNELS``
+``groundline kernel`` — the Track B kernel-verification pipeline, driven by a
+declarative manifest (``kernels.toml``; see ``groundline/kernel_bank.py`` for
+the schema). Manifest resolution: ``--kernels PATH`` > ``$GROUNDLINE_KERNELS``
 > ``./kernels.toml``.
 
-    flinspect kernel list        # kernels in the manifest + basic status
-    flinspect kernel show NAME   # print one kernel's generated Lean defs
-    flinspect kernel generate    # (re)write the generated Lean modules
-    flinspect kernel verify      # regenerate + byte-diff against the committed
+    groundline kernel list        # kernels in the manifest + basic status
+    groundline kernel show NAME   # print one kernel's generated Lean defs
+    groundline kernel generate    # (re)write the generated Lean modules
+    groundline kernel verify      # regenerate + byte-diff against the committed
                                  # files, then `lake build` if lake is on PATH
                                  # (Track B's CI gate; non-zero exit on drift
                                  # or build failure)
@@ -33,9 +33,9 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from flinspect import kernel_bank as kb
-from flinspect.kir import UnsupportedConstruct
-from flinspect.lean_printer import print_kernel
+from groundline import kernel_bank as kb
+from groundline.kir import UnsupportedConstruct
+from groundline.lean_printer import print_kernel
 
 _DIFF_CONTEXT_LINES = 40
 
@@ -124,7 +124,7 @@ def _verify_side(side: str, fresh: str, committed_path: Path) -> bool:
     """Byte-diff one regenerated module against its committed file."""
     if not committed_path.is_file():
         print(f"DRIFT [{side}]: {committed_path} does not exist — "
-              f"run `flinspect kernel generate`")
+              f"run `groundline kernel generate`")
         return False
     committed = committed_path.read_text()
     if fresh == committed:
@@ -217,9 +217,10 @@ def _add_kernel_group(sub: argparse._SubParsersAction) -> None:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="flinspect",
-        description="flang-based inspection tooling for large Fortran HPC "
-                    "codebases")
+        prog="groundline",
+        description="structural inspection and machine-checked kernel "
+                    "equivalence for Fortran HPC codebases, built on "
+                    "compiler syntax trees (flang/clang)")
     sub = parser.add_subparsers(dest="command", required=True,
                                 metavar="COMMAND")
     _add_kernel_group(sub)

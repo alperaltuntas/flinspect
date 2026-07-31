@@ -7,7 +7,7 @@
 !   init_simple(x, n)                real    first arg; 2 required args
 !   init_advanced(k, n, tol, debug)  integer first arg; 2 required + 2 optional
 !
-! flinspect's (pre-Phase-2) heuristic resolver treats real and integer as
+! groundline's (pre-Phase-2) heuristic resolver treats real and integer as
 ! mutually compatible, so a 2-argument call still fans out to both specifics;
 ! the 3-/4-argument and keyword calls exercise argument-count matching and
 ! keyword matching against the optional dummies.

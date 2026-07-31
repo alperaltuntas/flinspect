@@ -10,12 +10,12 @@ behaviour (the stratified call relation) is tested in ``tests/test_ir.py``.
 import pytest
 from pathlib import Path
 
-from flinspect.frontend.flang_dump import ParseTree
-from flinspect.frontend._flang_text import (
+from groundline.frontend.flang_dump import ParseTree
+from groundline.frontend._flang_text import (
     node_path, unparse_text, demangle, call_candidates,
 )
-from flinspect.frontend._nodes import Subroutine
-from flinspect.frontend._registry import NodeRegistry
+from groundline.frontend._nodes import Subroutine
+from groundline.frontend._registry import NodeRegistry
 
 
 F90_DIR = Path(__file__).parent.parent / "f90"

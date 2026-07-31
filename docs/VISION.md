@@ -1,7 +1,7 @@
-# flinspect — Vision
+# groundline — Vision
 
 > **Status:** living document, rewritten in place as decisions change. This is the
-> *why*: where flinspect is going and the strategic decisions behind it.
+> *why*: where groundline is going and the strategic decisions behind it.
 >
 > Companion documents in this directory:
 > - **`DESIGN.md`** — the *how*: target architecture, the IR seam, the weakness→fix
@@ -16,7 +16,7 @@
 
 ## 1. Purpose
 
-flinspect has two faces today:
+groundline has two faces today:
 
 - **What it is:** a prototype that scrapes flang's textual parse-tree dump to build
   a structural/call graph of Fortran code, viewable in Jupyter.
@@ -33,7 +33,7 @@ up work, so it errs toward making implicit reasoning explicit.
 
 ---
 
-## 2. What flinspect is today
+## 2. What groundline is today
 
 Pipeline, as of Phase 3 (the seam from D2 is in place; call facts carry
 confidence per D3, and the Explorer shows it):
@@ -47,7 +47,7 @@ flang -fdebug-dump-parse-tree (with sema)  →  text dump
    │                                              _state, _flang_text]         │
    │    projected onto the IR at the boundary                                  │
    └──────────────────────────────────────────────────────────────────────────┘
-   →  flinspect IR: entities + relation tuple-sets           [flinspect/ir.py]
+   →  groundline IR: entities + relation tuple-sets           [groundline/ir.py]
    →  ParseForest builds NetworkX module/call graphs   [parse_forest.py]
         call-graph edges carry their confidence stratum as an edge attribute
    →  subgraph -> renderable elements, confidence-annotated  [graph_view.py]
@@ -58,7 +58,7 @@ Key facts about the current implementation:
 
 - **The seam is real and load-bearing.** Consumers (`ir.py`'s clients,
   `parse_forest.py`, `explorer.py`) never import anything flang-specific;
-  everything about the dump format lives in `flinspect/frontend/`, behind
+  everything about the dump format lives in `groundline/frontend/`, behind
   `extract(sources) -> IR`. `frontend/lfortran_asr.py` is a deliberate stub
   (`NotImplementedError`) that keeps the IR honest.
 - **Tests and production parse the same dump variant** — both use with-sema
@@ -91,7 +91,7 @@ Key facts about the current implementation:
 
 ## 3. The vision (destination)
 
-Turn flinspect from a structural explorer into a **relational reasoning substrate
+Turn groundline from a structural explorer into a **relational reasoning substrate
 over sound, compiler-derived facts** about Fortran programs.
 
 - **Universe:** Modules, Subroutines, Functions, Interfaces, Derived Types, plus
@@ -154,7 +154,7 @@ does **not** guarantee the `-fdebug-dump-*` *text format* is stable — these ar
 debugging aids with no stability contract. Therefore:
 
 > **All flang-specific parsing lives behind a seam. Everything downstream depends
-> on a flinspect-owned intermediate representation (IR), never on flang's format.**
+> on a groundline-owned intermediate representation (IR), never on flang's format.**
 
 This is what makes a later backend swap (e.g., LFortran, or flang's real
 programmatic API) a *localized* change instead of a rewrite. See the architecture
@@ -312,17 +312,17 @@ Lean model).
 
 ## 5. Prior art — comparable tools, and where the gap is
 
-flinspect's vision is an *intersection* of three established ideas: (a) treat code
+groundline's vision is an *intersection* of three established ideas: (a) treat code
 as a queryable database of entities + relations, (b) check architectural invariants
 declaratively and enforce them in CI, and (c) do source-level GPU porting of Fortran
 HPC code. Each of those exists in mature tools — but, as far as we know, **no single
-tool sits in their intersection for Fortran**, which is the niche flinspect claims.
+tool sits in their intersection for Fortran**, which is the niche groundline claims.
 
 ### Code-as-relational-facts + queries (the query/CI half)
 
 - **CodeQL** (GitHub/Semmle) — the closest spiritual match. Compiles code into a
   relational database and exposes **QL**, an object-oriented, Datalog-descended query
-  language; queries run in CI and gate merges. This is almost exactly flinspect's
+  language; queries run in CI and gate merges. This is almost exactly groundline's
   "query + CI gate" face — except CodeQL **has no Fortran frontend** (C/C++, Java,
   C#, Python, JS, Go, Ruby, Swift). The architectural template is proven; the
   language coverage is the gap.
@@ -350,27 +350,27 @@ tool sits in their intersection for Fortran**, which is the niche flinspect clai
 
 - **SciTools Understand** — commercial; builds a queryable database of entities and
   relations across many languages **including Fortran**, with a Python API and
-  dependency graphs. This is the closest tool to flinspect's *today-state* (queryable
+  dependency graphs. This is the closest tool to groundline's *today-state* (queryable
   entities + relations for Fortran) — but it stops at exploration/metrics; there is no
   invariant-checking/verification layer and no GPU-porting model.
 - **PSyclone** (STFC) — source-to-source transformation for Fortran HPC, generating
   OpenACC/OpenMP **GPU offload** code; built on **fparser2**. It directly addresses
   our headline *goal* (GPU-porting Fortran), but by *transforming* code under a DSL/
   PSyKAl separation, not by *proving* a porting frontier safe over arbitrary existing
-  code. Complementary, not overlapping: PSyclone could be the actor flinspect's
+  code. Complementary, not overlapping: PSyclone could be the actor groundline's
   analysis informs.
 - **CamFort** (Cambridge/Imperial) — research tool for Fortran analysis and
   **verification** (units-of-measure, array-stencil specifications). The closest match
-  to flinspect's *verification spirit* for Fortran, but targets numerical/stencil
+  to groundline's *verification spirit* for Fortran, but targets numerical/stencil
   properties, not architectural/call-graph invariants for GPU readiness.
 - **LFortran** (ASR), **fparser2**, **fortls** — frontends/infrastructure, not
   reasoning tools; relevant as potential *backends* (see D5), not competitors.
 
 ### Formal modeling (the inspiration)
 
-- **Alloy** — the relational-modeling lineage flinspect's query syntax borrows from.
+- **Alloy** — the relational-modeling lineage groundline's query syntax borrows from.
   As established in `DESIGN.md` (Q4), Alloy does bounded *model-finding* over small
-  universes; flinspect does *query evaluation* over one large fixed graph — same
+  universes; groundline does *query evaluation* over one large fixed graph — same
   relational vocabulary, opposite computational shape.
 - **Logos Research — "migration by proof"** — the template for D6 (the bottom-up
   track). An agent rewrites code in the target language; a *deterministic*
@@ -383,14 +383,14 @@ tool sits in their intersection for Fortran**, which is the niche flinspect clai
   structural layer (Track A) that Logos has no analogue of, which scopes *which*
   kernels are provable in isolation.
 
-### The gap flinspect targets
+### The gap groundline targets
 
 Put together: CodeQL nails relational-query-plus-CI but not Fortran; Understand has
 Fortran entities + relations but no reasoning/verification; PSyclone ports Fortran to
 GPU but by transformation, not by provable-safety gating of existing code; CamFort
 verifies Fortran but different properties. **The unoccupied intersection — sound,
 confidence-aware relational reasoning over real Fortran HPC code, in service of
-provably-monotonic GPU porting enforced in CI — is flinspect's niche.** The honest
+provably-monotonic GPU porting enforced in CI — is groundline's niche.** The honest
 risk is that this niche is narrow and the nearest neighbors (especially CodeQL gaining
 Fortran, or Understand gaining a query/verification layer) could encroach; the
 differentiators we must keep sharp are the **confidence model (D3)** and the

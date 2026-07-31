@@ -24,11 +24,11 @@ PYTHONNOUSERSITE=1 python -m pytest tests/frontend/test_clang_kernel.py
 ```
 
 The *production* extraction (the real TIM header, which includes AMReX) is
-driven by `flinspect kernel generate` against the kernel manifest
+driven by `groundline kernel generate` against the kernel manifest
 `examples/turbo-stack.kernels.toml`, where the include paths are pinned; its
 golden test sits in `tests/test_kir_lean.py` next to its Fortran sibling.
 
-| Construct | Fixture / function | Extractor code path (`flinspect/frontend/clang_kernel.py`) |
+| Construct | Fixture / function | Extractor code path (`groundline/frontend/clang_kernel.py`) |
 |---|---|---|
 | Composite point kernel: `Real&`/`Real const` intent mapping, local decl-with-init, if / else if / else, `_rt` literals, `+ - * /`, comparisons, `abs` call, skipped decl attribute | `test_kernel_point.cpp` / `clamp_scale_point` | `extract_kernel_from_decl`, `_extract_param`, `_extract_vardecl`, `_extract_if`, `_extract_call`, `_extract_udl` |
 | Sequential guarded pair (the `ppm_limit_cw84_point` shape): two braceless guarded assignments, the second reading the first's target — merged-state threading | `test_kernel_guard_join.cpp` / `guard_pair_point` | `_extract_if` (braceless branch), `_extract_stmts` (`=` branch); join merge in `kir.functionalize` (reused unchanged) |

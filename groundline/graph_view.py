@@ -23,7 +23,7 @@ from collections import defaultdict
 
 import networkx as nx
 
-from flinspect.ir import (
+from groundline.ir import (
     IR, Entity, MODULE, SUBROUTINE, FUNCTION, INTERFACE,
     RESOLVED, ASSUMED, UNRESOLVED,  # stratum labels (D3); re-exported for callers
 )

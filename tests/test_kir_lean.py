@@ -4,7 +4,7 @@ Two tiers, per D7: fixture-based tests run everywhere (the
 ``test_kernel_doconcurrent`` / ``test_kernel_ifstmt_join`` /
 ``test_kernel_negate`` conformance fixtures); the production golden test —
 regenerating ``lean/pilot/Pilot/Generated.lean`` byte-for-byte from the MOM6
-corpus — is gated on ``FLINSPECT_CORPUS``. Semantic fidelity of the generated
+corpus — is gated on ``GROUNDLINE_CORPUS``. Semantic fidelity of the generated
 Lean is checked *in Lean* (``lean/pilot/Pilot/Fidelity.lean``), not here.
 """
 
@@ -14,13 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from flinspect.kir import (
+from groundline.kir import (
     Assign, BinOp, ComponentRef, Do, DoConcurrent, If, IntLit, Kernel, Param,
     RealLit, Tuple_, UnsupportedConstruct, Var, ArrayRef, functionalize,
     pointize,
 )
-from flinspect.frontend.flang_kernel import extract_kernel, extract_loop_kernel
-from flinspect.lean_printer import print_kernel
+from groundline.frontend.flang_kernel import extract_kernel, extract_loop_kernel
+from groundline.lean_printer import print_kernel
 
 F90_DIR = Path(__file__).parent / "f90"
 REPO = Path(__file__).parent.parent
@@ -393,22 +393,22 @@ def test_sequential_alias_read_threads_current_value():
 # Production golden test (gated on the corpus)
 # =============================================================================
 
-CORPUS = os.environ.get("FLINSPECT_CORPUS")
+CORPUS = os.environ.get("GROUNDLINE_CORPUS")
 MANIFEST = REPO / "examples" / "turbo-stack.kernels.toml"
 
 
-@pytest.mark.skipif(not CORPUS, reason="FLINSPECT_CORPUS not set")
+@pytest.mark.skipif(not CORPUS, reason="GROUNDLINE_CORPUS not set")
 def test_generated_lean_is_current():
     """lean/pilot/Pilot/Generated.lean must match a fresh regeneration from
     the committed production manifest — the kernel list and rendering come
     from the same kernel-bank path the CLI runs, so they can't drift apart."""
-    from flinspect import kernel_bank
+    from groundline import kernel_bank
     m = kernel_bank.load_manifest(MANIFEST)
     if not m.fortran.corpus.is_dir():
         pytest.skip("manifest corpus not present")
     text = kernel_bank.render_fortran(m)
     assert text == m.fortran.out.read_text(), \
-        ("Generated.lean is stale — rerun `flinspect kernel generate "
+        ("Generated.lean is stale — rerun `groundline kernel generate "
          "--kernels examples/turbo-stack.kernels.toml`")
 
 
@@ -419,7 +419,7 @@ def test_generated_cpp_lean_is_current():
     the C++ sibling of test_generated_lean_is_current (drift alarm for the
     committed file, the TIM header, AND the pinned clang itself, whose
     version line is stamped into the output)."""
-    from flinspect import kernel_bank
+    from groundline import kernel_bank
     m = kernel_bank.load_manifest(MANIFEST)
     if not all(e.cpp.header.exists() for e in kernel_bank.cpp_entries(m)):
         pytest.skip("TIM kernel headers not present")
@@ -427,5 +427,5 @@ def test_generated_cpp_lean_is_current():
         pytest.skip("pinned C++ include dirs not present")
     text = kernel_bank.render_cpp(m)
     assert text == m.cpp.out.read_text(), \
-        ("GeneratedCpp.lean is stale — rerun `flinspect kernel generate "
+        ("GeneratedCpp.lean is stale — rerun `groundline kernel generate "
          "--kernels examples/turbo-stack.kernels.toml`")

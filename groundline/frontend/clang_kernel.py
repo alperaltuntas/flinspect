@@ -1,15 +1,15 @@
 """Kernel-IR frontend: extract one C++ point-kernel function from a clang JSON
-AST dump into the Track B kernel IR (``flinspect/kir.py``).
+AST dump into the Track B kernel IR (``groundline/kir.py``).
 
 The C++ mirror of ``frontend/flang_kernel.py`` (DESIGN §2.3, §4 Track B):
 everything clang-specific about kernel bodies lives here; the kernel IR,
 ``functionalize``, and the Lean printer are reused unchanged. TIM's kernels are
 already per-point scalar functions, so extraction produces a rank-0
-:class:`~flinspect.kir.Kernel` directly — there is no ``pointize`` on this side.
+:class:`~groundline.kir.Kernel` directly — there is no ``pointize`` on this side.
 
 Trusted-base rule (VISION D6): everything here is deterministic and small
 enough to audit. Any construct outside the supported subset raises
-:class:`~flinspect.kir.UnsupportedConstruct` — refusal, never a guess.
+:class:`~groundline.kir.UnsupportedConstruct` — refusal, never a guess.
 
 The JSON dump is an *intermediate*, never persisted: clang's node ``id`` fields
 are memory addresses, nondeterministic across runs, so raw dumps must never be
@@ -25,11 +25,11 @@ import tempfile
 from pathlib import Path
 from typing import Sequence
 
-from flinspect.kir import (
+from groundline.kir import (
     Assign, BinOp, Call, Cmp, Expr, If, Kernel, Neg, Param, Paren, RealLit,
     Stmt, UnsupportedConstruct, Var,
 )
-from flinspect.frontend.kernel_base import CppKernelSpec
+from groundline.frontend.kernel_base import CppKernelSpec
 
 # --------------------------------------------------------------------------- #
 # clang invocation (pinned flags; JSON is an in-memory intermediate)
@@ -380,7 +380,7 @@ def extract_kernel(source: Path, function: str, *, clang: str = "clang++",
 # --------------------------------------------------------------------------- #
 
 class ClangKernelFrontend:
-    """The :class:`~flinspect.frontend.kernel_base.KernelFrontend` for clang
+    """The :class:`~groundline.frontend.kernel_base.KernelFrontend` for clang
     JSON ASTs. The clang invocation config (compiler, include dirs) travels in
     the spec — part of the kernel's address, not function kwargs. The
     module-level :func:`extract_kernel` remains the implementation and stays

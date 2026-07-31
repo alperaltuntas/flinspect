@@ -6,7 +6,7 @@ set_option linter.style.header false
 /-!
 # Track B pilot: PPM_limit_pos equivalence
 
-Track B pilot (flinspect DESIGN §4): hand-written Lean models of one already-
+Track B pilot (groundline DESIGN §4): hand-written Lean models of one already-
 ported MOM6 kernel pair, and a machine-checked equivalence proof over ℝ.
 
 Kernel pair:

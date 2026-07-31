@@ -1,7 +1,7 @@
 """Explorer — the Jupyter widget layer over the IR.
 
 Kept deliberately thin (principle #10 — rendering is not the seam): every
-decision about *what* is drawn lives in :mod:`flinspect.graph_view`, which is
+decision about *what* is drawn lives in :mod:`groundline.graph_view`, which is
 pure and unit-tested; this module owns the stylesheet, the legend, and the event
 wiring. The stylesheet is where the visual encoding is defined:
 
@@ -18,10 +18,10 @@ vs. line style); ``LEGEND_HTML`` below spells the whole scheme out for the user.
 """
 
 import re
-from flinspect.ir import (
+from groundline.ir import (
     SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE, CALLABLE_KINDS,
 )
-from flinspect.graph_view import (
+from groundline.graph_view import (
     gen_subgraph, subgraph_elements, INTERFACE_MEMBER,
 )
 from ipywidgets import VBox, HBox, Dropdown, Text, Select, Output, HTML, IntSlider, Label, Button
@@ -321,7 +321,7 @@ class Explorer(VBox):
         return None
 
     def gen_subgraph(self, entity):
-        """The one-hop neighbourhood of ``entity`` (see :mod:`flinspect.graph_view`)."""
+        """The one-hop neighbourhood of ``entity`` (see :mod:`groundline.graph_view`)."""
         return gen_subgraph(self.ir, entity)
 
     def update_graph_display(self):

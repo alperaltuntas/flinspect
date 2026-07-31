@@ -2,16 +2,16 @@
 #
 # This file is the *site config* for the MOM6 ⇄ TIM kernel bank: every
 # machine-specific path (the /glade corpus, the AMReX install, the MPI
-# headers) lives HERE, not in flinspect code — the package itself has no
+# headers) lives HERE, not in groundline code — the package itself has no
 # built-in defaults. On another site, copy this file and repoint the paths.
 #
 # Use it via any of (resolution order):
-#   flinspect kernel list --kernels examples/turbo-stack.kernels.toml
-#   export FLINSPECT_KERNELS=$PWD/examples/turbo-stack.kernels.toml
+#   groundline kernel list --kernels examples/turbo-stack.kernels.toml
+#   export GROUNDLINE_KERNELS=$PWD/examples/turbo-stack.kernels.toml
 #   cp examples/turbo-stack.kernels.toml ./kernels.toml
 #
 # String values support ${ENV_VAR} expansion; relative paths resolve against
-# this file's directory. Schema reference: flinspect/kernel_bank.py.
+# this file's directory. Schema reference: groundline/kernel_bank.py.
 
 [fortran]
 # With-sema flang parse-tree dumps of the MOM6 production build.
@@ -43,7 +43,7 @@ blurb = """Fidelity against the hand-written pilot models is machine-checked in
 `Pilot/FidelityCpp.lean`."""
 
 [lean]
-# `flinspect kernel verify` runs `lake build` here (when lake is on PATH).
+# `groundline kernel verify` runs `lake build` here (when lake is on PATH).
 lake_dir = "../lean/pilot"
 
 # --- The banked pairs (5 of 5 TIM point kernels; DEVLOG 2026-07-31) ---------

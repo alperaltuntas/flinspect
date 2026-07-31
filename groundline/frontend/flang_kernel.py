@@ -1,11 +1,11 @@
 """Kernel-IR frontend: extract one subroutine — or one addressed loop nest of a
 subroutine (:func:`extract_loop_kernel`) — from a with-sema flang parse-tree
-dump into the Track B kernel IR (``flinspect/kir.py``).
+dump into the Track B kernel IR (``groundline/kir.py``).
 
 Below the seam (DESIGN §2.3): everything flang-dump-specific about *kernel
 bodies* lives here, exactly as ``flang_dump.py`` owns the dump's *relational*
 face. Trusted-base rule (VISION D6): deterministic; any construct outside the
-supported subset raises :class:`~flinspect.kir.UnsupportedConstruct` — the
+supported subset raises :class:`~groundline.kir.UnsupportedConstruct` — the
 extractor refuses rather than guesses.
 
 The dump is parsed into a literal node tree first (one node per ``A -> B -> C``
@@ -20,13 +20,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional
 
-from flinspect.kir import (
+from groundline.kir import (
     ArrayRef, Assign, BinOp, Call, Cmp, ComponentRef, Do, DoConcurrent, Expr,
     If, IntLit, Kernel, Neg, Param, Paren, RealLit, Stmt, UnsupportedConstruct,
     Var,
 )
-from flinspect.frontend._flang_text import level
-from flinspect.frontend.kernel_base import FortranKernelSpec
+from groundline.frontend._flang_text import level
+from groundline.frontend.kernel_base import FortranKernelSpec
 
 
 # --------------------------------------------------------------------------- #
@@ -513,7 +513,7 @@ def extract_loop_kernel(dump_path: Path, subroutine: str, nest: int,
 # --------------------------------------------------------------------------- #
 
 class FlangKernelFrontend:
-    """The :class:`~flinspect.frontend.kernel_base.KernelFrontend` for flang
+    """The :class:`~groundline.frontend.kernel_base.KernelFrontend` for flang
     with-sema dumps: one deep method dispatching on the spec's addressing mode
     (whole subroutine vs rule-B inline loop). The module-level functions above
     remain the implementation — and stay importable for tests that pin them

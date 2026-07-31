@@ -3,7 +3,7 @@
 ! it generates FunctionReference -> Call -> ProcedureDesignator -> Name = 'fields'
 ! rather than ArrayElement, since it can't determine if it's an array or function.
 !
-! flinspect must detect this pattern and look up the variable type from 'fields'
+! groundline must detect this pattern and look up the variable type from 'fields'
 ! (if declared) rather than treating it as a function call.
 
 module func_ref_mod

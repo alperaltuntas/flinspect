@@ -2,14 +2,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from flinspect.frontend._flang_text import (
+from groundline.frontend._flang_text import (
     level, is_fortran_intrinsic, node_path, unparse_text, call_candidates, demangle,
 )
-from flinspect.frontend._state import ParseState
-from flinspect.frontend._variable_info import VariableInfo
-from flinspect.frontend._nodes import Interface, Callable, DerivedType
-from flinspect.frontend._registry import NodeRegistry
-from flinspect.ir import (
+from groundline.frontend._state import ParseState
+from groundline.frontend._variable_info import VariableInfo
+from groundline.frontend._nodes import Interface, Callable, DerivedType
+from groundline.frontend._registry import NodeRegistry
+from groundline.ir import (
     IR, Entity, Signature, Use, FileError,
     MODULE, PROGRAM, SUBPROGRAM, SUBROUTINE, FUNCTION, INTERFACE, DERIVED_TYPE,
     CALLABLE_KINDS,
@@ -1678,7 +1678,7 @@ def _unknown_target(ir, name, kind, module=None):
 
 
 def project_registry(registry, file_errors, call_edges):
-    """Walk the interned node graph and build the flinspect IR (the seam).
+    """Walk the interned node graph and build the groundline IR (the seam).
 
     ``call_edges`` is the classified call relation from
     :meth:`ParseTree.classify_calls`: ``(caller_node, stratum, target)`` triples
@@ -1756,7 +1756,7 @@ class FlangDumpFrontend:
     recording, then call classification (the order cross-file resolution
     requires) — with per-file fault isolation (W3), and projects the interned
     node graph onto the IR. Implements the
-    :class:`~flinspect.frontend.base.Frontend` protocol.
+    :class:`~groundline.frontend.base.Frontend` protocol.
 
     Input is the with-sema dump (``-fdebug-dump-parse-tree``), the sole
     production input per VISION D4: call resolution is read from sema's unparse

@@ -11,7 +11,7 @@ enough to audit line by line against ``kir.py``.
 
 from __future__ import annotations
 
-from flinspect.kir import (
+from groundline.kir import (
     ArrayRef, BinOp, Call, Cmp, ComponentRef, Cond, Expr, FunExpr, IfExpr,
     IntLit, Kernel, Let, Neg, Param, Paren, RealLit, Tuple_,
     UnsupportedConstruct, Var, functionalize,
@@ -123,7 +123,7 @@ def print_kernel(kernel: Kernel, *, provenance: str = "") -> str:
     """Render a pointized kernel as a complete Lean ``def``.
 
     ``kernel`` must already be pointized (rank-0 params only); this function
-    runs :func:`~flinspect.kir.functionalize` itself so printing stays the
+    runs :func:`~groundline.kir.functionalize` itself so printing stays the
     single entry point.
     """
     params, outputs, body = functionalize(kernel)
@@ -152,7 +152,7 @@ def print_module(kernels: list[tuple[Kernel, str]], *, namespace: str,
     """Render a full Lean module for generated kernels (imports + namespace).
 
     ``blurb`` is the module-header provenance text — the caller (the kernel
-    bank, ``flinspect/kernel_bank.py``) owns it, since provenance names the
+    bank, ``groundline/kernel_bank.py``) owns it, since provenance names the
     manifest and toolchain; the semantic rendering below is identical for
     every frontend."""
     defs = "\n".join(print_kernel(k, provenance=prov) for k, prov in kernels)
