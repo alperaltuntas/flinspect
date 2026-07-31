@@ -14,8 +14,10 @@ set_option linter.unusedVariables false
 # GENERATED FILE — do not edit
 
 Emitted by `flinspect.lean_printer` (Track B; DESIGN §2.3) from flang with-sema
-parse-tree dumps. Regenerate with `lean/pilot/generate.py`. Fidelity against the
-hand-written pilot models is machine-checked in `Pilot/Fidelity.lean`.
+parse-tree dumps (`flinspect.frontend.flang_kernel`).
+Regenerate with `flinspect kernel generate` (manifest: `turbo-stack.kernels.toml`).
+Fidelity against the hand-written pilot models is machine-checked in
+`Pilot/Fidelity.lean`.
 -/
 
 namespace TrackB.Generated
