@@ -21,7 +21,7 @@ from typing import Iterable, Optional
 
 from flinspect.kir import (
     ArrayRef, Assign, BinOp, Call, Cmp, DoConcurrent, Expr, If, IntLit, Kernel,
-    Param, Paren, RealLit, Stmt, UnsupportedConstruct, Var,
+    Neg, Param, Paren, RealLit, Stmt, UnsupportedConstruct, Var,
 )
 from flinspect.frontend._flang_text import level
 
@@ -156,6 +156,8 @@ def _extract_expr_inner(n: Node) -> Expr:
         return _extract_dataref(n.child("DataRef"))
     if n.name == "Parentheses":
         return Paren(extract_expr(n.child("Expr")))
+    if n.name == "Negate":
+        return Neg(extract_expr(n.child("Expr")))
     if n.name in _BINOPS:
         lhs, rhs = n.children_named("Expr")
         return BinOp(_BINOPS[n.name], extract_expr(lhs), extract_expr(rhs))
@@ -208,18 +210,28 @@ def extract_block(block: Node) -> tuple[Stmt, ...]:
 def _extract_construct(ec: Node) -> Stmt:
     inner = ec.only_child()
     if inner.name == "ActionStmt":
-        stmt = inner.only_child()
-        if stmt.name == "AssignmentStmt":
-            var = stmt.child("Variable")
-            target = _extract_dataref(var.child("Designator").child("DataRef"))
-            value = extract_expr(stmt.child("Expr"))
-            return Assign(target, value)
-        raise UnsupportedConstruct(f"action statement '{stmt.name}'")
+        return _extract_action(inner)
     if inner.name == "IfConstruct":
         return _extract_if(inner)
     if inner.name == "DoConstruct":
         return _extract_do(inner)
     raise UnsupportedConstruct(f"executable construct '{inner.name}'")
+
+
+def _extract_action(action: Node) -> Stmt:
+    stmt = action.only_child()
+    if stmt.name == "AssignmentStmt":
+        var = stmt.child("Variable")
+        target = _extract_dataref(var.child("Designator").child("DataRef"))
+        value = extract_expr(stmt.child("Expr"))
+        return Assign(target, value)
+    if stmt.name == "IfStmt":
+        # Logical IF statement (R1139): `if (cond) action` — the dump nests the
+        # guarded action as a child ActionStmt of the IfStmt, alongside the
+        # condition. Extracted as a single-branch If with no orelse.
+        cond = extract_expr(stmt.child("Scalar").child("Logical").child("Expr"))
+        return If(((cond, (_extract_action(stmt.child("ActionStmt")),)),), ())
+    raise UnsupportedConstruct(f"action statement '{stmt.name}'")
 
 
 def _extract_if(n: Node) -> If:

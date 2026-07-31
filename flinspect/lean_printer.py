@@ -12,8 +12,9 @@ enough to audit line by line against ``kir.py``.
 from __future__ import annotations
 
 from flinspect.kir import (
-    ArrayRef, BinOp, Call, Cmp, Expr, FunExpr, IfExpr, IntLit, Kernel, Let,
-    Param, Paren, RealLit, Tuple_, UnsupportedConstruct, Var, functionalize,
+    ArrayRef, BinOp, Call, Cmp, Cond, Expr, FunExpr, IfExpr, IntLit, Kernel,
+    Let, Neg, Param, Paren, RealLit, Tuple_, UnsupportedConstruct, Var,
+    functionalize,
 )
 
 # Operator spelling and precedence (higher binds tighter). Lean and Fortran
@@ -41,6 +42,15 @@ def print_expr(e: Expr, parent_prec: int = 0, right: bool = False) -> str:
         return e.name
     if isinstance(e, Paren):
         return f"({print_expr(e.inner)})"
+    if isinstance(e, Neg):
+        # Fortran only admits unary minus on a whole term (R1008), but Lean's
+        # prefix `-` binds tighter than `*`, so a compound operand must regain
+        # its grouping explicitly: Neg(2*x) prints as -(2 * x). Leaves — and
+        # Paren/Call, which bring their own delimiters — stay bare.
+        compound = isinstance(e.inner, (BinOp, Cmp, Cond))
+        inner = f"({print_expr(e.inner)})" if compound else print_expr(e.inner)
+        s = f"-{inner}"
+        return f"({s})" if parent_prec > 1 else s
     if isinstance(e, BinOp):
         sym, prec = _BIN[e.op]
         lhs = print_expr(e.lhs, prec, right=False)
@@ -62,6 +72,13 @@ def print_expr(e: Expr, parent_prec: int = 0, right: bool = False) -> str:
             return f"{e.name} {args}" if len(e.args) != 2 else \
                 f"{e.name} ({print_expr(e.args[0])}) ({print_expr(e.args[1])})"
         raise UnsupportedConstruct(f"cannot print call to '{e.name}'")
+    if isinstance(e, Cond):
+        # Inline conditional from a merged control-flow join. `if then else`
+        # sits below every operator in Lean, so any operand position
+        # (parent_prec > 0) needs parentheses.
+        s = (f"if {print_expr(e.cond)} then {print_expr(e.then)} "
+             f"else {print_expr(e.orelse)}")
+        return f"({s})" if parent_prec > 0 else s
     if isinstance(e, ArrayRef):
         raise UnsupportedConstruct(f"array reference '{e.name}' survived pointization")
     raise UnsupportedConstruct(f"cannot print {type(e).__name__}")
@@ -128,6 +145,9 @@ def print_module(kernels: list[tuple[Kernel, str]], *, namespace: str) -> str:
 import Mathlib.Tactic.Ring
 
 set_option linter.style.header false
+-- Generated code keeps each expression on one line (merged-join tuples can be
+-- arbitrarily wide), so the line-length style lint does not apply.
+set_option linter.style.longLine false
 
 /-!
 # GENERATED FILE — do not edit

@@ -1,7 +1,8 @@
 """Track B tests: kernel-IR extraction, passes, and the Lean printer.
 
 Two tiers, per D7: fixture-based tests run everywhere (the
-``test_kernel_doconcurrent`` conformance fixture); the production golden test —
+``test_kernel_doconcurrent`` / ``test_kernel_ifstmt_join`` /
+``test_kernel_negate`` conformance fixtures); the production golden test —
 regenerating ``lean/pilot/Pilot/Generated.lean`` byte-for-byte from the MOM6
 corpus — is gated on ``FLINSPECT_CORPUS``. Semantic fidelity of the generated
 Lean is checked *in Lean* (``lean/pilot/Pilot/Fidelity.lean``), not here.
@@ -13,11 +14,11 @@ from pathlib import Path
 import pytest
 
 from flinspect.kir import (
-    Assign, BinOp, DoConcurrent, If, IntLit, Kernel, Param, RealLit,
-    UnsupportedConstruct, Var, ArrayRef, pointize,
+    Assign, BinOp, DoConcurrent, If, IntLit, Kernel, Param, RealLit, Tuple_,
+    UnsupportedConstruct, Var, ArrayRef, functionalize, pointize,
 )
 from flinspect.frontend.flang_kernel import extract_kernel
-from flinspect.lean_printer import print_kernel, print_module
+from flinspect.lean_printer import print_kernel
 
 F90_DIR = Path(__file__).parent / "f90"
 REPO = Path(__file__).parent.parent
@@ -60,6 +61,52 @@ def clamp_scale (x_in x_out lo : ℝ) : ℝ :=
         assert text == expected
 
 
+class TestIfStmtJoinFixture:
+    """Logical IF statements (R1139) + the sequential guarded join: the loop
+    ends with two guarded assignments to state, and the second guard's RHS
+    reads b, which the first IF may have just updated."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.kernel = extract_kernel(F90_DIR / "test_kernel_ifstmt_join_ptree",
+                                     "guard_pair")
+
+    def test_ifstmt_extracted_as_single_branch_if(self):
+        loop = self.kernel.body[0]
+        assert isinstance(loop, DoConcurrent)
+        for stmt in loop.body[1:]:
+            assert isinstance(stmt, If)
+            assert len(stmt.branches) == 1 and stmt.orelse == ()
+
+    def test_printed_lean_threads_merged_state(self):
+        # The load-bearing assertion: c's new value reads the MERGED b —
+        # `(if t > b then t - 1 else b) + t` — not the input b.
+        text = print_kernel(pointize(self.kernel))
+        expected = """\
+def guard_pair (a b c : ℝ) : ℝ × ℝ :=
+  let t := 2 * a
+  if t < c then
+    (if t > b then t - 1 else b, (if t > b then t - 1 else b) + t)
+  else (if t > b then t - 1 else b, c)
+"""
+        assert text == expected
+
+
+class TestNegateFixture:
+    """Unary minus: bare leaf (-y), compound operand needing printer parens
+    (-(2 * x)), and negated source parentheses (-(x + y))."""
+
+    def test_printed_lean(self):
+        kernel = extract_kernel(F90_DIR / "test_kernel_negate_ptree", "neg_clip")
+        expected = """\
+def neg_clip (x y : ℝ) : ℝ :=
+  if x < -y then
+    -(2 * x)
+  else -(x + y)
+"""
+        assert print_kernel(pointize(kernel)) == expected
+
+
 # =============================================================================
 # Pass-level refusals (trusted base: refuse, never guess)
 # =============================================================================
@@ -89,19 +136,56 @@ class TestPointizeRefusals:
         with pytest.raises(UnsupportedConstruct, match="do-concurrent"):
             pointize(k)
 
-    def test_join_after_if_refused(self):
-        good = Assign(ArrayRef("b", (Var("i"),)), ArrayRef("a", (Var("i"),)))
-        cond_stmt = If(((Var("q"), (good,)),), ())
-        k = Kernel(
+
+class TestJoinRefusals:
+    """The control-flow join is supported in exactly one shape (single-branch
+    If whose branches assign only to state variables); everything else refuses.
+    The supported shape itself is pinned by TestIfStmtJoinFixture."""
+
+    def _kernel(self, if_stmt):
+        after = Assign(ArrayRef("b", (Var("i"),)), ArrayRef("a", (Var("i"),)))
+        return Kernel(
             "k",
             (Param("a", "real", "in", 1), Param("b", "real", "inout", 1),
              Param("q", "real", "in", 0), Param("n", "integer", "in", 0)),
-            (Param("i", "integer", None, 0),),
+            (Param("w", "real", None, 0), Param("i", "integer", None, 0)),
             body=(DoConcurrent((("i", IntLit("1"), Var("n")),),
-                               (cond_stmt, good)),),
+                               (if_stmt, after)),),
         )
-        with pytest.raises(UnsupportedConstruct, match="join"):
-            print_kernel(pointize(k))
+
+    def test_local_assignment_in_joined_branch_refused(self):
+        # w is a local: merging it would need a Let to escape the branch.
+        stmt = If(((Var("q"), (Assign(Var("w"), RealLit("1.0")),)),), ())
+        with pytest.raises(UnsupportedConstruct, match="Let may not escape"):
+            print_kernel(pointize(self._kernel(stmt)))
+
+    def test_nested_if_in_joined_branch_refused(self):
+        assign_b = Assign(ArrayRef("b", (Var("i"),)), Var("q"))
+        stmt = If(((Var("q"), (If(((Var("q"), (assign_b,)),), ()),)),), ())
+        with pytest.raises(UnsupportedConstruct, match="only assignments"):
+            print_kernel(pointize(self._kernel(stmt)))
+
+    def test_elseif_chain_join_refused(self):
+        assign_b = Assign(ArrayRef("b", (Var("i"),)), Var("q"))
+        stmt = If(((Var("q"), (assign_b,)), (Var("q"), (assign_b,))), ())
+        with pytest.raises(UnsupportedConstruct, match="elseif"):
+            print_kernel(pointize(self._kernel(stmt)))
+
+
+def test_sequential_alias_read_threads_current_value():
+    """After `b = a`, a read of b must see a (its current value), not the
+    input b — even though the current value is a plain Var. Pins the
+    unconditional substitution in functionalize.subst."""
+    k = Kernel(
+        "k",
+        (Param("a", "real", "in", 0), Param("b", "real", "inout", 0),
+         Param("c", "real", "inout", 0)),
+        (),
+        (Assign(Var("b"), Var("a")), Assign(Var("c"), Var("b"))),
+    )
+    _, outputs, expr = functionalize(k)
+    assert outputs == ("b", "c")
+    assert expr == Tuple_((Var("a"), Var("a")))
 
 
 # =============================================================================
@@ -113,12 +197,15 @@ CORPUS = os.environ.get("FLINSPECT_CORPUS")
 
 @pytest.mark.skipif(not CORPUS, reason="FLINSPECT_CORPUS not set")
 def test_generated_lean_is_current():
-    """lean/pilot/Pilot/Generated.lean must match a fresh regeneration."""
-    dump = Path(CORPUS) / "MOM6" / "MOM_continuity_PPM.o_ptree"
-    kernel = pointize(extract_kernel(dump, "ppm_limit_pos"))
-    text = print_module(
-        [(kernel, "`ppm_limit_pos` in `MOM6/MOM_continuity_PPM.o_ptree` "
-                  "(flang with-sema dump)")],
-        namespace="TrackB.Generated")
+    """lean/pilot/Pilot/Generated.lean must match a fresh regeneration.
+
+    The kernel list and rendering come from lean/pilot/generate.py itself
+    (its KERNELS/render), so this test can't drift from the driver."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "pilot_generate", REPO / "lean" / "pilot" / "generate.py")
+    generate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generate)
+    text = generate.render(CORPUS)
     committed = (REPO / "lean" / "pilot" / "Pilot" / "Generated.lean").read_text()
     assert text == committed, "Generated.lean is stale — rerun lean/pilot/generate.py"

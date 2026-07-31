@@ -1,0 +1,112 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'kernel_negate_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'neg_clip'
+| | | | DummyArg -> Name = 'x'
+| | | | DummyArg -> Name = 'y'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'y'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | NonLabelDoStmt
+| | | | | | LoopControl -> Concurrent
+| | | | | | | ConcurrentHeader
+| | | | | | | | ConcurrentControl
+| | | | | | | | | Name = 'i'
+| | | | | | | | | Scalar -> Integer -> Expr = '1_4'
+| | | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | | | Scalar -> Integer -> Expr = 'n'
+| | | | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> IfConstruct
+| | | | | | | IfThenStmt
+| | | | | | | | Scalar -> Logical -> Expr = 'x(int(i,kind=8))<-y(int(i,kind=8))'
+| | | | | | | | | LT
+| | | | | | | | | | Expr = 'x(int(i,kind=8))'
+| | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | DataRef -> Name = 'x'
+| | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | Expr = '-y(int(i,kind=8))'
+| | | | | | | | | | | Negate -> Expr = 'y(int(i,kind=8))'
+| | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | DataRef -> Name = 'y'
+| | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | Block
+| | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'y(int(i,kind=8))=-2._4*x(int(i,kind=8))'
+| | | | | | | | | Variable = 'y(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'y'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | Expr = '-2._4*x(int(i,kind=8))'
+| | | | | | | | | | Negate -> Expr = '2._4*x(int(i,kind=8))'
+| | | | | | | | | | | Multiply
+| | | | | | | | | | | | Expr = '2._4'
+| | | | | | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | | | | | Real = '2.0'
+| | | | | | | | | | | | Expr = 'x(int(i,kind=8))'
+| | | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | | DataRef -> Name = 'x'
+| | | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | ElseBlock
+| | | | | | | | ElseStmt -> 
+| | | | | | | | Block
+| | | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'y(int(i,kind=8))=-(x(int(i,kind=8))+y(int(i,kind=8)))'
+| | | | | | | | | | Variable = 'y(int(i,kind=8))'
+| | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | DataRef -> Name = 'y'
+| | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | Expr = '-(x(int(i,kind=8))+y(int(i,kind=8)))'
+| | | | | | | | | | | Negate -> Expr = '(x(int(i,kind=8))+y(int(i,kind=8)))'
+| | | | | | | | | | | | Parentheses -> Expr = 'x(int(i,kind=8))+y(int(i,kind=8))'
+| | | | | | | | | | | | | Add
+| | | | | | | | | | | | | | Expr = 'x(int(i,kind=8))'
+| | | | | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | | | | DataRef -> Name = 'x'
+| | | | | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | | | | | Expr = 'y(int(i,kind=8))'
+| | | | | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | | | | DataRef -> Name = 'y'
+| | | | | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | EndIfStmt -> 
+| | | | | EndDoStmt -> 
+| | | EndSubroutineStmt -> Name = 'neg_clip'
+| EndModuleStmt -> Name = 'kernel_negate_mod'

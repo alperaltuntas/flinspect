@@ -23,7 +23,20 @@ DEFAULT_CORPUS = "/glade/work/altuntas/turbo-stack/bin/flang_ptree/MOM6_using_FM
 # (dump file relative to corpus, subroutine name)
 KERNELS = [
     ("MOM6/MOM_continuity_PPM.o_ptree", "ppm_limit_pos"),
+    ("MOM6/MOM_continuity_PPM.o_ptree", "ppm_limit_cw84"),
 ]
+
+
+def render(corpus: str) -> str:
+    """The full Generated.lean text for KERNELS — also imported by the pytest
+    golden test, so the committed file and the test can't drift apart."""
+    rendered = []
+    for rel, sub in KERNELS:
+        kernel = pointize(extract_kernel(Path(corpus) / rel, sub))
+        rendered.append((kernel, f"`{sub}` in `{rel}` (flang with-sema dump)"))
+        print(f"extracted {sub}: params={[p.name for p in kernel.params]} "
+              f"locals={[p.name for p in kernel.locals]}")
+    return print_module(rendered, namespace="TrackB.Generated")
 
 
 def main() -> None:
@@ -31,16 +44,8 @@ def main() -> None:
     ap.add_argument("--corpus", default=DEFAULT_CORPUS)
     args = ap.parse_args()
 
-    rendered = []
-    for rel, sub in KERNELS:
-        dump = Path(args.corpus) / rel
-        kernel = pointize(extract_kernel(dump, sub))
-        rendered.append((kernel, f"`{sub}` in `{rel}` (flang with-sema dump)"))
-        print(f"extracted {sub}: params={[p.name for p in kernel.params]} "
-              f"locals={[p.name for p in kernel.locals]}")
-
     out = Path(__file__).parent / "Pilot" / "Generated.lean"
-    out.write_text(print_module(rendered, namespace="TrackB.Generated"))
+    out.write_text(render(args.corpus))
     print(f"wrote {out}")
 
 

@@ -38,6 +38,8 @@ Two assertion tiers per construct:
 | Unresolved externals → first-class `defined=False` targets | `test_external_calls` | `_classify_event` unresolved branch, `_unknown_target` |
 | Local variable declarations (type/rank/kind; `type(t)` / `class(t)`) | `test_interface_rank`, `test_type_bound_generic` | `parse_variable_declaration` |
 | Track B kernel subset: `do concurrent` point kernel — assignment, if/elseif/else, arithmetic (`+ - * / **`), comparisons, `abs`, array refs at loop indices, local scalars | `test_kernel_doconcurrent` | `frontend/flang_kernel.py` (whole module), `kir.pointize`/`functionalize`, `lean_printer` |
+| Track B: logical IF statement (R1139, dump: `ActionStmt -> IfStmt`) + the sequential guarded control-flow join (second guard's RHS reads the first's target — merged-state threading) | `test_kernel_ifstmt_join` | `flang_kernel._extract_action` (IfStmt branch), `kir.functionalize` (`merge_if`), `lean_printer` (`Cond`) |
+| Track B: unary minus (dump: `Negate`) — bare leaf, compound operand needing printer parens, negated source parens | `test_kernel_negate` | `flang_kernel._extract_expr_inner` (Negate), `lean_printer` (`Neg`) |
 
 ## Known gaps (parser paths with no fixture yet)
 

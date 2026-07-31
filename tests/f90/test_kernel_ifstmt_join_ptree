@@ -1,0 +1,129 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'kernel_ifstmt_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'guard_pair'
+| | | | DummyArg -> Name = 'a'
+| | | | DummyArg -> Name = 'b'
+| | | | DummyArg -> Name = 'c'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'a'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'b'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'c'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | EntityDecl
+| | | | | | Name = 't'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | NonLabelDoStmt
+| | | | | | LoopControl -> Concurrent
+| | | | | | | ConcurrentHeader
+| | | | | | | | ConcurrentControl
+| | | | | | | | | Name = 'i'
+| | | | | | | | | Scalar -> Integer -> Expr = '1_4'
+| | | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | | | Scalar -> Integer -> Expr = 'n'
+| | | | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 't=2._4*a(int(i,kind=8))'
+| | | | | | | Variable = 't'
+| | | | | | | | Designator -> DataRef -> Name = 't'
+| | | | | | | Expr = '2._4*a(int(i,kind=8))'
+| | | | | | | | Multiply
+| | | | | | | | | Expr = '2._4'
+| | | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | | Real = '2.0'
+| | | | | | | | | Expr = 'a(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'a'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> IfStmt
+| | | | | | | Scalar -> Logical -> Expr = 't>b(int(i,kind=8))'
+| | | | | | | | GT
+| | | | | | | | | Expr = 't'
+| | | | | | | | | | Designator -> DataRef -> Name = 't'
+| | | | | | | | | Expr = 'b(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'b'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | ActionStmt -> AssignmentStmt = 'b(int(i,kind=8))=t-1._4'
+| | | | | | | | Variable = 'b(int(i,kind=8))'
+| | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | DataRef -> Name = 'b'
+| | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | Expr = 't-1._4'
+| | | | | | | | | Subtract
+| | | | | | | | | | Expr = 't'
+| | | | | | | | | | | Designator -> DataRef -> Name = 't'
+| | | | | | | | | | Expr = '1._4'
+| | | | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | | | Real = '1.0'
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> IfStmt
+| | | | | | | Scalar -> Logical -> Expr = 't<c(int(i,kind=8))'
+| | | | | | | | LT
+| | | | | | | | | Expr = 't'
+| | | | | | | | | | Designator -> DataRef -> Name = 't'
+| | | | | | | | | Expr = 'c(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'c'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | ActionStmt -> AssignmentStmt = 'c(int(i,kind=8))=b(int(i,kind=8))+t'
+| | | | | | | | Variable = 'c(int(i,kind=8))'
+| | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | DataRef -> Name = 'c'
+| | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | Expr = 'b(int(i,kind=8))+t'
+| | | | | | | | | Add
+| | | | | | | | | | Expr = 'b(int(i,kind=8))'
+| | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | DataRef -> Name = 'b'
+| | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | Expr = 't'
+| | | | | | | | | | | Designator -> DataRef -> Name = 't'
+| | | | | EndDoStmt -> 
+| | | EndSubroutineStmt -> Name = 'guard_pair'
+| EndModuleStmt -> Name = 'kernel_ifstmt_mod'

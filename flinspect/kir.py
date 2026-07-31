@@ -23,8 +23,14 @@ Passes:
   ifs) into a single functional expression tree: local assignments become
   ``Let`` bindings, assignments to inout arguments update a symbolic state, and
   each control-flow path ends by materializing the state tuple. Statements
-  *after* an if that modified state (a join) are refused — none of the target
-  kernels need them yet, and refusing keeps the pass auditable.
+  *after* an ``If`` (a control-flow join) are supported in exactly one shape:
+  the ``If`` has a single branch (no elseif chain) and every branch body is
+  assignments to state (output) variables only — no locals (a ``Let`` may not
+  escape a branch), no nested ``If``s. Each variable a branch assigned merges
+  as ``state'[v] = Cond(cond, state_then[v], state_else[v])``; the remaining
+  statements then run against the *merged* state, so a later read of a
+  variable the ``If`` may have updated observes the conditional value —
+  sequential semantics, as in the source. Any other join shape is refused.
 """
 
 from __future__ import annotations
@@ -70,6 +76,13 @@ class Paren:
 
 
 @dataclass(frozen=True)
+class Neg:
+    """Unary minus. Fortran only admits it on a whole term (R1008), so the
+    frontend produces it wrapping either a leaf or an entire term/paren."""
+    inner: "Expr"
+
+
+@dataclass(frozen=True)
 class BinOp:
     op: str            # 'add' | 'sub' | 'mul' | 'div' | 'pow'
     lhs: "Expr"
@@ -90,7 +103,18 @@ class Call:
     args: tuple["Expr", ...]
 
 
-Expr = Union[RealLit, IntLit, Var, ArrayRef, Paren, BinOp, Cmp, Call]
+@dataclass(frozen=True)
+class Cond:
+    """Conditional *expression* — the functional layer's inline
+    ``if cond then a else b``. No frontend ever produces one: only
+    :func:`functionalize` creates it, when merging a control-flow join
+    (see the module docstring)."""
+    cond: "Expr"
+    then: "Expr"
+    orelse: "Expr"
+
+
+Expr = Union[RealLit, IntLit, Var, ArrayRef, Paren, Neg, BinOp, Cmp, Call, Cond]
 
 
 # --------------------------------------------------------------------------- #
@@ -172,6 +196,8 @@ def pointize(kernel: Kernel) -> Kernel:
                 f"exactly by the concurrent indices {indices}")
         if isinstance(e, Paren):
             return Paren(scalarize_expr(e.inner))
+        if isinstance(e, Neg):
+            return Neg(scalarize_expr(e.inner))
         if isinstance(e, BinOp):
             return BinOp(e.op, scalarize_expr(e.lhs), scalarize_expr(e.rhs))
         if isinstance(e, Cmp):
@@ -201,7 +227,7 @@ def pointize(kernel: Kernel) -> Kernel:
     def collect(e: Expr) -> None:
         if isinstance(e, Var):
             used.add(e.name)
-        elif isinstance(e, Paren):
+        elif isinstance(e, (Paren, Neg)):
             collect(e.inner)
         elif isinstance(e, BinOp):
             collect(e.lhs); collect(e.rhs)
@@ -287,8 +313,10 @@ def functionalize(kernel: Kernel) -> tuple[tuple[Param, ...], tuple[str, ...], F
                 f"{kernel.name}: assignment to '{name}', neither local nor output")
         if isinstance(head, If):
             if rest:
-                raise UnsupportedConstruct(
-                    f"{kernel.name}: statements after an IF (control-flow join) are unsupported")
+                # Control-flow join: the remaining statements run against the
+                # MERGED state, so a later read of a variable this IF may have
+                # updated observes the conditional value (sequential semantics).
+                return go(rest, merge_if(head, state))
             def branch(i: int) -> FunExpr:
                 if i < len(head.branches):
                     cond, body = head.branches[i]
@@ -297,13 +325,60 @@ def functionalize(kernel: Kernel) -> tuple[tuple[Param, ...], tuple[str, ...], F
             return branch(0)
         raise UnsupportedConstruct(f"{kernel.name}: {type(head).__name__} is unsupported here")
 
+    def merge_if(head: If, state: dict[str, Expr]) -> dict[str, Expr]:
+        """Merge an ``If`` that statements follow into a per-variable ``Cond``.
+
+        Supported ONLY when the ``If`` has a single branch (no elseif chain)
+        and every branch body consists solely of assignments to state (output)
+        variables — no locals (a ``Let`` may not escape), no nested ``If``s.
+        Per variable a branch assigned: ``state'[v] = Cond(cond, state_then[v],
+        state_else[v])``; unassigned variables pass through unchanged.
+        """
+        if len(head.branches) != 1:
+            raise UnsupportedConstruct(
+                f"{kernel.name}: statements after an IF with an elseif chain "
+                f"(control-flow join) are unsupported")
+        cond, then_body = head.branches[0]
+
+        def branch_state(body: tuple[Stmt, ...]) -> tuple[dict[str, Expr], set[str]]:
+            st, assigned = dict(state), set()
+            for s in body:
+                if not isinstance(s, Assign):
+                    raise UnsupportedConstruct(
+                        f"{kernel.name}: statements after an IF (control-flow join) "
+                        f"require its branches to hold only assignments to output "
+                        f"variables; found {type(s).__name__}")
+                if s.target.name not in state:
+                    raise UnsupportedConstruct(
+                        f"{kernel.name}: assignment to non-output '{s.target.name}' "
+                        f"inside a joined IF branch (a Let may not escape the branch)")
+                st[s.target.name] = subst(s.value, st)
+                assigned.add(s.target.name)
+            return st, assigned
+
+        st_then, asg_then = branch_state(then_body)
+        st_else, asg_else = branch_state(head.orelse)
+        cond_now = subst(cond, state)
+        merged = dict(state)
+        for v in asg_then | asg_else:
+            merged[v] = Cond(cond_now, st_then[v], st_else[v])
+        return merged
+
     def subst(e: Expr, state: dict[str, Expr]) -> Expr:
         """Replace reads of *output* variables with their current symbolic value.
-        (Locals are bound by ``Let`` and read by name, so they pass through.)"""
-        if isinstance(e, Var) and e.name in state and not isinstance(state[e.name], Var):
+        (Locals are bound by ``Let`` and read by name, so they pass through.)
+
+        Unconditional on purpose: when the current value is the identity
+        ``Var(name)`` the substitution is a no-op, and when it is any other
+        expression — including a plain ``Var`` alias like ``b = a`` — the read
+        must see it, or a later statement would silently read the *input*
+        value. Sequential threading is the whole contract here."""
+        if isinstance(e, Var) and e.name in state:
             return state[e.name]
         if isinstance(e, Paren):
             return Paren(subst(e.inner, state))
+        if isinstance(e, Neg):
+            return Neg(subst(e.inner, state))
         if isinstance(e, BinOp):
             return BinOp(e.op, subst(e.lhs, state), subst(e.rhs, state))
         if isinstance(e, Cmp):

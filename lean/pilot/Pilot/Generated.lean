@@ -2,6 +2,9 @@ import Mathlib.Data.Real.Basic
 import Mathlib.Tactic.Ring
 
 set_option linter.style.header false
+-- Generated code keeps each expression on one line (merged-join tuples can be
+-- arbitrarily wide), so the line-length style lint does not apply.
+set_option linter.style.longLine false
 
 /-!
 # GENERATED FILE — do not edit
@@ -30,6 +33,21 @@ def ppm_limit_pos (h_in h_l h_r h_min : ℝ) : ℝ × ℝ :=
       else (h_l, h_r)
     else (h_l, h_r)
   else (h_l, h_r)
+
+/-- Generated from `ppm_limit_cw84` in `MOM6/MOM_continuity_PPM.o_ptree` (flang with-sema dump).
+Outputs `(h_l, h_r)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
+def ppm_limit_cw84 (h_in h_l h_r : ℝ) : ℝ × ℝ :=
+  let h_i := h_in
+  if (h_r - h_i) * (h_i - h_l) ≤ 0 then
+    (h_i, h_i)
+  else
+    let rldiff := h_r - h_l
+    let rlmean := 0.5 * (h_r + h_l)
+    let funfac := 6 * rldiff * (h_i - rlmean)
+    let rldiff2 := rldiff * rldiff
+    if funfac < -rldiff2 then
+      (if funfac > rldiff2 then 3 * h_i - 2 * h_r else h_l, 3 * h_i - 2 * (if funfac > rldiff2 then 3 * h_i - 2 * h_r else h_l))
+    else (if funfac > rldiff2 then 3 * h_i - 2 * h_r else h_l, h_r)
 
 end
 
