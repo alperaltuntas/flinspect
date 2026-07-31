@@ -1,0 +1,26 @@
+# Track B quickstart manifest — a self-contained toy kernel pair.
+#
+# Run from this directory (the CLI finds ./kernels.toml on its own):
+#   flinspect kernel list
+#   flinspect kernel show scale_clip_acc
+#   flinspect kernel generate
+# or from anywhere with `--kernels path/to/this/file`.
+#
+# Relative paths resolve against this file's directory. The Fortran dump is
+# committed (no flang needed); the C++ side needs only `clang++` on PATH.
+
+[fortran]
+corpus = "."
+out = "Generated.lean"
+namespace = "Quickstart.Generated"
+
+[cpp]
+header_dir = "."
+clang = "clang++"
+out = "GeneratedCpp.lean"
+namespace = "Quickstart.GeneratedCpp"
+
+[[kernel]]
+name = "scale_clip_acc"
+fortran = { dump = "toy_kernel_ptree", subroutine = "scale_clip_acc" }
+cpp = { header = "toy_kernel.hpp", function = "scale_clip_acc_point" }
