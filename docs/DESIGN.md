@@ -1,4 +1,4 @@
-# flinspect — Design
+# groundline — Design
 
 > **Status:** living document, rewritten in place as the architecture firms up.
 > This is the *how*: target architecture, the IR seam, the weakness→fix mapping,
@@ -33,11 +33,11 @@ From the review of the current codebase. Ordered by impact on the vision.
 
 ```
 ┌──────────────────────┐   ┌────────────────────────┐   ┌───────────────────────────┐
-│ Frontends (swappable) │   │  flinspect IR          │   │ Consumers (flang-agnostic) │
+│ Frontends (swappable) │   │  groundline IR          │   │ Consumers (flang-agnostic) │
 │                       │   │  (the contract)        │   │                            │
 │ A. flang sema dump    │──▶│  Entities + Relations  │──▶│  Graph build (ParseForest) │
 │ B. LFortran ASR  (TBD)│   │  + confidence (D3)     │   │  Explorer (Jupyter)        │
-│ C. flang FIR/API (TBD)│   │  flinspect-owned       │   │  Relational query layer    │
+│ C. flang FIR/API (TBD)│   │  groundline-owned       │   │  Relational query layer    │
 └──────────────────────┘   └────────────────────────┘   └───────────────────────────┘
         leaks here              the seam — nothing            never imports flang
         stay here               flang-specific lives here    query evals the ground
@@ -121,7 +121,7 @@ consumer is a Lean printer. Two rules, stated now so they hold later:
 
 - **Do not bloat the relational IR.** The two IRs share the frontend layer and
   nothing else; a field that only the Lean printer needs never appears in
-  `flinspect/ir.py`.
+  `groundline/ir.py`.
 - **The kernel-IR → Lean path is trusted-base code** (VISION D6): deterministic,
   small, auditable; no LLM anywhere in it.
 
@@ -189,7 +189,7 @@ independently green and the one risky step is isolated.
 
 *Phase 1a — structural seam (pure refactor, fixtures stay no-sema):* — **DONE
 2026-06-18.**
-- Define the IR (§2.1) as flinspect-owned types in `flinspect/ir.py` — entities as
+- Define the IR (§2.1) as groundline-owned types in `groundline/ir.py` — entities as
   frozen value objects keyed by scope-qualified `EntityId`; relations as tuple-sets;
   `callees`/`callers` computed, not stored. Single `calls` relation (no confidence
   strata yet — that's Phase 2); `unresolved_calls` kept first-class.
@@ -243,7 +243,7 @@ the real MOM6+FMS2 corpus went from 346 unparseable files to 0. See `DEVLOG.md`.
   calls), and a legend makes the encoding discoverable. Direction stays the
   colour channel, so the two encodings compose.
 - The graph-element construction moved out of the widget into
-  `flinspect/graph_view.py` — pure IR → element dicts, no ipywidgets import — and
+  `groundline/graph_view.py` — pure IR → element dicts, no ipywidgets import — and
   is unit-tested there (`tests/test_graph_view.py`); `explorer.py` keeps only the
   stylesheet, legend and event wiring (principle #10). The stratum labels
   `resolved|assumed|unresolved` and the per-edge lookup live at the seam
@@ -278,7 +278,7 @@ frontier-and-gate story real).
   and the honest caveats (hand-written models; friendliest kernel shape).
 - *Then:* automate the printer (deterministic dump → kernel IR → Lean; §2.3), one
   construct at a time in the D7 corpus style (construct → golden Lean model).
-  **First milestone landed 2026-07-30:** `flinspect/kir.py` +
+  **First milestone landed 2026-07-30:** `groundline/kir.py` +
   `frontend/flang_kernel.py` + `lean_printer.py` regenerate the pilot model from
   the *production* MOM6 dump, and `Pilot/Fidelity.lean` proves generated ≡
   hand-written **by `rfl`** — so generated-from-dump ≡ C++ port, transitively,
@@ -341,14 +341,26 @@ frontier-and-gate story real).
   `KernelFrontend` seam (`frontend/kernel_base.py`: typed
   `FortranKernelSpec`/`CppKernelSpec`, one `extract(spec) -> Kernel` method,
   mirroring the relational `Frontend`), and the old `lean/pilot/generate.py`
-  driver is replaced by `flinspect/kernel_bank.py` plus a `flinspect` console
-  script (`flinspect kernel list/show/generate/verify`; `verify` — regenerate,
+  driver is replaced by `groundline/kernel_bank.py` plus a `groundline` console
+  script (`groundline kernel list/show/generate/verify`; `verify` — regenerate,
   byte-diff against the committed files, `lake build` — is the CI gate). All
   generated defs verified byte-identical across the migration.
   `examples/quickstart/` is the committed portability proof (toy pair, its
   with-sema dump committed, AMReX-free standalone C++ header), validated by a
   bare-clone + fresh-venv acceptance run outside turbo-stack. See the DEVLOG
   entry.
+  **User manual landed 2026-07-31** (Track B conclusion 2 of 2): a
+  comprehensive MkDocs Material site — concepts, tiered install, quickstart,
+  how-tos, four case studies retold from the DEVLOG, full reference including
+  the complete refusal catalog, and an honest limits page. Site source
+  `manual/` + `mkdocs.yml`; deployed to GitHub Pages by
+  `.github/workflows/docs.yml` (one-time Pages setup checklisted in
+  `PUBLISHING.md`; URL https://alperaltuntas.github.io/groundline/). The build
+  is fully static: every shown output is pre-rendered from the real pipeline
+  into committed `manual/snippets/` files (regenerable via
+  `render_snippets.sh`) and pinned against fresh runs by
+  `tests/test_manual.py`, so the manual cannot rot silently. `docs/` remains
+  the engineering record; the site links to it. See the DEVLOG entry.
 - *Later:* kernels with cross-iteration structure (k-recurrences → induction —
   the genuinely sequential shapes the plain-DO gate refuses, e.g.
   `find_dz_for_eta`'s pressure accumulation), reductions (scalar
@@ -449,7 +461,7 @@ the dump can't give. Resolves D5.
 - **Option A** — frontend built on flang's textual parse-tree dump (current
   direction).
 - **Option B** — frontend built on a semantic-IR library (LFortran ASR / fparser2).
-- **IR** — flinspect's own intermediate representation; the seam between frontends
+- **IR** — groundline's own intermediate representation; the seam between frontends
   and consumers.
 - **sema / no-sema** — flang dumps *with* / *without* semantic analysis (name &
   type resolution, generic binding).

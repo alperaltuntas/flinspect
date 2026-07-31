@@ -1,4 +1,4 @@
-# flinspect — Devlog
+# groundline — Devlog
 
 > **Status:** append-only, newest-first. Each entry is dated and records a
 > roadblock and its resolution as it happened. **Do not rewrite past entries** —
@@ -8,6 +8,134 @@
 > story of how we got there.
 >
 > Decision IDs (D1–D5) and weakness IDs (W1–W10) refer to `VISION.md` / `DESIGN.md`.
+> Entries before 2026-07-31 refer to the tool by its original name,
+> **flinspect** — renamed to **groundline** on 2026-07-31 (see that entry);
+> per the append-only rule they are not rewritten.
+
+---
+
+## 2026-07-31 — flinspect → groundline: the rename, applied
+
+**What:** the tool, package, and CLI are renamed **flinspect → groundline**,
+applied in the manual session before its commits landed (so the manual ships
+under the new name). Why the old name had to go: it hard-codes *flang* when
+the pipeline has ingested clang ASTs since the Track B clang frontend, and
+"inspect" undersells what Track B does. Why *groundline*: the glaciology
+**grounding line** — where floating ice meets bedrock — is the boundary this
+tool draws through a codebase (what floats: `assumed`/`unresolved`, untested
+ports; what rests on bedrock: sema-resolved facts, Lean-proved equivalences),
+and "ground graph" was already the relational track's own vocabulary. Naming
+history: *soundline* was chosen first and rejected the same day (three active
+software companies, an audio-polluted namespace); *groundline* verified clean
+— PyPI available (unclaimed), sole collision a power-lines engineering firm.
+
+- **Scope applied:** package dir `flinspect/` → `groundline/` (git mv) + all
+  imports; pyproject name, console script (`groundline = groundline.cli:main`),
+  and description (no longer "flang-based"); the CLI's `--help` description;
+  env vars renamed **without back-compat** per the user's call —
+  `GROUNDLINE_CORPUS` / `GROUNDLINE_KERNELS`; `FLINSPECT_*` is no longer
+  honored anywhere. The checkout directory moved to `dev-utils/groundline`
+  (grep confirmed zero references to the old path anywhere in the parent
+  turbo-stack repo); venv recreated at the new path; the stale Jupyter
+  kernelspec migrated. All URLs now `alperaltuntas/groundline` — the GitHub
+  repo rename itself (auto-redirecting) is on the user, before enabling Pages.
+- **Generated artifacts, regenerated not sed-trusted:** the four generated
+  Lean modules (pilot + quickstart `Generated.lean`/`GeneratedCpp.lean`) carry
+  provenance blurbs naming `groundline.lean_printer` and `groundline kernel
+  generate`; after the code rename, `groundline kernel verify` confirmed the
+  updated committed files match a fresh regeneration **byte-for-byte** on all
+  four (defs untouched — the rename changed header comments only), and `lake
+  build` re-checked the proofs. Manual snippets all re-rendered under the new
+  CLI (`render_snippets.sh`); the manual-honesty tests re-pin them.
+- **What was deliberately NOT renamed:** DEVLOG entries below this one
+  (append-only; a header note now flags the old name), and the historical
+  narratives inside them. `docs/VISION.md`/`DESIGN.md` are living documents
+  and were updated in place.
+- **Environment note (the same trap, third sighting):** the first
+  `kernel verify` after the rename ran with the bare elan `lake` shim on PATH
+  and failed with the home-quota error — activating the Lean env
+  (`activate_lean.sh`) before the lake tier remains mandatory; the snippet
+  script's temp-file guard kept the committed axioms snippet intact, as
+  designed.
+
+---
+
+## 2026-07-31 — Track B conclusion (2 of 2): the user manual (MkDocs Material + GitHub Pages)
+
+**What:** docs only — a comprehensive user manual for Track B, built with
+MkDocs Material (site source `manual/`, config `mkdocs.yml` at the repo root;
+`docs`/`VISION`/`DESIGN`/`DEVLOG` stay the engineering record, linked from
+the site but not absorbed). Published via a GitHub Pages workflow
+(`.github/workflows/docs.yml`: `configure-pages` → `upload-pages-artifact` →
+`deploy-pages` on pushes to main); enabling Pages needs one-time repo-admin
+setup, checklisted in `PUBLISHING.md` (Settings → Pages → Source = "GitHub
+Actions"; repo must be public or on a paid plan). Site URL will be
+https://alperaltuntas.github.io/flinspect/ — internal links are all relative,
+so the URL choice can't break the site. README gained the site link + a
+one-paragraph Track B blurb (nothing else touched). Packaging: a `docs`
+optional extra (`mkdocs-material>=9,<10`).
+
+- **Structure (27 pages):** Home (what the theorems mean and deliberately do
+  NOT mean, prominent; Logos "migration by proof" + reals-first VSS 2025
+  lineage credited) · tiered Installation (pip / +flang / +clang / +Lean,
+  each tier's unlock stated) · Quickstart (the `examples/quickstart` walk,
+  end to end) · six Concepts pages written for a scientific-software reader
+  who hasn't seen Lean (two-IR architecture, kernel IR + refusal discipline,
+  pointize with the assertion-vs-proof licensing story, functionalize + the
+  join, the printer's fidelity contract, trusted base + axioms audit) · five
+  How-tos (bank a pair, inline-loop addressing, extend the subset via the D7
+  workflow, port to a new LLVM, wire `verify` into CI) · four Case studies
+  retold from this DEVLOG as narratives with the real theorem names and
+  axiom audits (the pilot & why `rfl` is the strongest no-drift statement;
+  CW84's join **including the functionalize.subst aliasing bug, told
+  honestly**; thickness_to_dz's assertion-vs-proof symmetry;
+  edge_thickness_upwind's ordinal addressing + the find_dz_for_eta refusal
+  as the boundary) · Reference (manifest schema, CLI with real `--help`
+  output, kir API, both frontends, printer behavior, Lean project layout,
+  and the **complete refusal catalog** — all 77 `raise UnsupportedConstruct`
+  sites, grepped and organized by stage) · Limits & roadmap (reductions/
+  k-recurrences/masks as the frontier, permanent scope boundaries restated)
+  · a one-page relational-track stub ("documented after its CLI lands").
+- **Honesty mechanics.** The site build is fully static — no flang, clang,
+  Lean, or corpus at build time. Every command output shown is real,
+  pre-rendered THIS session from the real pipeline into committed snippet
+  files (`manual/snippets/*.txt`), embedded via `pymdownx.snippets`, and
+  reproducible: `manual/snippets/render_snippets.sh` regenerates all of them
+  (quickstart list/show/generate/verify, CLI help, production list + a CW84
+  show, the k-recurrence refusal via a temp manifest, and the axioms audit
+  from a fresh `lake build` + `lake env lean Pilot/AxiomsAudit.lean` — 798
+  jobs, all 31 declarations `[propext, Classical.choice, Quot.sound]` or
+  documented subsets). `tests/test_manual.py` (+5 tests; clang-gated where
+  needed) pins the snippets against fresh runs: the quickstart `show` output
+  byte-compares, the refusal line reproduces through the real CLI error
+  path, and the axioms snippet must list exactly `AxiomsAudit.lean`'s
+  declarations with only the standard axioms. The quickstart page also
+  includes `Generated.lean` straight from the repo file (cannot rot vs the
+  file; `verify` pins the file vs regeneration). The toy equivalence theorem
+  shown in the quickstart was actually compiled (`lake env lean` on a scratch
+  file; `rfl`, standard axioms) before being quoted.
+- **Verification:** `mkdocs build --strict` green; suite 179 → 184 with
+  gates on, bare mode 171 pass / 13 skip (gated tests still skip, never
+  fail); manual quotes checked against the real MOM6 source where DEVLOG
+  wasn't verbatim (CW84 loop body, upwind bounds `i=ish-1:ieh+1`,
+  find_dz_for_eta's recurrence line).
+- **Findings recorded, not fixed** (docs task — package untouched beyond the
+  `docs` extra + honesty tests):
+  - (a) `kernel verify`'s C++ tier byte-diffs the whole module, whose header
+    stamps the clang version — so full C++ `verify` passes only under the
+    pinned clang. Correct per the toolchain-is-provenance design, but a
+    portability wart for CI on other runners (the manual documents the
+    pytest-golden workaround, which compares defs only). A future
+    `verify --defs-only` (or diffing below the header) may be worth it.
+  - (b) `kernel list` prints unnormalized output paths from relative
+    manifest entries (`.../examples/../lean/pilot/...`) — cosmetic.
+  - (c) The bare-elan-shim failure mode (entry 1-of-2) bit again while
+    rendering snippets: a `lake` on PATH without a provisioned toolchain
+    produced an empty axioms snippet before the script was hardened to write
+    through a temp file and keep the committed copy on failure.
+- **Not done, deliberately:** no aspirational content — roadmap items are
+  labeled roadmap on one page (`limits.md`); the relational track got a stub,
+  not a manual; no package/proof changes.
 
 ---
 
