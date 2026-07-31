@@ -312,9 +312,32 @@ frontier-and-gate story real).
   narrative files that cite the hand models as documentation; there is no
   verification reason to do so — they cost nothing and keep the
   human-readable anchor.
-- *Later:* kernels with cross-iteration structure (k-recurrences → induction),
-  masks/wet-dry logic, and more C++ surface (e.g. `pow` calls, ternaries) as
-  real kernels demand it.
+  **5-of-5 landed 2026-07-31:** the three remaining TIM point kernels —
+  `edge_thickness_upwind`, `thickness_to_dz_3d_boussinesq`,
+  `thickness_to_dz_3d_nonboussinesq` — banked, covering the **entire current
+  TIM kernel population**, via two extraction extensions that widen where a
+  kernel may live and what it may reference, not what its body may compute.
+  (1) *Plain-DO pointization*, superseding the CW84-era out-of-scope note on
+  `thickness_to_dz`: a plain, perfectly nested `do` nest pointizes under the
+  array-index gate plus an own-cell write gate (reductions/recurrences still
+  refuse), and its **standing semantic license is a proved schema lemma**
+  (`Pilot/SeqSchema.lean`): the honest sequential fold of a point function
+  over any duplicate-free complete enumeration of the box equals the
+  pointwise map — where `do concurrent` supplies an assertion, plain DO now
+  supplies a proof. (2) *Inline-loop addressing + component reads*: loop
+  nest #N of a subroutine by source-order ordinal (dumps carry no line
+  numbers), with driver-supplied def names recording the pairing, and
+  loop-invariant scalar components / loop-indexed component arrays becoming
+  synthesized scalar `in` params (`GV%H_to_Z` → `h_to_z`,
+  `tv%SpV_avg(i,j,k)` → `spv_avg`; collision-checked, refuse-don't-rename).
+  All three point lemmas are `rfl` between the two generated sides; the C++
+  frontend needed nothing. See the DEVLOG entry for the branch↔kernel
+  pairings and the two source-vs-prompt discrepancies it records.
+- *Later:* kernels with cross-iteration structure (k-recurrences → induction —
+  the genuinely sequential shapes the plain-DO gate refuses, e.g.
+  `find_dz_for_eta`'s pressure accumulation), reductions (scalar
+  accumulators), masks/wet-dry logic, and more C++ surface (e.g. `pow` calls,
+  ternaries) as real kernels demand it.
 
 **Ongoing — conformance corpus (D7).** Formalize `tests/f90/` into the corpus: a
 manifest (construct → fixture → parser code path), a coverage rule (every parse

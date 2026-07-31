@@ -11,6 +11,160 @@
 
 ---
 
+## 2026-07-31 — Track B 5-of-5: the remaining TIM point kernels banked; plain DO licensed by proof
+
+**What:** the three remaining TIM point kernels —
+`edge_thickness_upwind_point`, `thickness_to_dz_3d_boussinesq_point`,
+`thickness_to_dz_3d_nonboussinesq_point` — extracted from the production
+dumps, generated into `Pilot/Generated.lean` / `Pilot/GeneratedCpp.lean`, and
+proved equivalent, closing out the **current TIM kernel population (5 of 5)**.
+Two extraction extensions carried the load; both widen WHERE a Fortran kernel
+may live and WHAT it may reference — not what its body may compute. The two
+already-banked kernels' generated output is **byte-identical** before and
+after — the diff of both generated files is purely additive (checked line by
+line): the appended defs, plus one new documented `set_option
+linter.unusedVariables false` in the generated header (kernels like upwind
+never read an output's incoming value, so its binder is unused by design —
+mirroring the existing longLine rationale comment). The extensions change
+nothing retroactively.
+
+- **Rule A — plain-DO pointization, licensed by a proved schema lemma, not by
+  assertion.** The two-layer design, and the layer split matters:
+  * *Python side (the extraction gate, `kir.pointize`):* a plain, PERFECTLY
+    nested `do` nest (each level's body exactly one inner `do` until the
+    innermost) pointizes under the same check as `do concurrent` — every
+    array reference indexed exactly by the loop indices — plus a write gate
+    the plain path alone needs: every write must land in the iteration's own
+    array cell, so an assignment to a scalar parameter (`s = s + a(i)`, the
+    accumulator/reduction shape) refuses, as do imperfect nests, strides, and
+    duplicate indices. The gate is NOT the semantic justification; it is what
+    guarantees the lemma's setting applies.
+  * *Lean side (the semantic license, `Pilot/SeqSchema.lean`):* a plain DO's
+    honest semantics is a *sequential fold* of per-point updates over an
+    enumeration of the index box — so that is what the kernel-level theorems
+    model (`foldSeq`), and the license to equate it with the pointwise map is
+    the once-and-for-all schema lemma `foldSeq_eq_pointwiseMap`: for any
+    point function `f` and any duplicate-free, complete enumeration,
+    `foldSeq f s₀ enum = pointwiseMap f s₀`. Proof shape as planned —
+    induction over the enumeration with a frame argument (`foldSeq_frame`:
+    cells not in the enumeration are never written; under `Nodup`, iteration
+    `i` finds cell `i` pristine, writes land in disjoint cells, the fold
+    telescopes to the map). The lemma is fully general (`f : ι → σ → σ`,
+    any state type σ — no arity specialization was needed): once pointize
+    has produced `f`, point-locality is baked into `f`'s *type*, so the
+    hypothesis is structural, not re-checked per kernel.
+  * *The symmetry worth recording:* for `do concurrent` we accept the
+    source's independence assertion as the license for `pointwise`; plain DO
+    gets a *proof* instead of an assertion — equal (arguably better)
+    footing. Reductions and recurrences remain refused: they are not
+    point-local, and their sequential-vs-unordered question is real
+    mathematics reserved for a future step.
+- **Rule B — inline-loop addressing + component reads.**
+  * *Addressing:* `flang_kernel.extract_loop_kernel(dump, subroutine, nest,
+    name)` extracts loop nest #N of a subroutine — the dump carries no line
+    numbers, so the deterministic address is the source-order ordinal among
+    the subroutine's outermost do-constructs (both do-concurrent and
+    plain-DO nests count; the walk descends into IF branches but never into
+    a do-construct). The generated def's name is driver-supplied — an inline
+    loop has no name of its own — and `KERNELS` records the pairing. The
+    enclosing subroutine's SpecificationPart supplies declarations,
+    *tolerantly*: a declaration outside the subset (`character` message
+    buffers, `optional`/`pointer` attrs, `logical` locals) poisons only its
+    own names, and extraction refuses iff the nest references one. The
+    whole-subroutine mode is unchanged.
+  * *Component reads:* exactly two shapes become synthesized scalar `in`
+    params of the pointized kernel — a loop-invariant scalar component
+    (`GV%H_to_Z` → `h_to_z`; loop-invariant because the base must be an
+    `intent(in)` derived-type dummy, which Fortran forbids modifying, and
+    component writes refuse) and a component array indexed exactly by the
+    loop indices (`tv%SpV_avg(i,j,k)` → `spv_avg`). Naming is the component's
+    own name, deterministic and collision-checked (refuse, never rename);
+    synthesized params append after the real params in first-use order.
+    Everything else refuses (offset subscripts, non-`intent(in)` bases,
+    chained `a%b%c`). The mapping rule — including that the synthesized param
+    is *modeled as a real scalar*, with the by-eye audit covering the
+    component's actual type — is recorded in `kir.py`'s docstring as part of
+    the model's meaning. In the kernel-level theorems the mapping surfaces
+    exactly as intended: `h_to_rz` is captured loop-invariantly, `spv_avg`
+    is fed per cell (`spv i`).
+- **The branch ↔ kernel pairings** (and two source discrepancies vs the task
+  prompt, recorded per trust-the-source):
+  `MOM_interface_heights.F90` lives in **`MOM6/src/core/`**, not
+  `src/framework/`; and `thickness_to_dz_3d` carries **both** a
+  do-concurrent and a plain-DO variant of each branch under its
+  `do_offload`/`use_doconcurrent` guard (the prompt described only the plain
+  ones). Nest ordinals in source order: 1 = do-concurrent non-Boussinesq,
+  2 = plain-DO non-Boussinesq, 3 = do-concurrent Boussinesq, 4 = plain-DO
+  Boussinesq. Banked (the plain-DO variants — the default execution path,
+  `do_offload` absent/false — and the ones rule A exists for):
+  * `thickness_to_dz_3d_boussinesq_point` ↔ `thickness_to_dz_3d` nest 4, the
+    plain-DO loop of the else (Boussinesq or no SpV_avg) branch:
+    `dz(i,j,k) = GV%H_to_Z * h(i,j,k)`.
+  * `thickness_to_dz_3d_nonboussinesq_point` ↔ nest 2, the plain-DO loop of
+    the `(.not.GV%Boussinesq) .and. allocated(tv%SpV_avg)` branch:
+    `dz(i,j,k) = GV%H_to_RZ * h(i,j,k) * tv%SpV_avg(i,j,k)`.
+  * `edge_thickness_upwind_point` ↔ `zonal_edge_thickness` nest 1 (its only
+    nest), the in-subset `do concurrent` under `if (CS%upwind_1st)`:
+    `h_W(i,j,k) = h_in(i,j,k) ; h_E(i,j,k) = h_in(i,j,k)`
+    (`MOM_continuity_PPM.F90`; `meridional_edge_thickness` holds the
+    textually identical h_S/h_N loop). This one is do-concurrent, so its
+    license stays the source assertion, like the pilot kernels.
+  The corpus dump `MOM6/MOM_interface_heights.o_ptree` exists and holds the
+  3-D `thickness_to_dz_3d` as expected. An earlier entry (2026-07-31, second
+  kernel) recorded `thickness_to_dz` as OUT of scope pending exactly this
+  semantics decision; that entry stands as history — the decision has now
+  been made (by the user, 2026-07-31) and this entry records it in scope
+  under rule A.
+- **The C++ frontend needed NOTHING** — as predicted: the new point kernels
+  are assignments over `Real&`/`const Real` already in the subset. The only
+  clang-side change is the driver's `CPP_KERNELS` becoming (header, function)
+  pairs, since the thickness kernels live in
+  `mom_interface_heights_kernel.hpp`.
+- **One printer truthfulness fix:** the generated doc line hardcoded "the
+  `intent(inout)` arguments"; `edge_thickness_upwind`'s outputs are
+  `intent(out)`. The text now derives from the actual intents — byte-identical
+  for all previously banked kernels (theirs are all inout).
+- **D7 fixtures first** (`tests/f90/`, regenerated with the pinned flang 21;
+  existing dumps byte-identical): `test_kernel_plaindo` (perfectly nested
+  plain-DO point kernel), `test_kernel_recurrence` (REFUSAL — the
+  `p(i,K+1) = p(i,K) + …` shape distilled from `find_dz_for_eta`, whose EOS
+  branch is a twin of nothing; the capital-K spelling also pins dump
+  lowercasing — `K` and `k` are the same index, so the refusal fires on the
+  +1 offset, not on case), `test_kernel_inline_nests` (two nests in one
+  subroutine, one per IF branch, extracted by ordinal — pins determinism,
+  out-of-range refusal, and that whole-subroutine mode still refuses),
+  `test_kernel_component` (scalar + loop-indexed component reads, plus the
+  `collide` subroutine pinning the naming-collision refusal). KIR-level
+  refusal tests pin the reduction shape, imperfect nests, duplicate indices,
+  component writes, offset component subscripts, and non-`intent(in)` bases.
+  Tests 133 → 151 (with corpus + clang).
+- **Proof outcomes** (`Pilot/EdgeThicknessUpwind.lean`,
+  `Pilot/ThicknessToDz.lean`): per the mature pattern there are NO new
+  hand-written models — each pair's point lemma relates the two GENERATED
+  defs directly, and all three are **`rfl`** (the bodies are identical up to
+  parameter order). The kernel-level theorems: upwind reuses the pilot's
+  `pointwise` with the CW84 dummy-scalar idiom (license: the do-concurrent
+  assertion); the two thickness kernels model the Fortran side honestly as
+  `foldSeq` and *instantiate the schema lemma* (license: proof). The by-eye
+  audit of each generated def against its source — part of banking now that
+  both sides are machine-produced — was done for all six new defs (three
+  Fortran, three C++): each mirrors its source's expression shape exactly
+  (`h_to_z * h`; `h_to_rz * h * spv[_avg]` left-associated; `(h_in, h_in)`).
+  Axioms audit extended by 17 declarations; `lake build` compiled everything
+  **on the first attempt**: the twelve kernel-side declarations (generated
+  defs, point lemmas, kernel theorems) report exactly
+  `[propext, Classical.choice, Quot.sound]`, and the five polymorphic
+  SeqSchema declarations report strict subsets (`foldSeq`/`pointwiseMap`
+  none, the induction proofs `[propext]`(+`Quot.sound` via funext) — no
+  classical reasoning), which the audit file notes. One cross-iteration
+  channel the plain-DO gate deliberately leaves to the checker, now recorded
+  in kir.py's docstring: a local scalar read before its first write would
+  carry the previous iteration's value, but `functionalize` binds locals per
+  iteration, so such a read prints as an *unbound name* and the generated
+  Lean fails to elaborate — refusal by Lean, loud, never a wrong model.
+
+---
+
 ## 2026-07-31 — Track B clang frontend: both sides of the theorems are now generated
 
 **What:** the C++ mirror of the printer chain —
