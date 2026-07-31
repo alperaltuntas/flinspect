@@ -1,0 +1,166 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'kernel_dc_mod'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'clamp_scale'
+| | | | DummyArg -> Name = 'x_in'
+| | | | DummyArg -> Name = 'x_out'
+| | | | DummyArg -> Name = 'lo'
+| | | | DummyArg -> Name = 'n'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'n'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'x_in'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> ArraySpec -> ExplicitShapeSpec
+| | | | | | SpecificationExpr -> Scalar -> Integer -> Expr = 'n'
+| | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'x_out'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'lo'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | EntityDecl
+| | | | | | Name = 'w'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'i'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> DoConstruct
+| | | | | NonLabelDoStmt
+| | | | | | LoopControl -> Concurrent
+| | | | | | | ConcurrentHeader
+| | | | | | | | ConcurrentControl
+| | | | | | | | | Name = 'i'
+| | | | | | | | | Scalar -> Integer -> Expr = '1_4'
+| | | | | | | | | | LiteralConstant -> IntLiteralConstant = '1'
+| | | | | | | | | Scalar -> Integer -> Expr = 'n'
+| | | | | | | | | | Designator -> DataRef -> Name = 'n'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'w=2._4*x_in(int(i,kind=8))-x_out(int(i,kind=8))'
+| | | | | | | Variable = 'w'
+| | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | | | Expr = '2._4*x_in(int(i,kind=8))-x_out(int(i,kind=8))'
+| | | | | | | | Subtract
+| | | | | | | | | Expr = '2._4*x_in(int(i,kind=8))'
+| | | | | | | | | | Multiply
+| | | | | | | | | | | Expr = '2._4'
+| | | | | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | | | | Real = '2.0'
+| | | | | | | | | | | Expr = 'x_in(int(i,kind=8))'
+| | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | DataRef -> Name = 'x_in'
+| | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | Expr = 'x_out(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'x_out'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> IfConstruct
+| | | | | | | IfThenStmt
+| | | | | | | | Scalar -> Logical -> Expr = 'abs(w)<lo'
+| | | | | | | | | LT
+| | | | | | | | | | Expr = 'abs(w)'
+| | | | | | | | | | | FunctionReference -> Call
+| | | | | | | | | | | | ProcedureDesignator -> Name = 'abs'
+| | | | | | | | | | | | ActualArgSpec
+| | | | | | | | | | | | | ActualArg -> Expr = 'w'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | | | | | | Expr = 'lo'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | | | Block
+| | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'x_out(int(i,kind=8))=lo'
+| | | | | | | | | Variable = 'x_out(int(i,kind=8))'
+| | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | DataRef -> Name = 'x_out'
+| | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | Expr = 'lo'
+| | | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | | | ElseIfBlock
+| | | | | | | | ElseIfStmt
+| | | | | | | | | Scalar -> Logical -> Expr = 'w**2_4>4._4*lo'
+| | | | | | | | | | GT
+| | | | | | | | | | | Expr = 'w**2_4'
+| | | | | | | | | | | | Power
+| | | | | | | | | | | | | Expr = 'w'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | | | | | | | | | Expr = '2_4'
+| | | | | | | | | | | | | | LiteralConstant -> IntLiteralConstant = '2'
+| | | | | | | | | | | Expr = '4._4*lo'
+| | | | | | | | | | | | Multiply
+| | | | | | | | | | | | | Expr = '4._4'
+| | | | | | | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | | | | | | Real = '4.0'
+| | | | | | | | | | | | | Expr = 'lo'
+| | | | | | | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | | | | Block
+| | | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'x_out(int(i,kind=8))=x_in(int(i,kind=8))+w/2._4'
+| | | | | | | | | | Variable = 'x_out(int(i,kind=8))'
+| | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | DataRef -> Name = 'x_out'
+| | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | Expr = 'x_in(int(i,kind=8))+w/2._4'
+| | | | | | | | | | | Add
+| | | | | | | | | | | | Expr = 'x_in(int(i,kind=8))'
+| | | | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | | | DataRef -> Name = 'x_in'
+| | | | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | | | Expr = 'w/2._4'
+| | | | | | | | | | | | | Divide
+| | | | | | | | | | | | | | Expr = 'w'
+| | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | | | | | | | | | | Expr = '2._4'
+| | | | | | | | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | | | | | | | Real = '2.0'
+| | | | | | | ElseBlock
+| | | | | | | | ElseStmt -> 
+| | | | | | | | Block
+| | | | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'x_out(int(i,kind=8))=(w+lo)*5.e-1_4'
+| | | | | | | | | | Variable = 'x_out(int(i,kind=8))'
+| | | | | | | | | | | Designator -> DataRef -> ArrayElement
+| | | | | | | | | | | | DataRef -> Name = 'x_out'
+| | | | | | | | | | | | SectionSubscript -> Integer -> Expr = 'i'
+| | | | | | | | | | | | | Designator -> DataRef -> Name = 'i'
+| | | | | | | | | | Expr = '(w+lo)*5.e-1_4'
+| | | | | | | | | | | Multiply
+| | | | | | | | | | | | Expr = '(w+lo)'
+| | | | | | | | | | | | | Parentheses -> Expr = 'w+lo'
+| | | | | | | | | | | | | | Add
+| | | | | | | | | | | | | | | Expr = 'w'
+| | | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | | | | | | | | | | | Expr = 'lo'
+| | | | | | | | | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | | | | | | | | Expr = '5.e-1_4'
+| | | | | | | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | | | | | | Real = '0.5'
+| | | | | | | EndIfStmt -> 
+| | | | | EndDoStmt -> 
+| | | EndSubroutineStmt -> Name = 'clamp_scale'
+| EndModuleStmt -> Name = 'kernel_dc_mod'

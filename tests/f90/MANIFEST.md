@@ -37,6 +37,7 @@ Two assertion tiers per construct:
 | Mangled resolved names (`imported$owner$specific`) | `test_private_specifics` | `_flang_text.demangle`, `_edges_for_mangled` |
 | Unresolved externals → first-class `defined=False` targets | `test_external_calls` | `_classify_event` unresolved branch, `_unknown_target` |
 | Local variable declarations (type/rank/kind; `type(t)` / `class(t)`) | `test_interface_rank`, `test_type_bound_generic` | `parse_variable_declaration` |
+| Track B kernel subset: `do concurrent` point kernel — assignment, if/elseif/else, arithmetic (`+ - * / **`), comparisons, `abs`, array refs at loop indices, local scalars | `test_kernel_doconcurrent` | `frontend/flang_kernel.py` (whole module), `kir.pointize`/`functionalize`, `lean_printer` |
 
 ## Known gaps (parser paths with no fixture yet)
 
