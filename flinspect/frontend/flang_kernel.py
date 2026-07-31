@@ -26,6 +26,7 @@ from flinspect.kir import (
     Var,
 )
 from flinspect.frontend._flang_text import level
+from flinspect.frontend.kernel_base import FortranKernelSpec
 
 
 # --------------------------------------------------------------------------- #
@@ -505,3 +506,21 @@ def extract_loop_kernel(dump_path: Path, subroutine: str, nest: int,
     locals_ = tuple(d for d in decls
                     if d.name in used and d.name not in set(arg_order))
     return Kernel(name, params, locals_, (loop,))
+
+
+# --------------------------------------------------------------------------- #
+# The seam object (KernelFrontend)
+# --------------------------------------------------------------------------- #
+
+class FlangKernelFrontend:
+    """The :class:`~flinspect.frontend.kernel_base.KernelFrontend` for flang
+    with-sema dumps: one deep method dispatching on the spec's addressing mode
+    (whole subroutine vs rule-B inline loop). The module-level functions above
+    remain the implementation — and stay importable for tests that pin them
+    directly — but the spec path is the supported entry point."""
+
+    def extract(self, spec: FortranKernelSpec) -> Kernel:
+        if spec.nest is None:
+            return extract_kernel(spec.dump, spec.subroutine)
+        return extract_loop_kernel(spec.dump, spec.subroutine, spec.nest,
+                                   spec.def_name)

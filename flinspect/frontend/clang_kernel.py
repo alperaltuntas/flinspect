@@ -29,6 +29,7 @@ from flinspect.kir import (
     Assign, BinOp, Call, Cmp, Expr, If, Kernel, Neg, Param, Paren, RealLit,
     Stmt, UnsupportedConstruct, Var,
 )
+from flinspect.frontend.kernel_base import CppKernelSpec
 
 # --------------------------------------------------------------------------- #
 # clang invocation (pinned flags; JSON is an in-memory intermediate)
@@ -372,3 +373,19 @@ def extract_kernel(source: Path, function: str, *, clang: str = "clang++",
     text = dump_function_json(source, function, clang=clang,
                               include_dirs=include_dirs)
     return extract_kernel_from_decl(find_function(parse_ast_objects(text), function))
+
+
+# --------------------------------------------------------------------------- #
+# The seam object (KernelFrontend)
+# --------------------------------------------------------------------------- #
+
+class ClangKernelFrontend:
+    """The :class:`~flinspect.frontend.kernel_base.KernelFrontend` for clang
+    JSON ASTs. The clang invocation config (compiler, include dirs) travels in
+    the spec — part of the kernel's address, not function kwargs. The
+    module-level :func:`extract_kernel` remains the implementation and stays
+    importable for tests that pin it directly."""
+
+    def extract(self, spec: CppKernelSpec) -> Kernel:
+        return extract_kernel(spec.header, spec.function, clang=spec.clang,
+                              include_dirs=spec.include_dirs)
