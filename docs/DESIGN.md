@@ -295,8 +295,26 @@ frontier-and-gate story real).
   `thickness_to_dz` (MOM_interface_heights.F90) — its loops are plain nested
   `do`, not `do concurrent`, and extending pointize to plain DO nests is a
   semantics decision reserved for the user. See the DEVLOG entry.
+  **Clang side landed 2026-07-31:** `frontend/clang_kernel.py` (clang
+  `-ast-dump=json` → the *same* kernel IR; the C++ point kernels are already
+  per-point, so no pointize — `functionalize` and the printer are reused
+  unchanged, and CW84's join reused the existing merge machinery).
+  `lean/pilot/generate.py` now emits `Pilot/GeneratedCpp.lean` from the
+  production TIM header with the pinned clang invocation stamped as
+  provenance, and `Pilot/FidelityCpp.lean` proves generated-C++ ≡ hand-written
+  C++ for both kernels, plus the fully-mechanical chain theorems
+  generated-C++ ≡ generated-Fortran. **Both sides of every banked equivalence
+  are now machine-produced**; the hand-written C++ models (`ppmLimitPosC`,
+  `ppmLimitCw84C`) are no longer load-bearing — they remain as audited,
+  machine-checked references. Retiring them entirely would mean restating the
+  pilot's point lemmas directly between the two generated models (the chain
+  theorems already are that statement) and rewriting the `PpmLimit*.lean`
+  narrative files that cite the hand models as documentation; there is no
+  verification reason to do so — they cost nothing and keep the
+  human-readable anchor.
 - *Later:* kernels with cross-iteration structure (k-recurrences → induction),
-  masks/wet-dry logic, and the clang-side ingestion (`-ast-dump=json` or libclang).
+  masks/wet-dry logic, and more C++ surface (e.g. `pow` calls, ternaries) as
+  real kernels demand it.
 
 **Ongoing — conformance corpus (D7).** Formalize `tests/f90/` into the corpus: a
 manifest (construct → fixture → parser code path), a coverage rule (every parse

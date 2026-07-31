@@ -11,6 +11,109 @@
 
 ---
 
+## 2026-07-31 — Track B clang frontend: both sides of the theorems are now generated
+
+**What:** the C++ mirror of the printer chain —
+`flinspect/frontend/clang_kernel.py` (clang `-ast-dump=json` → the *same*
+kernel IR) plus `Pilot/GeneratedCpp.lean`, generated from the production TIM
+kernel header and proved equivalent to the hand-written C++ models
+(`Pilot/FidelityCpp.lean`). The last non-mechanical link is gone: for both
+banked kernels, dump → Lean is machine-produced on both sides, and the
+hand-written C++ models are demoted from load-bearing links to verified
+references (kept, audited, no longer trusted by eye). The full picture:
+
+```
+flang with-sema dump ──▶ kernel IR ──▶ Generated.lean          (Fortran side)
+clang JSON AST       ──▶ kernel IR ──▶ GeneratedCpp.lean       (C++ side)
+        FidelityCpp.lean:  GeneratedCpp ≡ hand-written C++ models
+        + chain theorems:  GeneratedCpp ≡ Generated  (both endpoints machine-produced)
+```
+
+- **Shared-KIR design held.** The C++ kernels are already per-point scalar
+  functions, so the extractor emits a rank-0 `Kernel` directly — no
+  `pointize` on this side; `functionalize` and the Lean printer are reused
+  unchanged. CW84's trailing guarded pair went through the *existing*
+  `merge_if` join machinery untouched — the join semantics banked last time
+  turned out to be frontend-agnostic, which is the whole point of the shared
+  IR. (`kir.py` unchanged; the only printer edit is a provenance-text
+  parameter on `print_module` — the default keeps `Generated.lean`
+  byte-identical — because the C++ header must stamp clang provenance, which
+  the flang blurb couldn't express. The semantic rendering paths are
+  untouched.)
+- **The cast allowlist (the load-bearing refusal).** clang wraps almost every
+  read in `ImplicitCastExpr`; unwrapping them wholesale would be exactly the
+  plausible-but-wrong-model failure mode, since cast kinds like
+  `IntegralToFloating` *change the value*. Only two kinds are allowlisted,
+  each argued value-preserving: `LValueToRValue` (a variable read — the
+  lvalue's storage location converts to the value it holds; pure value-category
+  bookkeeping) and `FunctionToPointerDecay` (a function name decaying to a
+  pointer in callee position — no data value involved). Anything else refuses,
+  pinned by the `refuse_int_literal` fixture (`b + 1` → `IntegralToFloating`
+  → `UnsupportedConstruct`).
+- **Intent mapping:** `Real &` (non-const lvalue reference) → `inout`;
+  `Real const` by value (clang prints `const Real`) → `in`. Everything else —
+  pointers, const refs, plain mutable by-value `Real`, non-Real types, default
+  arguments — refuses. Outputs are the `Real &` parameters in declaration
+  order, so the generated def's tuple order matches the hand models' by
+  construction.
+- **JSON surprises** (the survey mostly matched the plan; three notes):
+  (1) the callee of `amrex::Math::abs` carries **no namespace qualifier** in
+  the JSON — `referencedDecl` is just the FunctionDecl `abs` (found through
+  amrex's `using std::abs` shadow), so acceptance is on the referenced
+  declaration's name, not the source spelling; (2) `FloatingLiteral.value` is
+  the shortest round-trip form (`3.0_rt` → `'3'`, `0.5_rt` → `'0.5'`), which
+  lands on the same Lean numeral the Fortran side prints — spelling fidelity
+  is preserved through a different route; (3) `else if` is just an `IfStmt`
+  in the else slot — kept nested (single-branch `If` with an `If` in
+  `orelse`), which `functionalize` turns into the same `IfExpr` chain as
+  flang's `ElseIfBlock` branches, so the printed output is identical in form.
+  Also confirmed the prompt-level warning: node `id` fields are memory
+  addresses — nondeterministic across runs — so the JSON is an in-memory
+  intermediate only; no dump is ever committed or golden-compared (the D7
+  corpus asserts on extracted KIR / printed Lean instead).
+- **A genuine cross-language parse asymmetry, now pinned:** C++ unary minus
+  binds tighter than `*`, so `-2.0_rt * x` is `(-2) * x`, while Fortran R1008
+  makes `-2.0*x(i)` the negation of the whole term, `-(2 * x)`. The negate
+  fixtures on the two sides deliberately print differently — each model
+  mirrors its own source's parse, and the equivalence theorems absorb the
+  difference.
+- **D7 fixtures first** (`tests/cpp/`, self-contained — a 3-line prelude
+  mirrors `amrex::Real`/`_rt`/`Math::abs`, so no include paths are needed):
+  the composite point kernel, the guarded-join pair, negation, and a refusals
+  file (`+=`, `for`, `int` parameter, int literal). Gated on `clang++` being
+  on `PATH` (the C++ analogue of the `FLINSPECT_CORPUS` gate), with
+  node-level allowlist tests that run everywhere off hand-built JSON dicts.
+  Manifest: a **sibling `tests/cpp/MANIFEST.md`**, not a section in the f90
+  one — the f90 corpus defends flang *dump-format* drift with committed
+  snapshots; this corpus has no committed dumps at all (see above) and its
+  drift axis is the clang JSON schema. Tests 117 → 133.
+- **Determinism/provenance:** `lean/pilot/generate.py` now emits both files;
+  the clang invocation is pinned (paths as constants, CLI overrides) and the
+  `clang++ --version` line + full flag set are stamped into
+  `GeneratedCpp.lean`'s header. Regeneration is byte-stable for both files,
+  and the corpus golden tests import the driver's own lists (`KERNELS`,
+  `CPP_KERNELS`, `render`, `render_cpp`) so driver and tests cannot drift.
+- **Proof outcome** (`Pilot/FidelityCpp.lean`), compiled on the first
+  attempt: `ppm_limit_pos_point` fidelity is **`rfl`** (function-level
+  definitional equality — the printer's extra source parens and `curv > 0`
+  vs `0 < curv` are notation-level, exactly as on the Fortran side).
+  `ppm_limit_cw84_point` fidelity is deliberately *not* plain `rfl`, and the
+  investigation says the extractor is right: `functionalize` carries the
+  sequential guarded pair as merged inline `Cond`s inside the result tuple,
+  while the hand model mirrors the C++ mutation order as a
+  `let h_L' := ...; let h_R' := ... h_L' ...` chain, and
+  `(a, if c then x else y)` vs `if c then (a, x) else (a, y)` is a
+  propositional, not definitional, equality. That is the *same*
+  control-flow-representation delta the Fortran-side CW84 proof absorbs, and
+  the same two-line pattern closes it: `simp only [<the two defs>];
+  split_ifs <;> rfl`. The chain theorems
+  (`generated_cpp_matches_generated_fortran_{pos,cw84}`) rewrite through the
+  fidelity lemmas into the existing pilot equivalences. Axioms audit extended
+  by six declarations; all fourteen report exactly `[propext,
+  Classical.choice, Quot.sound]`.
+
+---
+
 ## 2026-07-31 — Track B second kernel banked: `PPM_limit_CW84`, and the control-flow join
 
 **What:** the second kernel pair — Fortran `PPM_limit_CW84`
