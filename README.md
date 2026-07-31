@@ -1,21 +1,40 @@
-# What is flinspect?
+# What is groundline?
 
-flinspect is a **structural exploration tool for large Fortran HPC codebases**. It
+groundline is a **structural exploration tool for large Fortran HPC codebases**. It
 consumes LLVM/flang parse-tree dumps and builds a graph-based model of a project's
 modules, subprograms, interfaces, derived types, USE dependencies, and call
 relationships, which you can browse and visualize interactively in Jupyter.
 
 It is an early-stage **prototype**, currently used primarily for the TURBO project.
-The longer-term ambition — to grow flinspect into a relational reasoning system
+The longer-term ambition — to grow groundline into a relational reasoning system
 that can *prove* architectural properties (e.g. for safe GPU modernization of
 MOM6) — is described under [Roadmap / Vision](#roadmap--vision) below and is **not
 yet implemented**.
 
-> **Documentation.** This README describes what flinspect does *today*. The
+> **Documentation.** This README describes what groundline does *today*. The
 > forward-looking plan lives in `docs/`:
 > - [`docs/VISION.md`](docs/VISION.md) — goals and the strategic decisions behind them.
 > - [`docs/DESIGN.md`](docs/DESIGN.md) — target architecture, the IR seam, and the phased roadmap.
 > - [`docs/DEVLOG.md`](docs/DEVLOG.md) — append-only log of build/parsing roadblocks and how they were resolved.
+>
+> **User manual:** <https://alperaltuntas.github.io/groundline/> (source under
+> `manual/`; see `PUBLISHING.md`).
+
+## Track B — kernel equivalence by proof
+
+Alongside the structural exploration below, groundline has a second,
+**working** face: it proves that TURBO's C++/AMReX (TIM) ports of MOM6
+kernels compute the same mathematics as the legacy Fortran — machine-checked
+in Lean 4 / Mathlib, **over the reals** (algorithmic equivalence, deliberately
+not bit-for-bit floating point). Both sides of every theorem are generated
+from compiler syntax trees (flang with-sema dumps, clang JSON ASTs) by a
+small deterministic translator that refuses anything outside its audited
+subset. The pipeline is driven by a declarative manifest and the `groundline
+kernel list/show/generate/verify` CLI; today it covers the entire current TIM
+point-kernel population (5 of 5), each with a checked equivalence theorem and
+a clean axioms audit. **The [manual](https://alperaltuntas.github.io/groundline/)
+is the guided tour** — concepts, a self-contained quickstart
+(`examples/quickstart/`), and case studies retold from the development log.
 
 ---
 
@@ -43,9 +62,9 @@ and every call fact carries a confidence stratum — `resolved` / `assumed` /
 
 ---
 
-## Working with flinspect
+## Working with groundline
 
-flinspect is a prototype; the notebooks under `notebooks/` are the guided tour —
+groundline is a prototype; the notebooks under `notebooks/` are the guided tour —
 see [`notebooks/README.md`](notebooks/README.md) for the index, the launch
 instructions, and the conventions. In short:
 
@@ -58,7 +77,7 @@ PYTHONNOUSERSITE=1 .venv/bin/jupyter lab notebooks/
 `01_getting_started.ipynb` runs anywhere off the committed `tests/f90` fixtures —
 no corpus needed. Notebooks 02–04 read a corpus of parse-tree dumps: by default
 the MOM6 + FMS2 one on NCAR's glade filesystem, overridable with the
-`FLINSPECT_CORPUS` environment variable (to generate dumps for your own code,
+`GROUNDLINE_CORPUS` environment variable (to generate dumps for your own code,
 see `tests/f90/gen_ptree_files.sh` and the build pipeline notes in
 `docs/DEVLOG.md`).
 
@@ -66,13 +85,13 @@ see `tests/f90/gen_ptree_files.sh` and the build pipeline notes in
 
 ## Key classes and components
 
-- **`flinspect.ir.IR`** — the seam: entities (scope-qualified atoms) plus
+- **`groundline.ir.IR`** — the seam: entities (scope-qualified atoms) plus
   relations (tuple-sets) over them; nothing flang-specific appears in it.
-- **`flinspect.frontend`** — everything flang-specific, behind one method:
+- **`groundline.frontend`** — everything flang-specific, behind one method:
   `FlangDumpFrontend.extract(sources) -> IR`.
 - **`ParseForest`** — flang-agnostic consumer; builds NetworkX module-dependency
   and call graphs from the IR (call edges carry their confidence stratum).
-- **`flinspect.graph_view`** — pure neighbourhood → renderable-elements builder
+- **`groundline.graph_view`** — pure neighbourhood → renderable-elements builder
   (the testable half of the Explorer; no widget imports).
 - **`Explorer`** — interactive Jupyter widget for code exploration.
 
@@ -81,7 +100,7 @@ see `tests/f90/gen_ptree_files.sh` and the build pipeline notes in
 1. **Input.** Takes flang-generated with-sema parse-tree dump files as input
    (typically under a build directory such as `.../flang_ptree/`).
 2. **Parsing pipeline.** The frontend scrapes each dump line by line and projects
-   the result onto the flinspect-owned IR at the boundary. *(Text scraping is
+   the result onto the groundline-owned IR at the boundary. *(Text scraping is
    inherently fragile; the IR seam contains that fragility — a format change is a
    frontend fix, invisible to consumers — and the conformance corpus under
    `tests/f90/` localizes it to named constructs. See `docs/DESIGN.md`.)*
@@ -98,11 +117,11 @@ see `tests/f90/gen_ptree_files.sh` and the build pipeline notes in
 - Jupyter ecosystem: jupyterlab, ipywidgets, ipycytoscape
 - z3-solver — present as a dependency for the planned reasoning layer (see Roadmap)
 
-## Why was flinspect created?
+## Why was groundline created?
 
 Large Fortran HPC codebases (climate models, CFD codes, etc.) often have thousands
 of source files, complex module hierarchies, intricate dependencies, and legacy
-code with unclear structure and sparse documentation. flinspect aims to help with:
+code with unclear structure and sparse documentation. groundline aims to help with:
 
 1. **Code understanding** — grasp the structure of complex Fortran codebases.
 2. **Dependency analysis** — see how parts of the code interact.
@@ -117,14 +136,14 @@ planning legacy-code modernization.
 
 # Roadmap / Vision
 
-> **Everything below this line is aspirational** — it describes where flinspect is
+> **Everything below this line is aspirational** — it describes where groundline is
 > headed, not what it does today. It is preserved here as the detailed design
 > sketch for the reasoning layer; the condensed, decision-level version lives in
 > [`docs/VISION.md`](docs/VISION.md), and the architecture/roadmap that gets us
 > there is in [`docs/DESIGN.md`](docs/DESIGN.md). None of the query/constraint
 > syntax shown below is implemented yet.
 
-The long-term vision is to turn flinspect from a structural explorer into a
+The long-term vision is to turn groundline from a structural explorer into a
 **relational reasoning system over Fortran programs** — very much in the spirit of
 the Alloy model checker, but grounded in real compiler-derived facts rather than
 abstract models.
@@ -190,7 +209,7 @@ resolution that violates the property?" or "does *every* resolution satisfy it?"
 That residual partial-knowledge reasoning is the only part that resembles Alloy's
 model-finding; the bulk is settled by the query layer.
 
-Together this makes flinspect a program-logic checker for Fortran architecture,
+Together this makes groundline a program-logic checker for Fortran architecture,
 enabling:
 
  - architectural invariants
@@ -356,7 +375,7 @@ in Earth system modeling software engineering. The headline framing:
    refactorings.
 
 4. **Classifying frontier nodes (the real power).** Once we compute the frontier,
-   flinspect + logic can classify each node:
+   groundline + logic can classify each node:
    - **Pure blockers (easy wins)** — no MPI, no I/O, no global state, just not yet
      ported: `easy = frontier - HostOnly - GlobalAccess - SyncPoints`. Low-risk,
      high-reward.
