@@ -11,6 +11,86 @@
 
 ---
 
+## 2026-07-31 — Track B second kernel banked: `PPM_limit_CW84`, and the control-flow join
+
+**What:** the second kernel pair — Fortran `PPM_limit_CW84`
+(`MOM6/src/core/MOM_continuity_PPM.F90`) / C++ `MOM::ppm_limit_cw84_point`
+(`TIM/mom/cpp/mom_continuity_ppm_kernel.hpp`) — extracted from the production
+dump, generated into `Pilot/Generated.lean`, and proved equivalent to the C++
+port. The kernel subset widened by exactly the three constructs CW84 needs;
+everything else still refuses.
+
+- **The join semantics decision (the load-bearing one).** CW84's loop body ends
+  with two *sequential* guarded assignments, and the second guard's RHS reads
+  `h_L`, which the first may have just updated. `functionalize` now supports a
+  statement following an `If` in exactly one shape: the `If` has a single
+  branch (an elseif chain refuses — the merge formula below is binary) and
+  every branch body consists solely of assignments to state (output) variables
+  — no locals (a `Let` may not escape a branch), no nested `If`s. The merge is
+  per variable, `state'[v] = Cond(cond, state_then[v], state_else[v])` (vars no
+  branch assigned pass through), and the remaining statements run against the
+  *merged* state — so the second guard's `h_l` read observes the first `If`'s
+  conditional value, sequentially, as in the source. `Cond` is a new
+  conditional *expression* node (inline `if c then a else b` in the printer);
+  no frontend ever produces one — only `functionalize` creates it. The merge
+  applies only when statements actually follow the `If`; a trailing `If` keeps
+  the structured `IfExpr` path, so the pilot kernel's generated model is
+  byte-identical to before. Deliberately conservative refusals, both pinned by
+  tests: elseif-chain joins, and any non-state assignment inside a joined
+  branch.
+- **The two smaller constructs.** Logical IF statement (R1139): the dump nests
+  it as `ActionStmt -> IfStmt` with the condition and a *nested* `ActionStmt`
+  as children — extracted as a single-branch `If` with no orelse. Unary minus:
+  flang's `Negate -> Expr`, new `Neg` node, printed `-x` with parens restored
+  around compound operands (`-(2 * x)`) because Lean's prefix `-` binds tighter
+  than `*` while Fortran's applies to the whole term. Both node shapes matched
+  what we expected from the R1139/R1008 grammar — no dump surprises this time
+  (Q1 ledger: nothing new).
+- **D7 fixtures first:** `test_kernel_ifstmt_join` (two guarded assignments,
+  the second reading the first's target — the golden Lean pins the merged-state
+  threading visibly: `(if t > b then t - 1 else b) + t`) and
+  `test_kernel_negate` (bare leaf, compound operand, negated source parens).
+  Manifest rows added. Tests 111 → 116 (join + negate goldens, three join
+  refusals; the old blanket join refusal test retired — that shape is now the
+  supported one).
+- **Proof outcome** (`Pilot/PpmLimitCw84.lean`): the maturing pattern — no
+  hand-written Fortran model; the point lemma is proved directly against
+  `TrackB.Generated.ppm_limit_cw84`. Only the C++ model is hand-written
+  (mirroring its own shapes: the `h_i` copy, locals RLdiff/RLmean/FunFac/
+  RLdiff2, and the sequential mutations as a `let h_L' := ...; let h_R' :=
+  ... h_L' ...` chain). Expression shapes are identical across the two sources;
+  the proof absorbs only the control-flow *representation* delta (inline
+  `Cond`s in the result tuple vs sequential `let`s):
+  `simp only [<the two defs>]; split_ifs <;> rfl` — every case closes by
+  `rfl` once the shared guards are split. (One tactic lesson: `unfold` leaves
+  the ifs buried under `have` binders where `split_ifs` cannot see them;
+  unfolding via `simp only` zeta-reduces the `let`s first.) The kernel-level
+  theorem reuses the pilot's
+  `pointwise` schema — CW84 has no scalar argument, so the schema's scalar
+  slot is filled with a dummy `0` on both sides. Axioms audit extended: all
+  three new declarations report exactly `[propext, Classical.choice,
+  Quot.sound]`.
+- **Latent threading bug found by auditing the join against its spec:**
+  `functionalize.subst` skipped substitution whenever an output's current
+  symbolic value was a plain `Var` — meant to skip the identity case
+  (`state[o] = Var(o)`, where substituting is a no-op anyway), but it also
+  skipped *aliases*: after `b = a`, a later read of `b` would silently keep
+  referring to the input `b`. No banked kernel hits it, but the join makes it
+  reachable, so it is fixed (substitution is now unconditional) and pinned by
+  `test_sequential_alias_read_threads_current_value`. Regenerating
+  Generated.lean confirmed the fix changes nothing for the existing kernels.
+- **Drift guard tightened:** the pytest corpus golden test now imports
+  `KERNELS`/`render` from `lean/pilot/generate.py` instead of hardcoding one
+  kernel, so the driver and the test cannot disagree about what Generated.lean
+  should contain.
+- **Considered and OUT of scope:** `thickness_to_dz`
+  (`MOM_interface_heights.F90`). Its loops are plain nested `do`, not
+  `do concurrent` — extending pointize to plain DO nests would assert an
+  iteration-independence the source doesn't state, and that semantics decision
+  is reserved for the user.
+
+---
+
 ## 2026-07-30 — Track B printer: generated-from-dump model ≡ C++ port, every link machine-checked
 
 **What:** the first milestone of Track B's printer step (DESIGN §4 "*Then:*

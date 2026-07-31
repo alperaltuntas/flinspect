@@ -284,6 +284,17 @@ frontier-and-gate story real).
   hand-written **by `rfl`** — so generated-from-dump ≡ C++ port, transitively,
   all machine-checked. Supported subset = the pilot kernel's shape; everything
   else refuses (`UnsupportedConstruct`). See the DEVLOG entry.
+  **Second kernel banked 2026-07-31:** `PPM_limit_CW84` / `ppm_limit_cw84_point`.
+  The subset widened by exactly the three constructs CW84 needs — logical IF
+  statements (R1139), unary minus, and the restricted control-flow join
+  (statements after an IF, supported only for a single-branch IF whose branches
+  assign solely to outputs; merged per variable into inline conditionals with
+  *sequentially threaded* state). The maturing pattern: no hand-written Fortran
+  model anymore — the point lemma is proved directly against the GENERATED
+  model (`Pilot/PpmLimitCw84.lean`). Considered and OUT of scope:
+  `thickness_to_dz` (MOM_interface_heights.F90) — its loops are plain nested
+  `do`, not `do concurrent`, and extending pointize to plain DO nests is a
+  semantics decision reserved for the user. See the DEVLOG entry.
 - *Later:* kernels with cross-iteration structure (k-recurrences → induction),
   masks/wet-dry logic, and the clang-side ingestion (`-ast-dump=json` or libclang).
 
