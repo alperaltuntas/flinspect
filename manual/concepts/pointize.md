@@ -1,12 +1,19 @@
 # Pointize: from loop nest to point function
 
-`kir.pointize` performs the pipeline's central semantic move: it strips a kernel's
-single loop-nest wrapper and turns every array reference indexed *exactly* by
-the loop indices into a scalar. `b(i) = b(i) + w` becomes `b = b + w`; the
-loop indices, bound variables, and any parameter the pointized body no longer
-references (grid structs, index ranges) are dropped. What remains is a pure
-per-point function — the same shape as a C++/AMReX device kernel, which is
-what makes the two sides comparable at all.
+`kir.pointize` performs the pipeline's central semantic move: it strips a
+kernel's single loop-nest wrapper and turns every array reference indexed
+*exactly* by the loop indices into a scalar. `b(i) = b(i) + w` becomes
+`b = b + w`; the loop indices, bound variables, and any parameter the
+pointized body no longer references (grid structs, index ranges) are
+dropped. What remains is a pure per-point function — the same shape as a
+C++/AMReX device kernel, which is what makes the two sides comparable at
+all.
+
+It never runs silently. A loop and a point function are different things,
+so a loop-nest kernel refuses at extraction unless its manifest entry
+carries `pointize = true` — the user's explicit license for the reduction.
+(A Fortran kernel that is already per-point needs no license and skips this
+pass entirely.)
 
 The interesting question is not the mechanics but the **license**: a loop nest
 and a pointwise map are only the same thing if the iterations do not interact.

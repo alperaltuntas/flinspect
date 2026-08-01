@@ -60,14 +60,15 @@ refuses.
    thread a symbolic state, and every control-flow path ends by materializing
    the output tuple.
 
-The C++ frontend produces rank-0 kernels directly (the ported kernels it
-targets are already per-point functions), so pointize runs only on the
-Fortran side; functionalize and the printer are shared verbatim.
+Pointize runs only on the Fortran side, and only on loop kernels whose
+manifest entry licenses it with `pointize = true` — a per-point Fortran
+subroutine, like every supported C++ function, skips it. Functionalize and
+the printer are shared verbatim.
 
 ## How the refusal discipline is enforced
 
 The refusal discipline is pinned by tests, not just asserted: the conformance
-corpus (`tests/f90/`, `tests/cpp/`) contains **deliberate refusal fixtures** —
+suite (`tests/f90/`, `tests/cpp/`) contains **deliberate refusal fixtures** —
 a k-recurrence that must never pointize, joins with locals that must not
 merge, an integer literal whose implicit cast must not silently unwrap — and
 the test suite asserts the refusals fire. When an extension widens the

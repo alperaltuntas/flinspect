@@ -33,12 +33,12 @@ chosen:
 
 - A Fortran file that USEs other modules can only be dumped after those
   modules' `.mod` files exist — in practice, inside a full ordered build. So
-  Fortran dumps are captured once as a build side product and **committed
-  with provenance**, and the frontend reads files.
-- A C++ kernel header compiles standalone given its `-I` paths, so clang can
+  Fortran dumps are captured once as a build side product and **kept in the
+  repository with provenance**, and the frontend reads files.
+- A C++ kernel source compiles standalone given its `-I` paths, so clang can
   run fresh **on demand** — and must, because its JSON contains node IDs
   that are memory addresses, nondeterministic across runs, which makes
-  committed JSON dumps useless as fixtures anyway.
+  saved JSON dumps useless as fixtures anyway.
 
 Nothing is lost to this asymmetry: determinism is asserted where it actually
 holds (the extracted IR and the printed Lean, both address-free), and each
@@ -79,9 +79,9 @@ kinds beyond real/int, chained `a%b%c` component paths.
 
 **Input.** The frontend invokes clang itself:
 `clang++ -std=c++20 -fsyntax-only -Xclang -ast-dump=json -Xclang
--ast-dump-filter <function>`, plus the manifest's `-I` dirs. A header is
-wrapped in a one-line translation unit (`#include`) in a temp directory,
-mirroring how a real build consumes it.
+-ast-dump-filter <function>`, plus the manifest's `-I` dirs. A `.cpp` source
+compiles directly; a header is wrapped in a one-line translation unit
+(`#include`) in a temp directory, mirroring how a real build consumes it.
 
 **The JSON is an in-memory intermediate, never persisted.** clang's node
 `id` fields are memory addresses — nondeterministic across runs — so raw
@@ -102,14 +102,14 @@ each argued value-preserving:
 Anything else refuses — pinned by a fixture where `b + 1` produces an
 `IntegralToFloating` cast and must raise.
 
-**Intent mapping.** `Real &` → `inout`; `const Real` by value → `in`.
-Everything else — pointers, const refs, plain mutable by-value `Real`,
-non-Real types, default arguments — refuses. Outputs are the `Real &`
+**Intent mapping.** A non-const lvalue reference (`Real &` / `double &`) →
+`inout`; a const by-value scalar (`const Real` / `const double`) → `in`.
+Everything else — pointers, const refs, plain mutable by-value scalars,
+non-real types, default arguments — refuses. Outputs are the reference
 parameters in declaration order. The mapping keys on the *qualType
-spellings*, not on where the `Real` alias comes from — which is why the
-frontend needed zero changes when it met the quickstart's dependency-free
-standalone header after being built against the AMReX-based production
-headers.
+spellings*: `Real` (amrex's alias, as the production headers spell it) and
+plain `double` (as the quickstart's standalone `.cpp` spells it) are the two
+accepted real-scalar types.
 
 **No pointize.** The C++ kernels this frontend targets are already per-point
 scalar functions, so extraction emits a rank-0 `Kernel` directly;

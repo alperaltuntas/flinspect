@@ -50,18 +50,18 @@ The Fortran frontend reads flang **with-sema parse-tree dumps**:
 flang -fc1 -fdebug-dump-parse-tree kernel_source.f90 > kernel_source_ptree
 ```
 
-The committed fixtures and the production corpus were generated with **flang
-21** (the exact version is stamped in `tests/f90/PROVENANCE`). The dump format
+The committed fixtures and the production dump collection were generated
+with **flang 21** (the exact version is stamped in `tests/f90/PROVENANCE`). The dump format
 has no formal stability contract, so other LLVM versions may or may not work
-as is — the conformance corpus exists precisely to detect and localize format
+as is — the conformance fixtures exist precisely to detect and localize format
 drift; see [Port to a new LLVM](howto/new-llvm.md). Two constraints to know
 before generating dumps at scale:
 
 - the source must be *semantically valid*, not merely parseable — flang emits
   no dump at all on a semantic error;
 - a file that USEs modules from other files needs those modules' `.mod` files
-  built first, which means a full ordered build. The production corpus in the
-  case studies is generated as a side product of the real model build.
+  built first, which means a full ordered build. The case studies' dump
+  directory is generated as a side product of the real model build.
 
 ## Level 3 — add clang, for the C++ side
 
@@ -71,9 +71,9 @@ committed, because its node IDs are memory addresses and change between runs.
 (Why the two frontends consume different formats at all is answered in
 [the frontends reference](reference/frontends.md#why-two-different-input-formats).)
 
-- For **standalone headers** like the quickstart's `toy_kernel.hpp`, a plain
+- For **standalone sources** like the quickstart's `toy_kernel.cpp`, a plain
   `clang++` on `PATH` is all you need.
-- Headers with dependencies need their include paths in the manifest. The
+- Sources with dependencies need their include paths in the manifest. The
   production case study's kernels include AMReX, so its manifest pins an
   AMReX install's `include/` directory (and an `mpi.h`); see `include_dirs`
   in

@@ -61,7 +61,7 @@ implies — the early-warning surface for dump-format drift (see
 |---|---|
 | the function found zero or several times in the dump (`found N definitions`) | unique address, as on the Fortran side |
 | non-`void` return type | the supported kernel shape returns through `Real &` parameters; a return value is a different calling convention |
-| parameter type other than `Real &` / `const Real` (pointers, const refs, mutable by-value, non-Real, …) | the [intent mapping](frontends.md) is deliberately total on exactly two spellings |
+| parameter type other than `Real &`/`double &` or `const Real`/`const double` (pointers, const refs, mutable by-value, other types, …) | the [intent mapping](frontends.md) accepts exactly these spellings and nothing else |
 | a parameter with a default argument | a defaulted parameter changes the function's arity story; does not appear in the targeted kernel shape |
 | unexpected children of the function declaration, multiple bodies, or no body | structural guards on the JSON shape |
 | locals shadowing parameters (`locals shadow parameters`) | shadowing would silently redirect reads in the flat `let` model |
@@ -72,7 +72,7 @@ implies — the early-warning surface for dump-format drift (see
 |---|---|
 | any statement other than a declaration, an assignment, or an `if` (`statement '<kind>'`) — so `for`, `while`, `+=`, `return`, … | the C++ subset mirrors the Fortran one: straight-line assignments and structured ifs |
 | a declaration that is not a `VarDecl` (`declaration '<kind>'`) | only plain local variables are modeled |
-| a local of any type but `Real`/`const Real` (`local '<name>': type '<qual>'`) | only real scalars exist in the kernel IR |
+| a local of any type but `Real`/`double` (optionally const) (`local '<name>': type '<qual>'`) | only real scalars exist in the kernel IR |
 | a local without a copy-initializer (`= form`) | an uninitialized or direct/list-initialized local does not map to `let name := value` |
 | a local declared more than once | C++ block scoping does not map to the flat `Let` model; renaming would break the by-eye audit |
 | an assignment whose target is not a (reference) parameter | writes must go to outputs; anything else is outside the state-threading model |
@@ -89,6 +89,13 @@ implies — the early-warning surface for dump-format drift (see
 | calls to anything whose referenced declaration is not `abs`, calls with no callee or a non-`DeclRefExpr` callee, `abs` with ≠ 1 argument | same intrinsic policy as Fortran |
 | user-defined literal with an unexpected shape, a suffix other than `_rt`, or a non-`FloatingLiteral` operand | only AMReX's `_rt` real literals are modeled |
 | any other expression node (`expression node '<kind>'`) | catch-all |
+
+## The kernel bank (`groundline/kernel_bank.py`)
+
+| Trigger | Why it refuses |
+|---|---|
+| a loop-nest kernel whose manifest entry lacks `pointize = true` (`the Fortran kernel is a loop nest, which is not the same thing as a point function`) | reducing a loop to its per-point body is a semantic step the user must license explicitly ([Pointize](../concepts/pointize.md)) |
+| `pointize = true` on a kernel that is not a loop nest | the option would silently do nothing — the manifest should say what is true |
 
 ## Pointize (`groundline/kir.py`)
 

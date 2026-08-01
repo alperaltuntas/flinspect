@@ -34,10 +34,11 @@ name and records the pairing:
 ```toml
 [[kernel]]
 name = "edge_thickness_upwind"
-fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree",
+fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree",
             subroutine = "zonal_edge_thickness", nest = 1 }
-cpp = { header = "mom_continuity_ppm_kernel.hpp",
+cpp = { file = "mom_continuity_ppm_kernel.hpp",
         function = "edge_thickness_upwind_point" }
+pointize = true
 ```
 
 One more accommodation real routines need: the enclosing subroutine's

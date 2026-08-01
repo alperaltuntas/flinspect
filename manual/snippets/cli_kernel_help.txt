@@ -5,8 +5,8 @@ positional arguments:
     list      kernels in the manifest + basic status
     show      print one kernel's generated Lean defs
     generate  (re)write the generated Lean modules
-    verify    regenerate, byte-diff against the committed files, lake build
-              (non-zero exit on drift or failure)
+    verify    check the generated modules are current, then re-check the
+              proofs (non-zero exit on any mismatch or failure)
 
 options:
   -h, --help  show this help message and exit

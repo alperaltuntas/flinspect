@@ -79,9 +79,9 @@ if a broken `~/.local` user site shadows the environment, add `PYTHONNOUSERSITE=
 see [`notebooks/README.md`](notebooks/README.md).)
 
 `01_getting_started.ipynb` runs anywhere off the committed `tests/f90` fixtures —
-no corpus needed. Notebooks 02–04 read a corpus of parse-tree dumps: by default
+no dump collection needed. Notebooks 02–04 read a directory of parse-tree dumps: by default
 the MOM6 + FMS2 one on NCAR's glade filesystem, overridable with the
-`GROUNDLINE_CORPUS` environment variable (to generate dumps for your own code,
+`GROUNDLINE_DUMPS` environment variable (to generate dumps for your own code,
 see `tests/f90/gen_ptree_files.sh` and the build pipeline notes in
 `docs/DEVLOG.md`).
 
@@ -106,7 +106,7 @@ see `tests/f90/gen_ptree_files.sh` and the build pipeline notes in
 2. **Parsing pipeline.** The frontend scrapes each dump line by line and projects
    the result onto the groundline-owned IR at the boundary. *(Text scraping is
    inherently fragile; the IR seam contains that fragility — a format change is a
-   frontend fix, invisible to consumers — and the conformance corpus under
+   frontend fix, invisible to consumers — and the conformance fixtures under
    `tests/f90/` localizes it to named constructs. See `docs/DESIGN.md`.)*
 3. **Relationship analysis.** USE dependencies, containment, interfaces, and
    call relationships — read from the compiler's resolution and stratified by

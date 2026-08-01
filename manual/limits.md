@@ -52,13 +52,20 @@ today by the array-index gate (the mask subscripts `(i,j)` don't match a
 
 ## More C++ surface
 
-The clang frontend admits exactly what the five banked kernels need. Real
+The clang frontend admits exactly what the existing kernels need. Real
 future kernels will bring at least: `pow` calls (today only `abs` passes the
 callee gate), ternary conditional expressions (`?:` — the natural C++
 spelling of what functionalize's `Cond` already models), and `amrex::min`/
 `amrex::max` (the printer is already able to spell `min`/`max`). Each enters
 by the [subset-extension workflow](howto/extend-subset.md) when a kernel
 demands it — fixture first, refusal edges pinned.
+
+One larger item in the same category: **C++ loop extraction**. Today the
+clang frontend accepts only per-point functions, so a Fortran loop can only
+be compared against a C++ point function (under the explicit
+`pointize = true` license). Extracting a C++ `for` nest and pointizing it
+the same way would allow loop-vs-loop comparisons — a natural next step,
+not started.
 
 ## Scope boundaries that are permanent, not roadmap
 

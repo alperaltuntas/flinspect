@@ -13,9 +13,9 @@ groundline's original, top-down face models a whole Fortran codebase as
 **structural facts**: modules, subprograms, interfaces, and derived types as
 scope-qualified entities; USE dependencies, containment, interface
 membership, and call relationships as relations over them. It consumes the
-same flang with-sema dumps as the kernel track (458 files of MOM6 + FMS2 in the
-production corpus) and is browsable today through a Jupyter explorer and
-NetworkX graphs.
+same flang with-sema dumps as the kernel track (458 files of MOM6 + FMS2 in
+the production dump collection) and is browsable today through a Jupyter
+explorer and NetworkX graphs.
 
 Its distinguishing design decision is that **resolution confidence is a
 first-class fact**. Every call edge carries the stratum the compiler's

@@ -9,12 +9,14 @@ message, it names the construct.
 
 ## 0. Check the shape
 
-The Fortran side must be a single mask-free loop nest (`do concurrent`, or a
-perfectly nested plain `do`) of assignments and structured ifs over
-`+ - * / **`, comparisons, and `abs`, with every array reference indexed
-exactly by the loop indices. The C++ side must be a per-point function in the supported shape:
-`void`, `Real &` outputs, `const Real` inputs, `Real` locals. When in doubt,
-just try `groundline kernel show` — refusal is loud and names the problem.
+The Fortran side must be either a per-point subroutine (scalar arguments,
+no loop) or a single mask-free loop nest (`do concurrent`, or a perfectly
+nested plain `do`) of assignments and structured ifs over `+ - * / **`,
+comparisons, and `abs`, with every array reference indexed exactly by the
+loop indices. The C++ side must be a per-point function in the supported
+shape: `void`, reference outputs, const-value inputs, real scalars
+throughout (`Real` or `double`). When in doubt, just try
+`groundline kernel show` — refusal is loud and names the problem.
 
 ## 1. Add the manifest entry
 
@@ -25,13 +27,18 @@ Add a `[[kernel]]` table to your manifest (see
 ```toml
 [[kernel]]
 name = "my_kernel"
-fortran = { dump = "MOM6/MOM_something.o_ptree", subroutine = "my_kernel" }
-cpp     = { header = "mom_something_kernel.hpp", function = "my_kernel_point" }
+fortran  = { file = "MOM6/MOM_something.o_ptree", subroutine = "my_kernel" }
+cpp      = { file = "mom_something_kernel.hpp", function = "my_kernel_point" }
+pointize = true   # only if the Fortran side is a loop nest
 ```
 
 A whole-subroutine kernel must be named after its subroutine (the manifest
 loader enforces this); a loop *inside* a subroutine is addressed by nest
 ordinal instead — see [Address a loop inside a subroutine](inline-loops.md).
+If the Fortran side is a loop nest, `pointize = true` is required — it is
+the explicit license to reduce the loop to its per-point body
+([why](../concepts/pointize.md)); without it, extraction refuses and the
+message points here.
 
 Check the addressing resolves:
 
@@ -105,7 +112,7 @@ ok [lean]: lake build succeeded
 ```
 
 (Lean stage: activate a real Lean toolchain first — a bare elan shim fails the
-gate loudly.) Also run the pytest suite; the corpus golden tests import the
+gate loudly.) Also run the pytest suite; the golden tests import the
 manifest, so they pick up the new kernel automatically.
 
 ## 6. Commit

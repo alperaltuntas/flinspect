@@ -1,7 +1,7 @@
 # Extend the construct subset
 
 The kernel subset grows **pull, not push**: a construct enters only when a
-real kernel demands it, and it enters through the conformance-corpus
+real kernel demands it, and it enters through the conformance-fixture
 workflow below. The unit of work is a *construct*, not a kernel — the CW84
 kernel of the case studies entered as three constructs (logical IF
 statement, unary minus, the control-flow join), each with its own fixtures.

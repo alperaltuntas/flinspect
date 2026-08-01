@@ -6,7 +6,7 @@ def scale_clip_acc (a b s lo : ℝ) : ℝ :=
     b + lo
   else b + w
 
-/-- Generated from `scale_clip_acc_point` in `toy_kernel.hpp` (clang JSON AST).
+/-- Generated from `scale_clip_acc_point` in `toy_kernel.cpp` (clang JSON AST).
 Outputs `(b)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
 def scale_clip_acc_point (b a s lo : ℝ) : ℝ :=
   let w := s * a

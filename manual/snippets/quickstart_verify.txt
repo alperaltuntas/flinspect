@@ -1,2 +1,6 @@
-ok [fortran]: GeneratedFtn.lean matches a fresh regeneration
-ok [cpp]: GeneratedCpp.lean matches a fresh regeneration
+ok [fortran]: QuickstartFtn.lean matches a fresh extraction
+ok [cpp]: QuickstartCpp.lean matches a fresh extraction
+checking the proofs: `lake build` in …/lean/groundline ...
+    ⋮ (the axioms audit replays here — one line per declaration)
+Build completed successfully (801 jobs).
+ok [lean]: every theorem in the project re-checked

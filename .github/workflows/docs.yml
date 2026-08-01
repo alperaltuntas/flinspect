@@ -2,7 +2,7 @@
 # GitHub Pages on pushes to main. The build is fully static: every command
 # output shown in the manual is pre-rendered and committed under
 # manual/snippets/ (see manual/snippets/render_snippets.sh), so no flang,
-# clang, Lean, or corpus is needed here.
+# clang, Lean, or dump collection is needed here.
 #
 # One-time repository setup is required before this deploys — see
 # PUBLISHING.md at the repo root.

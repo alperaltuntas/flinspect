@@ -39,12 +39,21 @@ groundline kernel generate --help > "$SNIP/cli_kernel_generate_help.txt"
 groundline kernel verify --help   > "$SNIP/cli_kernel_verify_help.txt"
 
 # --- Quickstart walkthrough (C++ side needs clang++) ------------------------
+# The verify snippet keeps its lake stage readable: the axioms audit replays
+# into every build log (one `info:` line per declaration — see the trusted-base
+# page), which is exactly right for CI and far too long for the quickstart, so
+# compact_lake folds that block into one marker line.
+compact_lake() {
+  awk '/^(info:|ℹ|✔| )/ { if (!m) print "    ⋮ (the axioms audit replays here — one line per declaration)"; m=1; next }
+       { print }'
+}
 (
   cd examples/quickstart
   groundline kernel list                    | elide > "$SNIP/quickstart_list.txt"
   groundline kernel show scale_clip_acc             > "$SNIP/quickstart_show.txt"
   groundline kernel generate                | elide > "$SNIP/quickstart_generate.txt"
-  groundline kernel verify                  | elide > "$SNIP/quickstart_verify.txt"
+  PYTHONUNBUFFERED=1 groundline kernel verify 2>&1 | elide | compact_lake \
+                                                    > "$SNIP/quickstart_verify.txt"
 )
 
 # --- Production manifest (needs the corpus; show also needs clang++) --------
@@ -53,6 +62,24 @@ groundline kernel list --kernels examples/turbo-stack.kernels.toml \
 groundline kernel show ppm_limit_cw84 --kernels examples/turbo-stack.kernels.toml \
     > "$SNIP/production_show_ppm_limit_cw84.txt"
 
+# --- The loop/point refusal (quickstart page) --------------------------------
+# The quickstart's loop kernel without its `pointize = true` license: loops
+# and point functions don't compare unless you say so.
+TMP=$(mktemp -d)
+cat > "$TMP/kernels.toml" <<MANIFEST
+[fortran]
+dumps = "$REPO/examples/quickstart"
+generated = "$TMP/G.lean"
+namespace = "Demo"
+
+[[kernel]]
+name = "scale_clip_acc_loop"
+fortran = { file = "toy_kernel_ptree", subroutine = "scale_clip_acc_loop" }
+MANIFEST
+( groundline kernel show scale_clip_acc_loop --kernels "$TMP/kernels.toml" 2>&1 || true ) \
+    | elide > "$SNIP/quickstart_pointize_refusal.txt"
+rm -rf "$TMP"
+
 # --- A real refusal (runs everywhere; exercises the CLI error path) ---------
 # The recurrence fixture distilled from find_dz_for_eta's pressure
 # accumulation: iteration k+1 reads what iteration k wrote, so pointize
@@ -60,13 +87,14 @@ groundline kernel show ppm_limit_cw84 --kernels examples/turbo-stack.kernels.tom
 TMP=$(mktemp -d)
 cat > "$TMP/kernels.toml" <<EOF
 [fortran]
-corpus = "$REPO/tests/f90"
-out = "$TMP/Generated.lean"
+dumps = "$REPO/tests/f90"
+generated = "$TMP/Generated.lean"
 namespace = "Demo"
 
 [[kernel]]
 name = "accumulate"
-fortran = { dump = "test_kernel_recurrence_ptree", subroutine = "accumulate" }
+fortran = { file = "test_kernel_recurrence_ptree", subroutine = "accumulate" }
+pointize = true
 EOF
 ( groundline kernel show accumulate --kernels "$TMP/kernels.toml" 2>&1 || true ) \
     | elide | sed "s|$TMP|/tmp/demo|g" > "$SNIP/refusal_recurrence.txt"

@@ -9,17 +9,18 @@ drift or failure, and it prints exactly what it checked and what it skipped.
 $ groundline kernel verify
 ```
 
-1. **Regenerate + byte-diff, per side.** Extract every banked kernel fresh
-   from its sources and byte-compare the rendered modules against the
-   committed `GeneratedFtn.lean` / `GeneratedCpp.lean`. Any drift → non-zero
-   exit, a unified-diff excerpt, and the fresh copy parked in a temp file.
-   This catches: a stale committed file, upstream source changes, dump-format
+1. **The model check, per side.** Every kernel is extracted fresh from its
+   sources and the rendered modules are compared byte for byte against the
+   `generated` files on disk. Any difference → non-zero exit, a
+   unified-diff excerpt, and the fresh copy parked in a temp file. This
+   catches: a stale generated file, upstream source changes, dump-format
    drift, and any accidental change to the pipeline's output.
-2. **`lake build`** (when the manifest sets `[lean] lake_dir` and `lake` is
-   on `PATH`): every theorem re-checked, the axioms audit re-printed in the
-   log. Skipped with an explicit note when `lake` is absent; skipped when the
-   byte-diff already failed (fix drift first — proofs about stale defs prove
-   nothing).
+2. **The proof check** (when the manifest names a `[lean]` project and
+   `lake` is on `PATH`): `lake build` re-checks every theorem in that
+   project, and the axioms audit reappears in the log. `verify` prints an
+   explicit note when the manifest has no `[lean]` section or `lake` is
+   absent; it skips the proof check when the model check already failed
+   (proofs about stale models prove nothing).
 
 When a tool is missing, the gate says so rather than passing quietly: a missing `clang++` is an **error** on
 `verify` (a gate must not pass vacuously) unless you explicitly scope the run
@@ -31,18 +32,18 @@ with `--skip-cpp`.
 |---|---|---|
 | Python only | `groundline kernel verify --skip-cpp` (quickstart manifest) | Fortran extraction + printing against the committed dump |
 | + the *pinned* clang++ | `groundline kernel verify` (quickstart manifest) | both sides of extraction + printing |
-| + corpus & kernel headers | `verify --kernels examples/turbo-stack.kernels.toml` | the real kernel bank |
+| + the dump directory & kernel sources | `verify --kernels examples/turbo-stack.kernels.toml` | the real kernel bank |
 | + Lean toolchain | same | every equivalence theorem + axioms audit |
 
 The quickstart manifest is the portable smoke test — its Fortran dump is
-committed, its C++ header is standalone — so *any* CI runner can execute the
+committed, its C++ source is standalone — so *any* CI runner can execute the
 first row. One subtlety for the second: the committed `GeneratedCpp.lean`
 header stamps the clang version that produced it (toolchain is provenance),
 and `verify` byte-diffs the **whole file** — so the full C++ byte-diff passes
 only under the pinned clang. On runners with a different clang, cover the C++
 side with the pytest suite instead: its quickstart golden test compares the
 *defs* only, by design. The production rows require site resources
-(the case-study corpus and kernel headers live on NCAR storage),
+(the case-study dumps and kernel headers live on NCAR storage),
 which in practice means a self-hosted or site-local runner for the full gate.
 
 ## Example: GitHub Actions job (the portable level)
@@ -65,7 +66,7 @@ kernel-verify:
         pytest
 ```
 
-The corpus- and clang-gated tests *skip* rather than fail when their toolchain is
+The dump- and clang-gated tests *skip* rather than fail when their toolchain is
 absent, so the `pytest` step is safe on any runner and strengthens itself as
 tools become available.
 

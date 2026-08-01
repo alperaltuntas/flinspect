@@ -43,7 +43,7 @@ from groundline.kir import (
 from groundline.frontend.kernel_base import (
     KernelFrontend,        # Protocol: extract(spec) -> Kernel
     FortranKernelSpec,     # dump, subroutine, nest=None, def_name=None
-    CppKernelSpec,         # header, function, include_dirs=(), clang="clang++"
+    CppKernelSpec,         # source, function, include_dirs=(), compiler="clang++"
 )
 from groundline.frontend.flang_kernel import FlangKernelFrontend
 from groundline.frontend.clang_kernel import ClangKernelFrontend
@@ -85,12 +85,16 @@ from groundline import kernel_bank as kb
 m = kb.load_manifest(kb.resolve_manifest_path())   # or an explicit path
 entry = m.kernel("ppm_limit_pos")
 
-k_f = kb.extract_fortran_entry(entry)   # extract + pointize
-k_c = kb.extract_cpp_entry(entry)       # extract (already per-point)
+k_f = kb.extract_fortran_entry(entry)   # extract; pointize iff licensed
+k_c = kb.extract_cpp_entry(entry)       # extract (point functions only)
 
-text_f = kb.render_fortran(m)           # full GeneratedFtn.lean text
-text_c = kb.render_cpp(m)               # full GeneratedCpp.lean text
+text_f = kb.render_fortran(m)           # the full Fortran-side module text
+text_c = kb.render_cpp(m)               # the full C++-side module text
 ```
+
+`extract_fortran_entry` enforces the loop/point boundary: a loop-nest kernel
+refuses unless its entry carries `pointize = true`, and the option refuses on
+a kernel that is not a loop ([why](../concepts/pointize.md)).
 
 Key names: `Manifest`, `KernelEntry`, `FortranConfig`, `CppConfig`,
 `ManifestError` (malformed manifest — refuse, don't guess),
@@ -100,7 +104,7 @@ Key names: `Manifest`, `KernelEntry`, `FortranConfig`, `CppConfig`,
 `render_*` accept a pre-extracted list so extraction and rendering can be
 separated (this is how `generate` prints per-kernel progress).
 
-The corpus golden tests import these same functions — driver and tests cannot
+The golden tests import these same functions — driver and tests cannot
 disagree about what the generated modules should contain.
 
 ## Stability

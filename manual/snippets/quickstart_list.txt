@@ -1,6 +1,8 @@
-manifest: …/examples/quickstart/kernels.toml  (1 kernel(s))
+manifest: …/examples/quickstart/kernels.toml  (2 kernel(s))
 scale_clip_acc
     fortran: subroutine 'scale_clip_acc' in toy_kernel_ptree  [ok]
-    cpp:     function 'scale_clip_acc_point' in toy_kernel.hpp  [ok]
-fortran output: …/examples/quickstart/GeneratedFtn.lean  [present]
-cpp output: …/examples/quickstart/GeneratedCpp.lean  [present]
+    cpp:     function 'scale_clip_acc_point' in toy_kernel.cpp  [ok]
+scale_clip_acc_loop
+    fortran: subroutine 'scale_clip_acc_loop' in toy_kernel_ptree  [ok]
+fortran generated module: …/lean/groundline/Groundline/QuickstartFtn.lean  [present]
+cpp generated module: …/lean/groundline/Groundline/QuickstartCpp.lean  [present]

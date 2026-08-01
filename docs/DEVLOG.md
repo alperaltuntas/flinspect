@@ -14,6 +14,70 @@
 
 ---
 
+## 2026-08-01 — Quickstart rebuilt around symmetry; loop/point boundary made explicit; manifest schema v2
+
+A second user-driven revision pass, this time reaching into semantics.
+
+- **The loop/point boundary is now explicit.** Previously the Fortran side
+  was always pointized — a loop kernel silently became a point function.
+  New default: a loop-nest kernel *refuses* at extraction ("a loop nest is
+  not the same thing as a point function"), and the manifest entry must
+  carry `pointize = true` to license the reduction. The option refuses on a
+  non-loop kernel. All five production kernels are loops → all five carry
+  the license, stated in the manifest. Loop-vs-loop comparison (a C++ `for`
+  frontend + pointize on that side) is recorded as roadmap in the manual.
+- **Rank-0 Fortran kernels are now supported.** A per-point subroutine
+  (scalar args, no loop) extracts as written — `kir.is_loop_nest` decides,
+  and `extract_fortran_entry` skips pointize. This is what makes a genuinely
+  symmetric quickstart possible.
+- **The quickstart is symmetric and complete.** Fortran side is now a
+  per-point subroutine `scale_clip_acc` plus a loop variant
+  `scale_clip_acc_loop` (same dump, both banked; the loop entry demonstrates
+  the refusal-then-license flow with a captured snippet). The C++ side is a
+  plain `.cpp` with `double` — no header, no `using Real = double;` (the
+  clang frontend now accepts the `double`/`const double`/`double &`
+  spellings alongside amrex's `Real`), no AMReX/MPI anywhere near the page.
+  The generated modules land in the Lean project
+  (`Groundline/QuickstartFtn.lean`, `QuickstartCpp.lean`) with a committed
+  `QuickstartEquiv.lean` (both theorems `rfl`, audited) — so `verify` in the
+  quickstart now runs the FULL gate including `lake build`, and the manual
+  shows the real theorem file instead of "we checked it while writing this
+  page". 801 jobs green.
+- **Manifest schema v2 (role-named keys).** `corpus` → `dumps`, `out` →
+  `generated`, `header_dir` → `sources`, `clang` → `compiler`, `lake_dir` →
+  `project`, per-kernel `dump`/`header` → uniform `file`, new per-kernel
+  `pointize`. API fields renamed to match (FortranConfig.dumps/.generated,
+  CppConfig.sources/.compiler/.generated, Manifest.lean_project,
+  CppKernelSpec.source/.compiler, KernelEntry.fortran_label/.cpp_label/
+  .pointize). Env var `GROUNDLINE_CORPUS` → `GROUNDLINE_DUMPS` (no
+  back-compat, per the naming precedent). "corpus" retired from prose in
+  favor of "dump directory / dump collection"; docs/ keeps the old term
+  historically.
+- **`verify` says what it did and didn't check.** New note when the
+  manifest names no `[lean]` project ("the generated models were checked,
+  but no theorems were"); the proof-check messages name the stage instead
+  of just "lake build". Manifest `_path` now normalizes lexically so CLI
+  output shows clean paths.
+- **Manual precision pass** (from a criticized quickstart paragraph,
+  generalized): the verify explanation now spells out what is regenerated,
+  what it is compared against (the `generated` files on disk — version
+  control recommended, not required), what happens without `[lean]`, and
+  what "every theorem" means; the quickstart states plainly that the
+  theorem file is the user's to write (once per kernel, patterns
+  documented); "banked/corpus/committed" jargon defined or replaced at
+  first use. Snippet renderer gained the pointize-refusal capture and a
+  documented one-line elision of the audit replay in the verify snippet
+  (lake re-prints all ~40 audit lines every build — right for CI logs,
+  noise in a quickstart); `tests/test_manual.py` pins the new snippet.
+- **Trim:** the printer's emitted linter-option comments lost their
+  defensive tone ("…unused by design" → two matter-of-fact lines).
+
+Suite: 188 pytest green (new: pointize-gate refusals, rank-0 extraction,
+verify-note, refusal-snippet pin); production + quickstart `verify` green
+end to end; `mkdocs build --strict` green.
+
+---
+
 ## 2026-08-01 — Manual revision: "Track B" and "pilot" retired, `GeneratedFtn`, conda env, reframed related work
 
 A user-driven revision pass over the manual and the naming it exposed.

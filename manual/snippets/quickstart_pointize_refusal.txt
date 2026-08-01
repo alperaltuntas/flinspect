@@ -1,0 +1,1 @@
+error: outside the supported kernel subset — scale_clip_acc_loop: the Fortran kernel is a loop nest, which is not the same thing as a point function — to compare its per-point body, set `pointize = true` on this kernel's manifest entry (see the manual's Pointize page)

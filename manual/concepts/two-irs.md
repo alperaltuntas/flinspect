@@ -24,7 +24,7 @@ it has exactly one consumer: the [Lean printer](printer-fidelity.md).
 ## Why they are separate
 
 The two IRs share the frontend layer (dump ingestion, tree parsing, the
-conformance corpus) and nothing else. Two rules, stated in the design docs and
+conformance fixtures) and nothing else. Two rules, stated in the design docs and
 enforced in review:
 
 1. **Do not bloat the relational IR.** A field only the Lean printer needs
@@ -48,8 +48,9 @@ implemented twice:
   dumps** (text); addressed by `FortranKernelSpec(dump, subroutine[, nest,
   def_name])`.
 - `ClangKernelFrontend` — invokes `clang++ -ast-dump=json` itself; addressed
-  by `CppKernelSpec(header, function, include_dirs, clang)` — the toolchain
-  travels in the spec because it is part of the kernel's identity.
+  by `CppKernelSpec(source, function, include_dirs, compiler)` — the
+  toolchain travels in the spec because it is part of the kernel's
+  identity.
 
 What differs between the two languages is only the *address* of a kernel;
 everything downstream — the kernel IR, [pointize](pointize.md),
@@ -57,4 +58,4 @@ everything downstream — the kernel IR, [pointize](pointize.md),
 about either compiler. That shared spine is what made the C++ side cheap to
 add: the control-flow join machinery banked for a Fortran kernel worked for
 its C++ twin untouched, and the whole clang frontend needed zero changes when
-it later met an AMReX-free standalone header.
+it later met an AMReX-free standalone source file.

@@ -74,27 +74,33 @@ $ groundline kernel verify --help
 --8<-- "cli_kernel_verify_help.txt"
 ```
 
-The CI gate, in order:
+The CI gate. It runs two checks, in order:
 
-1. regenerate each enabled side **in memory** and byte-diff against the
-   committed `out` files. Drift → the fresh copy is parked in a temp file, a
-   unified-diff excerpt (first 40 lines) is printed, and the exit code is
-   non-zero. A missing committed file is drift. A missing clang is an
-   **error** (a gate must not pass vacuously) unless `--skip-cpp` is given;
-2. if the manifest has `[lean] lake_dir` and every diff passed: run
-   `lake build` there (skipped with an explicit note when `lake` is not on
-   `PATH`; skipped when drift was found — proofs about stale defs prove
-   nothing).
+1. **Are the generated models current?** Each enabled side is re-extracted
+   from its sources and re-rendered **in memory**, then compared byte for
+   byte against the `generated` module on disk — the file `generate` wrote
+   (keep it in version control so a mismatch is meaningful). Any difference
+   → the fresh copy is parked in a temp file, a unified-diff excerpt (first
+   40 lines) is printed, and the exit code is non-zero. A missing module
+   file counts as a mismatch. A missing compiler is an **error** (a gate
+   must not pass by accident) unless `--skip-cpp` scopes the run.
+2. **Do the proofs still hold?** If the models are current and the manifest
+   names a `[lean]` project, `verify` runs `lake build` there — re-checking
+   every theorem in that project. If the manifest has no `[lean]` section,
+   `verify` prints a note that no theorems were checked; if `lake` is not
+   on `PATH`, a note that the proofs were not re-checked; if the model
+   check already failed, the proof check is skipped (proofs about stale
+   models prove nothing).
 
 See [Wire verification into CI](../howto/ci.md) for gate recipes and the one
-subtlety about the C++ byte-diff under a non-pinned clang.
+subtlety about the C++ comparison under a non-pinned clang.
 
 ## Exit codes and errors
 
 | Code | Meaning |
 |---|---|
 | 0 | success (including `verify` fully green) |
-| 1 | `verify` found drift or a failure (byte-diff, missing clang, `lake build`) |
+| 1 | `verify` found a mismatch or a failure (model check, missing compiler, proof check) |
 | 2 | usage/environment error: bad or missing manifest (`ManifestError`), a kernel outside the supported subset (`UnsupportedConstruct`), missing file |
 
 An `UnsupportedConstruct` refusal surfaces as

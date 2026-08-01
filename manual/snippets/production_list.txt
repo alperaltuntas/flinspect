@@ -14,5 +14,5 @@ thickness_to_dz_3d_boussinesq
 thickness_to_dz_3d_nonboussinesq
     fortran: subroutine 'thickness_to_dz_3d', loop nest 2 in MOM6/MOM_interface_heights.o_ptree  [ok]
     cpp:     function 'thickness_to_dz_3d_nonboussinesq_point' in submodules/infra/TIM/mom/cpp/mom_interface_heights_kernel.hpp  [ok]
-fortran output: /glade/work/altuntas/turbo-stack/dev-utils/groundline/examples/../lean/groundline/Groundline/GeneratedFtn.lean  [present]
-cpp output: /glade/work/altuntas/turbo-stack/dev-utils/groundline/examples/../lean/groundline/Groundline/GeneratedCpp.lean  [present]
+fortran generated module: /glade/work/altuntas/turbo-stack/dev-utils/groundline/lean/groundline/Groundline/GeneratedFtn.lean  [present]
+cpp generated module: /glade/work/altuntas/turbo-stack/dev-utils/groundline/lean/groundline/Groundline/GeneratedCpp.lean  [present]
