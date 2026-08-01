@@ -60,21 +60,21 @@ project = "../lean/groundline"
 
 [[kernel]]
 name = "ppm_limit_pos"
-fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_pos" }
-cpp = { file = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_pos_point" }
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_pos" }
+cpp = { source = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_pos_point" }
 pointize = true
 
 [[kernel]]
 name = "ppm_limit_cw84"
-fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_cw84" }
-cpp = { file = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_cw84_point" }
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_cw84" }
+cpp = { source = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_cw84_point" }
 pointize = true
 
 [[kernel]]
 # zonal_edge_thickness nest 1 = the do concurrent under CS%upwind_1st.
 name = "edge_thickness_upwind"
-fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "zonal_edge_thickness", nest = 1 }
-cpp = { file = "mom_continuity_ppm_kernel.hpp", function = "edge_thickness_upwind_point" }
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "zonal_edge_thickness", nest = 1 }
+cpp = { source = "mom_continuity_ppm_kernel.hpp", function = "edge_thickness_upwind_point" }
 pointize = true
 
 # thickness_to_dz_3d nests, in source order: 1 = do-concurrent non-Boussinesq,
@@ -85,12 +85,12 @@ pointize = true
 
 [[kernel]]
 name = "thickness_to_dz_3d_boussinesq"
-fortran = { file = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 4 }
-cpp = { file = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_boussinesq_point" }
+fortran = { dump = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 4 }
+cpp = { source = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_boussinesq_point" }
 pointize = true
 
 [[kernel]]
 name = "thickness_to_dz_3d_nonboussinesq"
-fortran = { file = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 2 }
-cpp = { file = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_nonboussinesq_point" }
+fortran = { dump = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 2 }
+cpp = { source = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_nonboussinesq_point" }
 pointize = true

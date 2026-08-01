@@ -1,11 +1,12 @@
 # groundline quickstart — a toy kernel pair, end to end
 
 This directory is a self-contained instance of the groundline
-kernel-verification pipeline: a tiny Fortran point kernel (plus its loop
-variant) and its C++ point-function port, paired in a `kernels.toml` manifest,
-rendered into two generated Lean modules, and related by machine-checked
-theorems. Everything here works in a bare clone of groundline, anywhere — no
-site paths, no external libraries.
+kernel-verification pipeline: a tiny Fortran point kernel and its C++ port,
+paired in a `kernels.toml` manifest, rendered into two generated Lean
+modules, and related by a machine-checked theorem. Everything here works in
+a bare clone of groundline, anywhere — no site paths, no external libraries.
+Both sources are standalone files, so each side's compiler runs on demand:
+`flang` on `PATH` for the Fortran side, `clang++` for the C++ side.
 
 **The manual's [Quickstart page](https://alperaltuntas.github.io/groundline/quickstart/)
 is the guided walkthrough of this directory** — with real, captured output
@@ -16,15 +17,15 @@ browsing the repo.
 
 | File | Role |
 |---|---|
-| `toy_kernel.f90` | The Fortran side: `scale_clip_acc` (one grid point) and `scale_clip_acc_loop` (the same update over a column) |
-| `toy_kernel_ptree` | Its **committed** flang dump (see `PROVENANCE`), so the Fortran side needs no flang install |
+| `toy_kernel.f90` | The Fortran side: `scale_clip_acc`, one grid point |
 | `toy_kernel.cpp` | The C++ port (`scale_clip_acc_point`) — standalone, plain `double`, no includes |
-| `kernels.toml` | The manifest pairing them; the loop kernel carries the explicit `pointize = true` license |
+| `toy_kernel_loop.f90` | The same update as a loop over a column — the quickstart's closing section pairs it under an explicit `pointize = true` license |
+| `kernels.toml` | The manifest pairing the point kernels; both sides in source mode |
 
-The generated Lean modules and the equivalence theorems live in the
+The generated Lean modules and the equivalence theorem live in the
 repository's Lean project — `lean/groundline/Groundline/QuickstartFtn.lean`,
 `QuickstartCpp.lean` (generated; do not edit) and `QuickstartEquiv.lean`
-(the theorems, both `rfl`).
+(the theorem, a one-line `rfl`).
 
 ## The four commands
 
@@ -38,17 +39,15 @@ $ groundline kernel verify      # models current? then: do the proofs still hold
 ```
 
 `verify` exits non-zero on any mismatch or proof failure — the CI gate in
-miniature. The C++ side needs `clang++` on `PATH`; the proof stage needs
-`lake` (Lean 4); each is skipped or reported honestly when absent.
+miniature. The proof stage needs `lake` (Lean 4); each missing tool is
+reported honestly rather than skipped silently.
 
 ## Notes
 
 - The toy stays inside the supported kernel subset (anything outside it
-  raises `UnsupportedConstruct` rather than guessing). Removing the
-  `pointize = true` line and asking for the loop kernel is a quick way to
-  see a refusal.
-- Regenerating `QuickstartCpp.lean` re-stamps your local clang version into
-  its header comment; the defs themselves are byte-stable across machines.
-- To regenerate the committed dump after editing `toy_kernel.f90`:
-  `flang -fc1 -fdebug-dump-parse-tree toy_kernel.f90 > toy_kernel_ptree`
-  (and update `PROVENANCE`, mirroring `tests/f90`'s convention).
+  raises `UnsupportedConstruct` rather than guessing). Banking
+  `toy_kernel_loop.f90` without `pointize = true` is a quick way to see a
+  refusal — a loop is not a point function.
+- Regenerating the modules re-stamps your local flang/clang versions into
+  their header comments; the defs themselves are byte-stable across
+  machines.

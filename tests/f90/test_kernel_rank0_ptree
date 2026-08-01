@@ -1,0 +1,81 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'test_kernel_rank0'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'clip_shift'
+| | | | DummyArg -> Name = 'x'
+| | | | DummyArg -> Name = 'y'
+| | | | DummyArg -> Name = 'lo'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | | KindSelector -> Scalar -> Integer -> Constant -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'x'
+| | | | | EntityDecl
+| | | | | | Name = 'lo'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | | KindSelector -> Scalar -> Integer -> Constant -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'y'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | | KindSelector -> Scalar -> Integer -> Constant -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | | | EntityDecl
+| | | | | | Name = 'w'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'w=2._8*x'
+| | | | | Variable = 'w'
+| | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | Expr = '2._8*x'
+| | | | | | Multiply
+| | | | | | | Expr = '2._4'
+| | | | | | | | LiteralConstant -> RealLiteralConstant
+| | | | | | | | | Real = '2.0'
+| | | | | | | Expr = 'x'
+| | | | | | | | Designator -> DataRef -> Name = 'x'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> IfConstruct
+| | | | | IfThenStmt
+| | | | | | Scalar -> Logical -> Expr = 'w<lo'
+| | | | | | | LT
+| | | | | | | | Expr = 'w'
+| | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | | | | Expr = 'lo'
+| | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'y=y+lo'
+| | | | | | | Variable = 'y'
+| | | | | | | | Designator -> DataRef -> Name = 'y'
+| | | | | | | Expr = 'y+lo'
+| | | | | | | | Add
+| | | | | | | | | Expr = 'y'
+| | | | | | | | | | Designator -> DataRef -> Name = 'y'
+| | | | | | | | | Expr = 'lo'
+| | | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | ElseBlock
+| | | | | | ElseStmt -> 
+| | | | | | Block
+| | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'y=y+w'
+| | | | | | | | Variable = 'y'
+| | | | | | | | | Designator -> DataRef -> Name = 'y'
+| | | | | | | | Expr = 'y+w'
+| | | | | | | | | Add
+| | | | | | | | | | Expr = 'y'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'y'
+| | | | | | | | | | Expr = 'w'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | EndIfStmt -> 
+| | | EndSubroutineStmt -> Name = 'clip_shift'
+| EndModuleStmt -> Name = 'test_kernel_rank0'

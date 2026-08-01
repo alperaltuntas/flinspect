@@ -1,12 +1,13 @@
 """Kernel-bank packaging tests: the kernel manifest (``kernels.toml``), the
 uniform KernelFrontend spec API, and the ``groundline kernel`` CLI.
 
-Everything here runs everywhere (no corpus, no clang, no /glade paths): the
-Fortran fixtures are the committed ``tests/f90`` dumps, and CLI tests drive
-:func:`groundline.cli.main` in-process against manifests built in ``tmp_path``.
-The production golden tests stay in ``tests/test_kir_lean.py``; the quickstart
-example's golden tests are in this file's quickstart section (the C++ side
-gated on clang, like every clang-tier test).
+Most of this runs everywhere (no production dumps, no clang, no /glade
+paths): the Fortran fixtures are the committed ``tests/f90`` dumps, and CLI
+tests drive :func:`groundline.cli.main` in-process against manifests built in
+``tmp_path``. The quickstart golden tests are compiler-gated per side — the
+quickstart is all source mode, so its Fortran half needs flang exactly as its
+C++ half needs clang. The production golden tests stay in
+``tests/test_kir_lean.py``.
 """
 
 import shutil
@@ -28,6 +29,9 @@ QUICKSTART = REPO / "examples" / "quickstart"
 needs_clang = pytest.mark.skipif(
     shutil.which("clang++") is None,
     reason="clang++ not on PATH (source activate_llvm.sh)")
+needs_flang = pytest.mark.skipif(
+    shutil.which("flang") is None,
+    reason="flang not on PATH (source activate_llvm.sh)")
 
 
 # =============================================================================
@@ -58,6 +62,24 @@ class TestFortranSpecAPI:
         with pytest.raises(ValueError, match="nest and def_name"):
             FortranKernelSpec(dump=Path("x"), subroutine="s", def_name="d")
 
+    def test_neither_dump_nor_source_refused(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            FortranKernelSpec(subroutine="s")
+
+    def test_both_dump_and_source_refused(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            FortranKernelSpec(dump=Path("x"), source=Path("y"), subroutine="s")
+
+    @needs_flang
+    def test_source_mode_matches_the_committed_dump(self):
+        """Source mode (flang invoked on demand) extracts the same kernel as
+        the pre-generated dump of the same file — one pipeline, two inputs."""
+        via_source = FlangKernelFrontend().extract(
+            FortranKernelSpec(source=F90_DIR / "test_kernel_doconcurrent.f90",
+                              subroutine="clamp_scale"))
+        assert via_source == extract_kernel(
+            F90_DIR / "test_kernel_doconcurrent_ptree", "clamp_scale")
+
 
 # =============================================================================
 # Manifest loading (refuse-don't-guess: unknown keys, inconsistencies)
@@ -71,7 +93,7 @@ namespace = "Mini.Generated"
 
 [[kernel]]
 name = "clamp_scale"
-fortran = { file = "test_kernel_doconcurrent_ptree", subroutine = "clamp_scale" }
+fortran = { dump = "test_kernel_doconcurrent_ptree", subroutine = "clamp_scale" }
 pointize = true
 """
 
@@ -131,7 +153,7 @@ class TestManifestLoading:
     def test_duplicate_kernel_names_refused(self, mini_manifest):
         text = mini_manifest.read_text()
         text += ('\n[[kernel]]\nname = "clamp_scale"\n'
-                 'fortran = { file = "test_kernel_doconcurrent_ptree", '
+                 'fortran = { dump = "test_kernel_doconcurrent_ptree", '
                  'subroutine = "clamp_scale" }\n')
         mini_manifest.write_text(text)
         with pytest.raises(kb.ManifestError, match="duplicate"):
@@ -140,14 +162,42 @@ class TestManifestLoading:
     def test_cpp_side_without_cpp_section_refused(self, mini_manifest):
         text = mini_manifest.read_text()
         text = text.replace(
-            'fortran = { file = "test_kernel_doconcurrent_ptree", '
+            'fortran = { dump = "test_kernel_doconcurrent_ptree", '
             'subroutine = "clamp_scale" }',
-            'fortran = { file = "test_kernel_doconcurrent_ptree", '
-            'subroutine = "clamp_scale" }\ncpp = { file = "x.cpp", '
+            'fortran = { dump = "test_kernel_doconcurrent_ptree", '
+            'subroutine = "clamp_scale" }\ncpp = { source = "x.cpp", '
             'function = "f" }')
         mini_manifest.write_text(text)
         with pytest.raises(kb.ManifestError, match=r"no \[cpp\] section"):
             kb.load_manifest(mini_manifest)
+
+    def test_both_dump_and_source_refused(self, mini_manifest):
+        text = mini_manifest.read_text().replace(
+            'dump = "test_kernel_doconcurrent_ptree",',
+            'dump = "test_kernel_doconcurrent_ptree", source = "x.f90",')
+        mini_manifest.write_text(text)
+        with pytest.raises(kb.ManifestError, match="exactly one"):
+            kb.load_manifest(mini_manifest)
+
+    def test_dump_without_a_dumps_directory_refused(self, mini_manifest):
+        text = mini_manifest.read_text().replace(
+            'dumps = "${TEST_DUMP_DIR}"\n', '')
+        mini_manifest.write_text(text)
+        with pytest.raises(kb.ManifestError, match="no dumps directory"):
+            kb.load_manifest(mini_manifest)
+
+    def test_source_mode_resolves_under_sources(self, mini_manifest, tmp_path):
+        text = mini_manifest.read_text().replace(
+            'dumps = "${TEST_DUMP_DIR}"', 'sources = "${TEST_DUMP_DIR}"')
+        text = text.replace('dump = "test_kernel_doconcurrent_ptree"',
+                            'source = "test_kernel_doconcurrent.f90"')
+        mini_manifest.write_text(text)
+        m = kb.load_manifest(mini_manifest)
+        e = m.kernel("clamp_scale")
+        assert e.fortran.source == F90_DIR / "test_kernel_doconcurrent.f90"
+        assert e.fortran.dump is None
+        assert e.fortran.compiler == "flang"
+        assert e.fortran_label == "test_kernel_doconcurrent.f90"
 
     def test_unknown_kernel_name_lookup_refused(self, mini_manifest):
         m = kb.load_manifest(mini_manifest)
@@ -290,17 +340,32 @@ class TestPointizeGate:
         manifest = tmp_path / "kernels.toml"
         manifest.write_text(
             f'[fortran]\n'
-            f'dumps = "{QUICKSTART}"\n'
+            f'dumps = "{F90_DIR}"\n'
             f'generated = "G.lean"\n'
             f'namespace = "T"\n\n'
             f'[[kernel]]\n'
-            f'name = "scale_clip_acc"\n'
-            f'fortran = {{ file = "toy_kernel_ptree", '
-            f'subroutine = "scale_clip_acc" }}\n'
+            f'name = "clip_shift"\n'
+            f'fortran = {{ dump = "test_kernel_rank0_ptree", '
+            f'subroutine = "clip_shift" }}\n'
             f'pointize = true\n')
         m = kb.load_manifest(manifest)
         with pytest.raises(UnsupportedConstruct, match="not a loop"):
-            kb.extract_fortran_entry(m.kernel("scale_clip_acc"))
+            kb.extract_fortran_entry(m.kernel("clip_shift"))
+
+    def test_rank0_kernel_extracts_without_pointize(self, tmp_path):
+        manifest = tmp_path / "kernels.toml"
+        manifest.write_text(
+            f'[fortran]\n'
+            f'dumps = "{F90_DIR}"\n'
+            f'generated = "G.lean"\n'
+            f'namespace = "T"\n\n'
+            f'[[kernel]]\n'
+            f'name = "clip_shift"\n'
+            f'fortran = {{ dump = "test_kernel_rank0_ptree", '
+            f'subroutine = "clip_shift" }}\n')
+        m = kb.load_manifest(manifest)
+        k = kb.extract_fortran_entry(m.kernel("clip_shift"))
+        assert [p.name for p in k.params] == ["x", "y", "lo"]
 
 
 # =============================================================================
@@ -308,20 +373,28 @@ class TestPointizeGate:
 # =============================================================================
 
 class TestQuickstart:
-    """The committed toy pair in examples/quickstart: the Fortran side runs
-    everywhere (its with-sema dump is committed), the C++ side needs clang
-    (its .cpp is standalone — plain double, no includes)."""
+    """The committed toy pair in examples/quickstart — all source mode, so
+    each half is gated on its compiler: flang for the Fortran side, clang
+    for the C++ side (both sources are standalone; no includes needed)."""
 
     @pytest.fixture
     def manifest(self):
         return kb.load_manifest(QUICKSTART / "kernels.toml")
 
+    @staticmethod
+    def _defs(text: str) -> str:
+        # The module headers stamp the LOCAL compiler version (provenance),
+        # which legitimately varies across machines — the goldens pin the defs.
+        return text.split("-/\n", 1)[1]
+
+    @needs_flang
     def test_fortran_golden(self, manifest):
-        assert kb.render_fortran(manifest) == \
-            manifest.fortran.generated.read_text(), \
+        assert self._defs(kb.render_fortran(manifest)) == \
+            self._defs(manifest.fortran.generated.read_text()), \
             "quickstart QuickstartFtn.lean is stale — rerun `groundline kernel generate`"
 
-    def test_rank0_kernel_extracts_without_pointize(self, manifest):
+    @needs_flang
+    def test_point_kernel_extracts_without_pointize(self, manifest):
         e = manifest.kernel("scale_clip_acc")
         assert e.pointize is False
         k = kb.extract_fortran_entry(e)     # already per-point: no license needed
@@ -329,10 +402,6 @@ class TestQuickstart:
 
     @needs_clang
     def test_cpp_golden(self, manifest):
-        # The module header stamps the LOCAL clang version (provenance), which
-        # legitimately varies across machines — the golden pins the defs.
-        def defs(text: str) -> str:
-            return text.split("-/\n", 1)[1]
-        assert defs(kb.render_cpp(manifest)) == \
-            defs(manifest.cpp.generated.read_text()), \
+        assert self._defs(kb.render_cpp(manifest)) == \
+            self._defs(manifest.cpp.generated.read_text()), \
             "quickstart QuickstartCpp.lean is stale — rerun `groundline kernel generate`"

@@ -17,13 +17,15 @@ toolchain, output module; each ``[[kernel]]`` gives one kernel's location on
 each side::
 
     [fortran]                       # the flang side (omit to disable)
-    dumps = "..."                   # directory of with-sema *_ptree dumps
+    dumps = "..."                   # dir the kernels' `dump` values resolve under
+    sources = "."                   # dir the kernels' `source` values resolve under
+    compiler = "flang"              # runs on `source` kernels to dump them fresh
     generated = ".../GeneratedFtn.lean"   # module `kernel generate` writes
     namespace = "Groundline.GeneratedFtn"
     blurb = "..."                   # optional extra header-comment lines
 
     [cpp]                           # the clang side (omit to disable)
-    sources = "."                   # dir the kernels' `file` values resolve under
+    sources = "."                   # dir the kernels' `source` values resolve under
     include_dirs = ["...", ...]     # pinned -I dirs (part of the kernel identity)
     compiler = "clang++"
     provenance_root = "..."         # optional: files display relative to this
@@ -36,14 +38,20 @@ each side::
 
     [[kernel]]
     name = "ppm_limit_pos"
-    fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree",
+    fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree",
                 subroutine = "ppm_limit_pos" }      # + optional nest = N,
                                                     #   def_name = "..." for
                                                     #   rule-B inline loops
-    cpp     = { file = "mom_continuity_ppm_kernel.hpp",
+    cpp     = { source = "mom_continuity_ppm_kernel.hpp",
                 function = "ppm_limit_pos_point" }
     pointize = true                 # license: this kernel is a loop nest;
                                     # reduce it to its per-point body
+
+The Fortran side of a kernel names exactly one of ``dump`` (a pre-generated
+with-sema dump — for kernels living inside codebases whose modules must be
+built before flang can run) or ``source`` (a standalone Fortran file the
+pipeline runs flang on, exactly as the C++ side runs clang on its
+``source``).
 
 Manifest resolution order (used by the CLI): explicit ``--kernels`` flag >
 ``$GROUNDLINE_KERNELS`` > ``./kernels.toml`` in the current directory. There is
@@ -64,7 +72,9 @@ from pathlib import Path
 from typing import Optional
 
 from groundline.frontend.clang_kernel import ClangKernelFrontend, clang_version
-from groundline.frontend.flang_kernel import FlangKernelFrontend
+from groundline.frontend.flang_kernel import (
+    DUMP_FLAGS, FlangKernelFrontend, flang_version,
+)
 from groundline.frontend.kernel_base import CppKernelSpec, FortranKernelSpec
 from groundline.kir import Kernel, UnsupportedConstruct, is_loop_nest, pointize
 from groundline.lean_printer import print_module
@@ -83,9 +93,11 @@ class ManifestError(Exception):
 
 @dataclass(frozen=True)
 class FortranConfig:
-    dumps: Path
     generated: Path
     namespace: str
+    dumps: Optional[Path] = None     # root of the kernels' `dump` values
+    sources: Path = Path(".")        # root of the kernels' `source` values
+    compiler: str = "flang"
     blurb: str = ""
 
 
@@ -228,11 +240,15 @@ def _load_fortran(tbl: Optional[dict], base: Path, name: str) \
     if tbl is None:
         return None
     ctx = f"{name} [fortran]"
-    _check_keys(tbl, {"dumps": str, "generated": str, "namespace": str,
-                      "blurb": str}, {"dumps", "generated", "namespace"}, ctx)
-    return FortranConfig(dumps=_path(tbl["dumps"], base, ctx),
-                         generated=_path(tbl["generated"], base, ctx),
+    _check_keys(tbl, {"dumps": str, "sources": str, "compiler": str,
+                      "generated": str, "namespace": str, "blurb": str},
+                {"generated", "namespace"}, ctx)
+    dumps = tbl.get("dumps")
+    return FortranConfig(generated=_path(tbl["generated"], base, ctx),
                          namespace=_expand(tbl["namespace"], ctx),
+                         dumps=_path(dumps, base, ctx) if dumps else None,
+                         sources=_path(tbl.get("sources", "."), base, ctx),
+                         compiler=_expand(tbl.get("compiler", "flang"), ctx),
                          blurb=tbl.get("blurb", ""))
 
 
@@ -270,10 +286,26 @@ def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
             raise ManifestError(f"{ctx}: has a fortran side but the manifest "
                                 f"has no [fortran] section")
         ftbl = tbl["fortran"]
-        _check_keys(ftbl, {"file": str, "subroutine": str, "nest": int,
-                           "def_name": str}, {"file", "subroutine"},
+        _check_keys(ftbl, {"dump": str, "source": str, "subroutine": str,
+                           "nest": int, "def_name": str}, {"subroutine"},
                     f"{ctx} fortran")
-        flabel = _expand(ftbl["file"], f"{ctx} fortran")
+        if ("dump" in ftbl) == ("source" in ftbl):
+            raise ManifestError(
+                f"{ctx}: give exactly one of fortran.dump (a pre-generated "
+                f"flang dump, resolved under [fortran] dumps) or "
+                f"fortran.source (a standalone Fortran file groundline runs "
+                f"flang on, resolved under [fortran] sources)")
+        dump = src = None
+        if "dump" in ftbl:
+            if fortran.dumps is None:
+                raise ManifestError(
+                    f"{ctx}: fortran.dump given, but the [fortran] section "
+                    f"names no dumps directory")
+            flabel = _expand(ftbl["dump"], f"{ctx} fortran")
+            dump = _path(flabel, fortran.dumps, f"{ctx} fortran")
+        else:
+            flabel = _expand(ftbl["source"], f"{ctx} fortran")
+            src = _path(flabel, fortran.sources, f"{ctx} fortran")
         nest = ftbl.get("nest")
         def_name = ftbl.get("def_name")
         if nest is None:
@@ -286,8 +318,8 @@ def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
                     f"subroutine — rename the entry to "
                     f"'{ftbl['subroutine']}' or address a loop nest")
         fspec = FortranKernelSpec(
-            dump=_path(flabel, fortran.dumps, f"{ctx} fortran"),
-            subroutine=ftbl["subroutine"], nest=nest,
+            subroutine=ftbl["subroutine"], dump=dump, source=src,
+            compiler=fortran.compiler, nest=nest,
             def_name=(def_name or kname) if nest is not None else None)
 
     cspec, clabel = None, ""
@@ -296,9 +328,9 @@ def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
             raise ManifestError(f"{ctx}: has a cpp side but the manifest has "
                                 f"no [cpp] section")
         ctbl = tbl["cpp"]
-        _check_keys(ctbl, {"file": str, "function": str},
-                    {"file", "function"}, f"{ctx} cpp")
-        raw = _expand(ctbl["file"], f"{ctx} cpp")
+        _check_keys(ctbl, {"source": str, "function": str},
+                    {"source", "function"}, f"{ctx} cpp")
+        raw = _expand(ctbl["source"], f"{ctx} cpp")
         source = _path(raw, cpp.sources, f"{ctx} cpp")
         clabel = raw
         if cpp.provenance_root is not None:
@@ -387,11 +419,18 @@ def _regen_line(m: Manifest) -> str:
 
 
 def fortran_blurb(m: Manifest) -> str:
+    """The Fortran module header. When any kernel is source-mode (flang runs
+    on demand), the pinned flang invocation is stamped as provenance —
+    exactly as the C++ header stamps clang."""
     text = ("Emitted by `groundline.lean_printer` from "
             "flang with-sema\nparse-tree dumps "
             "(`groundline.frontend.flang_kernel`).\n" + _regen_line(m))
     if m.fortran.blurb:
         text += "\n" + m.fortran.blurb
+    if any(e.fortran.source is not None for e in fortran_entries(m)):
+        text += (f"\n\nExtraction provenance (pinned):\n"
+                 f"  {flang_version(m.fortran.compiler)}\n"
+                 f"  {' '.join(DUMP_FLAGS)}")
     return text
 
 

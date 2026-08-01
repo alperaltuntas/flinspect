@@ -4,8 +4,9 @@ the real pipeline produces — the manual must not rot silently.
 
 Every snippet is produced by ``manual/snippets/render_snippets.sh``; these
 tests re-derive the representative ones in-process and byte-compare. Gating
-mirrors the rest of the suite: the C++ half needs ``clang++`` on PATH, the
-Fortran half runs everywhere (the quickstart dump is committed).
+mirrors the rest of the suite: the quickstart is all source mode, so its
+Fortran half needs ``flang`` on PATH exactly as its C++ half needs
+``clang++``; the recurrence refusal runs everywhere (committed fixture).
 """
 
 import shutil
@@ -19,11 +20,15 @@ from groundline.lean_printer import print_kernel
 
 REPO = Path(__file__).parent.parent
 SNIPPETS = REPO / "manual" / "snippets"
-QUICKSTART_MANIFEST = REPO / "examples" / "quickstart" / "kernels.toml"
+QUICKSTART = REPO / "examples" / "quickstart"
+QUICKSTART_MANIFEST = QUICKSTART / "kernels.toml"
 
 needs_clang = pytest.mark.skipif(
     shutil.which("clang++") is None,
     reason="clang++ not on PATH (source activate_llvm.sh)")
+needs_flang = pytest.mark.skipif(
+    shutil.which("flang") is None,
+    reason="flang not on PATH (source activate_llvm.sh)")
 
 
 def _show_fortran() -> str:
@@ -45,6 +50,7 @@ class TestQuickstartShowSnippet:
     (quickstart_show.txt) matches a fresh run. The snippet is both defs
     joined by a blank line — exactly what `_cmd_show` prints."""
 
+    @needs_flang
     def test_fortran_half_matches(self):
         committed = (SNIPPETS / "quickstart_show.txt").read_text()
         fresh = _show_fortran()
@@ -52,6 +58,7 @@ class TestQuickstartShowSnippet:
             "manual/snippets/quickstart_show.txt has rotted (Fortran half) — "
             "rerun manual/snippets/render_snippets.sh")
 
+    @needs_flang
     @needs_clang
     def test_full_snippet_matches(self):
         committed = (SNIPPETS / "quickstart_show.txt").read_text()
@@ -74,7 +81,7 @@ class TestRefusalSnippet:
             f'namespace = "Demo"\n\n'
             f'[[kernel]]\n'
             f'name = "accumulate"\n'
-            f'fortran = {{ file = "test_kernel_recurrence_ptree", '
+            f'fortran = {{ dump = "test_kernel_recurrence_ptree", '
             f'subroutine = "accumulate" }}\n'
             f'pointize = true\n')
         rc = cli_main(["kernel", "show", "accumulate",
@@ -87,29 +94,46 @@ class TestRefusalSnippet:
             "rerun manual/snippets/render_snippets.sh")
 
 
-class TestPointizeRefusalSnippet:
-    """The quickstart's loop/point refusal (quickstart_pointize_refusal.txt)
-    is the real CLI error, reproduced against the committed quickstart dump
-    with the `pointize = true` license removed."""
+class TestQuickstartLoopSection:
+    """The quickstart's closing loop section: the loop/point refusal
+    (quickstart_pointize_refusal.txt) and the pointized loop's def
+    (quickstart_show_loop.txt) are the real CLI outputs, reproduced against
+    the quickstart's toy_kernel_loop.f90 (source mode, so flang-gated)."""
 
-    def test_refusal_line_matches(self, tmp_path, capsys):
+    def _manifest(self, tmp_path, pointize: bool) -> Path:
         manifest = tmp_path / "kernels.toml"
         manifest.write_text(
             f'[fortran]\n'
-            f'dumps = "{REPO / "examples" / "quickstart"}"\n'
+            f'sources = "{QUICKSTART}"\n'
             f'generated = "{tmp_path / "G.lean"}"\n'
             f'namespace = "Demo"\n\n'
             f'[[kernel]]\n'
             f'name = "scale_clip_acc_loop"\n'
-            f'fortran = {{ file = "toy_kernel_ptree", '
-            f'subroutine = "scale_clip_acc_loop" }}\n')
+            f'fortran = {{ source = "toy_kernel_loop.f90", '
+            f'subroutine = "scale_clip_acc_loop" }}\n'
+            + ('pointize = true\n' if pointize else ''))
+        return manifest
+
+    @needs_flang
+    def test_refusal_line_matches(self, tmp_path, capsys):
         rc = cli_main(["kernel", "show", "scale_clip_acc_loop",
-                       "--kernels", str(manifest)])
+                       "--kernels", str(self._manifest(tmp_path, False))])
         assert rc == 2
         err = capsys.readouterr().err
         committed = (SNIPPETS / "quickstart_pointize_refusal.txt").read_text()
         assert committed.strip() == err.strip(), (
             "manual/snippets/quickstart_pointize_refusal.txt has rotted — "
+            "rerun manual/snippets/render_snippets.sh")
+
+    @needs_flang
+    def test_pointized_show_matches(self, tmp_path, capsys):
+        rc = cli_main(["kernel", "show", "scale_clip_acc_loop",
+                       "--kernels", str(self._manifest(tmp_path, True))])
+        assert rc == 0
+        out = capsys.readouterr().out
+        committed = (SNIPPETS / "quickstart_show_loop.txt").read_text()
+        assert committed == out, (
+            "manual/snippets/quickstart_show_loop.txt has rotted — "
             "rerun manual/snippets/render_snippets.sh")
 
 

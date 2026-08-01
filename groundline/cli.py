@@ -63,7 +63,7 @@ def _cmd_list(args: argparse.Namespace) -> int:
             nest = f", loop nest {e.fortran.nest}" if e.fortran.nest else ""
             print(_describe_side(
                 "fortran:", f"subroutine '{e.fortran.subroutine}'{nest} "
-                f"in {e.fortran_label}", e.fortran.dump))
+                f"in {e.fortran_label}", e.fortran.dump or e.fortran.source))
         if e.cpp is not None:
             print(_describe_side(
                 "cpp:", f"function '{e.cpp.function}' in {e.cpp_label}",
@@ -76,13 +76,24 @@ def _cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _fortran_compiler_missing(m: kb.Manifest) -> bool:
+    """True iff some Fortran kernel needs flang run fresh (source mode) and
+    the manifest's flang is not on PATH. Dump-mode kernels never need it."""
+    return (any(e.fortran.source is not None for e in kb.fortran_entries(m))
+            and shutil.which(m.fortran.compiler) is None)
+
+
 def _cmd_show(args: argparse.Namespace) -> int:
     m = _load(args)
     e = m.kernel(args.name)
     shown = []
     if e.fortran is not None:
-        shown.append(print_kernel(kb.extract_fortran_entry(e),
-                                  provenance=kb.fortran_provenance(e)))
+        if e.fortran.source is not None and not shutil.which(e.fortran.compiler):
+            print(f"note: '{e.fortran.compiler}' not on PATH — skipping the "
+                  f"Fortran side", file=sys.stderr)
+        else:
+            shown.append(print_kernel(kb.extract_fortran_entry(e),
+                                      provenance=kb.fortran_provenance(e)))
     if e.cpp is not None:
         if shutil.which(e.cpp.compiler):
             shown.append(print_kernel(kb.extract_cpp_entry(e),
@@ -153,8 +164,14 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     m = _load(args)
     ok = True
     if not args.skip_fortran and m.fortran is not None:
-        ok &= _verify_side("fortran", kb.render_fortran(m),
-                           m.fortran.generated)
+        if _fortran_compiler_missing(m):
+            print(f"error: '{m.fortran.compiler}' not on PATH — cannot verify "
+                  f"the Fortran side (pass --skip-fortran to verify the C++ "
+                  f"side only)")
+            ok = False
+        else:
+            ok &= _verify_side("fortran", kb.render_fortran(m),
+                               m.fortran.generated)
     if not args.skip_cpp and m.cpp is not None:
         if shutil.which(m.cpp.compiler) is None:
             print(f"error: '{m.cpp.compiler}' not on PATH — cannot verify the "

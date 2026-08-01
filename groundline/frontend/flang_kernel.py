@@ -1,6 +1,10 @@
 """Kernel-IR frontend: extract one subroutine — or one addressed loop nest of a
 subroutine (:func:`extract_loop_kernel`) — from a with-sema flang parse-tree
-dump into the kernel IR (``groundline/kir.py``).
+dump into the kernel IR (``groundline/kir.py``). The dump is either
+pre-generated (captured inside a real build, kept with provenance) or
+produced on demand by running flang on a standalone source file
+(:func:`dump_parse_tree`) — the mirror of how the clang frontend invokes
+clang.
 
 Below the seam (DESIGN §2.3): everything flang-dump-specific about *kernel
 bodies* lives here, exactly as ``flang_dump.py`` owns the dump's *relational*
@@ -16,6 +20,8 @@ annotations.
 
 from __future__ import annotations
 
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional
@@ -27,6 +33,41 @@ from groundline.kir import (
 )
 from groundline.frontend._flang_text import level
 from groundline.frontend.kernel_base import FortranKernelSpec
+
+
+# --------------------------------------------------------------------------- #
+# flang invocation (source mode: generate the with-sema dump on demand)
+# --------------------------------------------------------------------------- #
+
+DUMP_FLAGS = ("-fc1", "-fdebug-dump-parse-tree")
+
+
+def flang_version(flang: str = "flang") -> str:
+    """First line of ``flang --version`` — stamped into generated provenance."""
+    out = subprocess.run([flang, "--version"], capture_output=True, text=True,
+                         check=True)
+    return out.stdout.splitlines()[0].strip()
+
+
+def dump_parse_tree(source: Path, *, flang: str = "flang") -> str:
+    """Run flang on a standalone source file and return its with-sema
+    parse-tree dump — the same text a pre-generated ``*_ptree`` file holds.
+
+    Runs in a temporary directory so flang's ``.mod`` side products never
+    land next to the source. A file that USEs modules whose ``.mod`` files
+    are not built fails here: such kernels are dumped inside their real
+    build and addressed as pre-generated dumps instead (``dump =`` in the
+    manifest).
+    """
+    source = Path(source).resolve()
+    with tempfile.TemporaryDirectory() as td:
+        proc = subprocess.run([flang, *DUMP_FLAGS, str(source)],
+                              capture_output=True, text=True, cwd=td)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"flang failed ({proc.returncode}): "
+            f"{flang} {' '.join(DUMP_FLAGS)} {source}\n{proc.stderr}")
+    return proc.stdout
 
 
 # --------------------------------------------------------------------------- #
@@ -383,7 +424,10 @@ def _extract_decls_tolerant(spec: Node) -> tuple[list[Param], dict[str, str]]:
 def extract_kernel(dump_path: Path, subroutine: str) -> Kernel:
     """Extract ``subroutine`` from the with-sema dump at ``dump_path``."""
     with open(dump_path) as f:
-        root = parse_dump_lines(f)
+        return _kernel_from_root(parse_dump_lines(f), subroutine)
+
+
+def _kernel_from_root(root: Node, subroutine: str) -> Kernel:
     sub = find_subroutine(root, subroutine)
     stmt = sub.child("SubroutineStmt")
     arg_order = [d.child("Name").payload for d in stmt.children_named("DummyArg")]
@@ -482,7 +526,12 @@ def extract_loop_kernel(dump_path: Path, subroutine: str, nest: int,
     is unchanged.
     """
     with open(dump_path) as f:
-        root = parse_dump_lines(f)
+        return _loop_kernel_from_root(parse_dump_lines(f), subroutine, nest,
+                                      name)
+
+
+def _loop_kernel_from_root(root: Node, subroutine: str, nest: int,
+                           name: str) -> Kernel:
     sub = find_subroutine(root, subroutine)
     nests = _collect_do_nests(sub.child("ExecutionPart"))
     if not 1 <= nest <= len(nests):
@@ -514,13 +563,21 @@ def extract_loop_kernel(dump_path: Path, subroutine: str, nest: int,
 
 class FlangKernelFrontend:
     """The :class:`~groundline.frontend.kernel_base.KernelFrontend` for flang
-    with-sema dumps: one deep method dispatching on the spec's addressing mode
-    (whole subroutine vs rule-B inline loop). The module-level functions above
-    remain the implementation — and stay importable for tests that pin them
-    directly — but the spec path is the supported entry point."""
+    with-sema dumps: one deep method dispatching on the spec's input mode
+    (a pre-generated dump vs a standalone source flang runs on now) and its
+    addressing mode (whole subroutine vs rule-B inline loop). The
+    module-level functions above remain the implementation — and stay
+    importable for tests that pin them directly — but the spec path is the
+    supported entry point."""
 
     def extract(self, spec: FortranKernelSpec) -> Kernel:
+        if spec.source is not None:
+            text = dump_parse_tree(spec.source, flang=spec.compiler)
+            root = parse_dump_lines(text.splitlines())
+        else:
+            with open(spec.dump) as f:
+                root = parse_dump_lines(f)
         if spec.nest is None:
-            return extract_kernel(spec.dump, spec.subroutine)
-        return extract_loop_kernel(spec.dump, spec.subroutine, spec.nest,
-                                   spec.def_name)
+            return _kernel_from_root(root, spec.subroutine)
+        return _loop_kernel_from_root(root, spec.subroutine, spec.nest,
+                                      spec.def_name)
