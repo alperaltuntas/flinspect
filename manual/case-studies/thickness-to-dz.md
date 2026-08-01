@@ -42,7 +42,7 @@ reordering.
 *sequential fold* of per-point updates over an enumeration of the index box —
 so that is exactly what the kernel-level theorems model (`foldSeq`). The
 license to equate that with the pointwise map is a once-and-for-all schema
-lemma, proved in `lean/pilot/Pilot/SeqSchema.lean`:
+lemma, proved in `lean/groundline/Groundline/SeqSchema.lean`:
 
 ```lean
 theorem foldSeq_eq_pointwiseMap (f : ι → σ → σ) (enum : List ι)
@@ -104,19 +104,19 @@ subsets* of the standard three (no classical reasoning in the structural
 induction; the audit file documents that expectation):
 
 ```text
-'TrackB.foldSeq' does not depend on any axioms
-'TrackB.pointwiseMap' does not depend on any axioms
-'TrackB.foldSeq_frame' depends on axioms: [propext]
-'TrackB.foldSeq_apply_of_mem' depends on axioms: [propext]
-'TrackB.foldSeq_eq_pointwiseMap' depends on axioms: [propext, Quot.sound]
-'TrackB.Generated.thickness_to_dz_3d_boussinesq' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.GeneratedCpp.thickness_to_dz_3d_boussinesq_point' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.thicknessToDzBouss_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.thicknessToDzBouss_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.Generated.thickness_to_dz_3d_nonboussinesq' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.GeneratedCpp.thickness_to_dz_3d_nonboussinesq_point' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.thicknessToDzNonBouss_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.thicknessToDzNonBouss_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.foldSeq' does not depend on any axioms
+'Groundline.pointwiseMap' does not depend on any axioms
+'Groundline.foldSeq_frame' depends on axioms: [propext]
+'Groundline.foldSeq_apply_of_mem' depends on axioms: [propext]
+'Groundline.foldSeq_eq_pointwiseMap' depends on axioms: [propext, Quot.sound]
+'Groundline.GeneratedFtn.thickness_to_dz_3d_boussinesq' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedCpp.thickness_to_dz_3d_boussinesq_point' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.thicknessToDzBouss_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.thicknessToDzBouss_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedFtn.thickness_to_dz_3d_nonboussinesq' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedCpp.thickness_to_dz_3d_nonboussinesq_point' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.thicknessToDzNonBouss_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.thicknessToDzNonBouss_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
-Proof files: `lean/pilot/Pilot/SeqSchema.lean`, `Pilot/ThicknessToDz.lean`.
+Proof files: `lean/groundline/Groundline/SeqSchema.lean`, `Groundline/ThicknessToDz.lean`.

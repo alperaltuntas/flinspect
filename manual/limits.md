@@ -1,9 +1,9 @@
 # Limits & roadmap
 
-This manual documents what runs today; this page is the honest inventory of
-what does not, and what each missing piece would take. Everything below is
-**roadmap** — none of it is implemented, and none of it should be cited as a
-capability.
+The rest of this manual documents what runs today; this page is the
+inventory of what does not — and what each missing piece would take.
+Everything below is **roadmap**: none of it is implemented, and none of it
+should be cited as a capability.
 
 ## The frontier: reductions and k-recurrences
 
@@ -21,7 +21,7 @@ kernels just past that boundary are the ones the pipeline refuses today:
 - **reductions** — scalar accumulators (`s = s + a(i)`), refused by the
   plain-DO write gate as not point-local.
 
-What a future step needs, sketched honestly:
+What a future step would need:
 
 - a **model shape** that keeps the sequential structure instead of erasing
   it — for a k-recurrence, a fold over the k-enumeration *is* the honest
@@ -39,10 +39,10 @@ What a future step needs, sketched honestly:
   and it was deliberately **reserved** rather than hand-waved when plain DO
   was admitted.
 
-## Masks and wet/dry logic
+## Masks and per-cell guards
 
-Many MOM6 kernels guard their arithmetic per-cell (`if (G%mask2dT(i,j) > 0.)
-…`) or branch on wet/dry state. A masked point kernel is still point-local,
+Many kernels in the case-study code base guard their arithmetic per cell
+(`if (G%mask2dT(i,j) > 0.) …`) or branch on wet/dry state. A masked point kernel is still point-local,
 so the iteration schemas should extend — but the mask array enters the model
 as a per-cell input with its own rule-B-like story (a component array of the
 grid type, read at exactly the loop indices), and the generated defs grow a
@@ -62,7 +62,8 @@ demands it — fixture first, refusal edges pinned.
 
 ## Scope boundaries that are permanent, not roadmap
 
-Worth restating so the roadmap above isn't misread as "everything eventually":
+Worth restating, so the roadmap above isn't misread as "everything,
+eventually":
 
 - equivalence stays **over ℝ** — floating-point identity is the regression
   and ensemble machinery's job, by design
@@ -74,7 +75,7 @@ Worth restating so the roadmap above isn't misread as "everything eventually":
 
 ## The other half of the vision
 
-Track B certifies each port; the **relational track** is meant to decide
+The kernel track certifies each port; the **relational track** is meant to decide
 *which* kernels are provable in isolation and to gate the porting frontier in
 CI — the two compose into one gate: every ported kernel carries a checked
 theorem *and* no forbidden structural edge appears. The relational track's

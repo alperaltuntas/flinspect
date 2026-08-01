@@ -24,8 +24,8 @@ Nothing else — no home-directory config, no fallback path.
   refuses** (`ManifestError`), never expands to empty.
 - Relative paths resolve against **the manifest file's directory**, so a
   manifest travels with its tree.
-- **Unknown keys refuse.** The manifest is trusted-base adjacent: a typo like
-  `namespcae` must fail loudly, not be silently ignored. Types are checked;
+- **Unknown keys refuse.** The manifest sits close to the trusted base: a
+  typo like `namespcae` must fail loudly, not be silently ignored. Types are checked;
   missing required keys are named.
 - Duplicate kernel names refuse.
 
@@ -35,7 +35,7 @@ Nothing else — no home-directory config, no fallback path.
 |---|---|---|
 | `corpus` | yes | root directory of the with-sema `*_ptree` dumps; each kernel's `dump` resolves under it |
 | `out` | yes | where `kernel generate` writes the Fortran-side Lean module |
-| `namespace` | yes | Lean namespace of the generated module (e.g. `TrackB.Generated`) |
+| `namespace` | yes | Lean namespace of the generated module (e.g. `Groundline.GeneratedFtn`) |
 | `blurb` | no | extra lines appended to the generated module's header comment |
 
 ## `[cpp]` — the clang side (omit to disable)
@@ -50,7 +50,7 @@ Nothing else — no home-directory config, no fallback path.
 | `provenance_root` | no | headers display relative to this root in generated doc comments — what keeps them byte-stable across machines |
 | `blurb` | no | extra header-comment lines |
 
-## `[lean]` — the proof tier (optional)
+## `[lean]` — the proof stage (optional)
 
 | Key | Required | Meaning |
 |---|---|---|
@@ -87,7 +87,7 @@ resolved absolute paths never leak into generated files.
 - [`examples/quickstart/kernels.toml`](https://github.com/alperaltuntas/groundline/blob/main/examples/quickstart/kernels.toml)
   — the self-contained toy pair; everything relative, no `[lean]` section.
 - [`examples/turbo-stack.kernels.toml`](https://github.com/alperaltuntas/groundline/blob/main/examples/turbo-stack.kernels.toml)
-  — the production MOM6 ⇄ TIM instance: the five banked pairs, the NCAR
-  corpus and TIM header paths, pinned AMReX/MPI include dirs, and
-  `lake_dir = "../lean/pilot"`. On another site, copy it and repoint the
+  — the production instance (the MOM6 ⇄ TIM case study): the five banked pairs, the NCAR
+  corpus and kernel header paths, pinned AMReX/MPI include dirs, and
+  `lake_dir = "../lean/groundline"`. On another site, copy it and repoint the
   paths — that file is the *only* thing that changes.

@@ -5,7 +5,8 @@ codebases, built on compiler syntax trees (flang/clang)
 
 positional arguments:
   COMMAND
-    kernel    Track B kernel bank: list, show, generate, verify
+    kernel    kernel verification: list, show, generate, verify banked kernel
+              pairs
 
 options:
   -h, --help  show this help message and exit

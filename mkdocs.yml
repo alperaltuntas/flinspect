@@ -1,8 +1,8 @@
-site_name: groundline — Track B kernel verification
+site_name: groundline — kernel verification
 site_description: >-
-  Machine-checked equivalence of legacy Fortran (MOM6) kernels and their
-  C++/AMReX (TIM) ports, generated from compiler syntax trees and proved in
-  Lean 4 over the reals.
+  Machine-checked equivalence of legacy Fortran kernels and their C++ ports,
+  generated from compiler syntax trees and proved in Lean 4 over the reals —
+  demonstrated on the MOM6 → TIM (AMReX) port.
 site_url: https://alperaltuntas.github.io/groundline/
 repo_url: https://github.com/alperaltuntas/groundline
 repo_name: alperaltuntas/groundline
@@ -71,7 +71,7 @@ nav:
       - Port to a new LLVM: howto/new-llvm.md
       - Wire verification into CI: howto/ci.md
   - Case studies:
-      - "The pilot: PPM_limit_pos": case-studies/ppm-limit-pos.md
+      - "The first kernel: PPM_limit_pos": case-studies/ppm-limit-pos.md
       - "The control-flow join: PPM_limit_CW84": case-studies/ppm-limit-cw84.md
       - "Assertion vs proof: thickness_to_dz": case-studies/thickness-to-dz.md
       - "Kernels that live inside branches": case-studies/edge-thickness-upwind.md

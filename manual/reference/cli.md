@@ -2,7 +2,8 @@
 
 The `groundline` console script is installed by `pip install`
 (`[project.scripts]` → `groundline.cli:main`). It is argparse-only and
-widget-free by design — it must work in a bare venv with no Jupyter stack.
+widget-free on purpose — it must work in a bare environment with no Jupyter
+stack.
 All help text below is the real `--help` output, captured from the installed
 script (see `manual/snippets/render_snippets.sh`).
 
@@ -73,7 +74,7 @@ $ groundline kernel verify --help
 --8<-- "cli_kernel_verify_help.txt"
 ```
 
-Track B's CI gate, in order:
+The CI gate, in order:
 
 1. regenerate each enabled side **in memory** and byte-diff against the
    committed `out` files. Drift → the fresh copy is parked in a temp file, a

@@ -1,21 +1,21 @@
 # The kernel IR and its refusal discipline
 
-`groundline/kir.py` defines the small vocabulary in which kernels are modeled,
-and the discipline that makes the whole method honest: **any construct outside
-the supported subset raises `UnsupportedConstruct` — the pipeline refuses,
-it never guesses.**
+`groundline/kir.py` defines the small vocabulary in which kernels are
+modeled, and one rule that the whole method depends on: **any construct
+outside the supported subset raises `UnsupportedConstruct` — the pipeline
+refuses, it never guesses.**
 
-## Why refusal is load-bearing
+## Why refusing matters so much
 
 A proof is only as good as the model it is about. If the translator met an
 unfamiliar construct and produced a *plausible* model — dropped a cast it
 didn't understand, approximated a subscript, guessed an operator — every
 theorem downstream would still compile, and would be **vacuous**: a correct
 proof about the wrong function. That is the one failure mode this design
-refuses to admit. The trade is deliberate: the subset grows only when a real
-kernel demands a construct, each extension arrives with fixtures pinning both
-the accepted and the refused shapes, and everything else fails loudly with a
-message naming the construct.
+refuses to admit. The trade-off is deliberate: the subset grows only when a
+real kernel demands a construct, each extension arrives with fixtures
+pinning both the accepted and the refused shapes, and everything else fails
+loudly with a message naming the construct.
 
 The flip side of refusal is a promise: **what is accepted is modeled exactly.**
 The complete inventory of refusal sites — every trigger, in every stage — is
@@ -45,14 +45,14 @@ no stride). A kernel is `Kernel(name, params, locals, body)` with each
 
 Note what is *absent*: no while loops, no function calls other than a few
 intrinsics, no I/O, no pointers, no array sections, no modules or globals.
-Absence here is not an oversight — it is the subset's boundary, and crossing
-it refuses.
+None of that is an oversight — it is the subset's boundary, and crossing it
+refuses.
 
 ## Two passes shape a kernel for printing
 
 1. **[pointize](pointize.md)** — strip the loop-nest wrapper and turn every
    array reference indexed exactly by the loop indices into a scalar. This is
-   the semantic move that pairs a Fortran loop nest with an AMReX per-point
+   the semantic move that pairs a Fortran loop nest with a per-point C++
    kernel — and the pass where the licensing question (who says the
    iterations are independent?) lives.
 2. **[functionalize](functionalize.md)** — turn the imperative body into one
@@ -60,11 +60,11 @@ it refuses.
    thread a symbolic state, and every control-flow path ends by materializing
    the output tuple.
 
-The C++ frontend produces rank-0 kernels directly (TIM's kernels are already
-per-point functions), so pointize runs only on the Fortran side;
-functionalize and the printer are shared verbatim.
+The C++ frontend produces rank-0 kernels directly (the ported kernels it
+targets are already per-point functions), so pointize runs only on the
+Fortran side; functionalize and the printer are shared verbatim.
 
-## Where the honesty is checked
+## How the refusal discipline is enforced
 
 The refusal discipline is pinned by tests, not just asserted: the conformance
 corpus (`tests/f90/`, `tests/cpp/`) contains **deliberate refusal fixtures** —

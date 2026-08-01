@@ -15,7 +15,7 @@ dependency graphs, call-graph queries, an interactive explorer. It lives in
 
 ## The kernel IR: narrow and deep
 
-Track B needs the opposite projection: for **one** procedure (or one loop nest
+The kernel track needs the opposite projection: for **one** procedure (or one loop nest
 inside a procedure), a *complete, typed* expression and statement tree — every
 literal's spelling, every parenthesis, every guard — deep exactly where the
 relational IR is shallow. That is the **kernel IR** (`groundline/kir.py`), and
@@ -28,10 +28,9 @@ conformance corpus) and nothing else. Two rules, stated in the design docs and
 enforced in review:
 
 1. **Do not bloat the relational IR.** A field only the Lean printer needs
-   never appears in `groundline/ir.py`. A reasoning layer built on a muddled
-   abstraction can't be rescued by good code, and "one IR to serve both" would
-   be exactly that muddle: relational consumers would drag around expression
-   trees they never read, and the semantic track would inherit invariants
+   never appears in `groundline/ir.py`. One IR trying to serve both consumers
+   would serve neither: relational consumers would drag around expression
+   trees they never read, and the kernel track would inherit invariants
    designed for whole-codebase queries.
 2. **The kernel-IR → Lean path is trusted-base code.** It must stay small,
    deterministic, and auditable ([why](trusted-base.md)); tying it to the
@@ -41,7 +40,7 @@ enforced in review:
 ## One seam shape, twice
 
 Each track hides its format-specific machinery behind one deep method. The
-relational seam is `Frontend.extract(sources) -> IR`; the Track B mirror is
+relational seam is `Frontend.extract(sources) -> IR`; the kernel track's mirror is
 `KernelFrontend.extract(spec) -> Kernel` (`groundline/frontend/kernel_base.py`),
 implemented twice:
 

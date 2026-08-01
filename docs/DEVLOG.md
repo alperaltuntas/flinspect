@@ -14,6 +14,61 @@
 
 ---
 
+## 2026-08-01 — Manual revision: "Track B" and "pilot" retired, `GeneratedFtn`, conda env, reframed related work
+
+A user-driven revision pass over the manual and the naming it exposed.
+
+- **"Track B" retired from all user-facing naming.** The label meant nothing
+  to anyone outside the project. The user-facing name is now plain **kernel
+  verification** (short form in prose: *the kernel track*, alongside *the
+  relational track*); docs/ keeps "Track B" as the historical/internal term.
+  CLI help, Python docstrings, fixtures' comments, the skill, mkdocs site
+  name, and the manual all updated.
+- **"Pilot" retired as a structural name.** The Lean project outgrew its
+  pilot-era identity (5/5 kernels banked, mature no-hand-models pattern).
+  Combined with the point above: `lean/pilot` → **`lean/groundline`**, module
+  `Pilot` → **`Groundline`**, and every Lean namespace moved from `TrackB.*`
+  to `Groundline.*` (e.g. `Groundline.GeneratedFtn.ppm_limit_pos`). The word
+  "pilot" survives only as history in the PPM_limit_pos case-study narrative.
+- **Symmetric generated-module names.** `Generated.lean` → `GeneratedFtn.lean`
+  and `Fidelity.lean` → `FidelityFtn.lean`, mirroring `GeneratedCpp.lean` /
+  `FidelityCpp.lean`; namespaces `Groundline.GeneratedFtn` and
+  `Quickstart.GeneratedFtn`. Both manifests, the regenerated modules, all
+  proofs, the audit, tests, the bank-kernel skill, and the snippets updated.
+- **Conda distribution.** New root `environment.yml` (`conda env create -f
+  environment.yml` → env `groundline`, editable pip install of the package);
+  the manual, README, and PUBLISHING now lead with it, venv demoted to an
+  aside with `PYTHONNOUSERSITE=1` as troubleshooting.
+- **Manual reframing.** (1) Application-agnostic: concepts/how-tos/reference
+  now describe the method generically; MOM6/TIM/TURBO appear as *the case
+  study*, not as the definition of the tool. (2) Related work: Logos
+  Research's migration-by-proof is presented as closely related parallel
+  work with the shared load-bearing ideas listed (no LLM in the pipeline,
+  auditable generated Lean, equivalence over ℝ) rather than as the template
+  the project "follows" — much of that philosophy is the project's own
+  (reals-first, VSS 2025). (3) A new frontends-reference section answers why
+  the two frontends read different formats (flang has no JSON AST dump;
+  clang's JSON *is* its post-sema tree; the committed-vs-on-demand workflow
+  split is forced by `.mod`-ordered Fortran builds vs standalone C++
+  headers — both sides consume the same thing, a post-sema syntax tree).
+  (4) Tone pass throughout: installation "tiers" became plain levels, the
+  slogan-y phrasings ("deliberately usable", "be honest with yourself",
+  "the method's honesty made visible") rewritten in plain language,
+  "honest/honestly" trimmed to its technical uses.
+- **One mechanical surprise:** `lean` renders `#print axioms` messages at a
+  fixed 120-column width (no option reaches it — `format.width` via
+  `set_option` and `-D` were both tried and ignored for message rendering),
+  and `Groundline.GeneratedCpp.thickness_to_dz_3d_nonboussinesq_point` is
+  long enough to wrap. `render_snippets.sh` now rejoins indented
+  continuation lines so the audit snippet keeps one declaration per line;
+  `tests/test_manual.py` pins the result.
+
+Verification after the renames: full `lake build` green (798 jobs), `kernel
+verify` green end to end (byte-diffs + Lean), 184 pytest green, `mkdocs build
+--strict` green.
+
+---
+
 ## 2026-07-31 — flinspect → groundline: the rename, applied
 
 **What:** the tool, package, and CLI are renamed **flinspect → groundline**,

@@ -22,9 +22,10 @@ that evaluates to the tuple of output values.
   functional if-expression, each branch ending by materializing the output
   tuple.
 
-For the pilot kernel this yields exactly the shape a Lean-literate reader
-would write by hand — compare `Generated.lean`'s `ppm_limit_pos` with its
-Fortran source in the [pilot case study](../case-studies/ppm-limit-pos.md).
+For a straight-line kernel this yields exactly the shape a Lean-literate
+reader would write by hand — compare `GeneratedFtn.lean`'s `ppm_limit_pos`
+with its Fortran source in the
+[first case study](../case-studies/ppm-limit-pos.md).
 
 ## The control-flow join
 
@@ -58,9 +59,9 @@ semantics, exactly as in the source. `Cond` is the one kernel-IR node no
 frontend ever produces — only this merge creates it.
 
 Any other join shape refuses. The restriction is not a temporary limitation
-to be quietly relaxed; it is the shape for which the merge semantics was
-designed, tested (the golden fixture pins the merged-state threading
-visibly), and audited. A trailing `if` — nothing after it — keeps the
+waiting to be quietly relaxed — it is the one shape the merge semantics was
+designed for, tested on (the golden fixture pins the merged-state threading
+visibly), and audited against. A trailing `if` — nothing after it — keeps the
 structured if-expression path, so kernels without joins are unaffected.
 
 ## Why this design is easy to trust

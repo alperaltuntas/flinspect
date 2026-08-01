@@ -1,36 +1,50 @@
 # Installation
 
-groundline's Track B is deliberately usable in tiers. Each tier adds one
-external toolchain and unlocks one more stage of the pipeline; everything
-below your tier keeps working. Be honest with yourself about which tier you
-need — most readers exploring the method need only the first.
+You don't need every toolchain to use groundline. The Python package alone
+already runs the Fortran side of the pipeline end to end; flang, clang, and
+Lean each add one more stage on top. This page walks through the four levels
+in order — if you are just exploring the method, the first one is all you
+need.
 
-## Tier 1 — pip alone
+## Level 1 — the Python package
+
+The recommended install is the groundline conda environment:
 
 ```bash
 git clone https://github.com/alperaltuntas/groundline
 cd groundline
-python3 -m venv .venv
-PYTHONNOUSERSITE=1 .venv/bin/pip install -e '.[dev]'
+conda env create -f environment.yml
+conda activate groundline
 ```
 
-Python ≥ 3.11, no compiler toolchains. This unlocks:
+This creates an isolated environment named `groundline` (Python 3.12) and
+installs the package into it in editable mode, so a `git pull` takes effect
+immediately. No compiler toolchains are involved. With this you can:
 
-- extraction from **committed** flang dumps (the quickstart ships one, and the
-  test fixtures under `tests/f90/` are all committed with provenance);
-- the full Fortran side of the CLI: `groundline kernel list`, `show`,
+- extract kernels from **committed** flang dumps — the quickstart ships one,
+  and the test fixtures under `tests/f90/` are all committed with provenance;
+- run the full Fortran side of the CLI: `groundline kernel list`, `show`,
   `generate --skip-cpp`, `verify --skip-cpp`;
-- reading and regenerating the Fortran-side generated Lean *text* (printing
-  needs no Lean installation — Lean is only needed to *check* proofs).
+- read and regenerate the Fortran-side generated Lean *text* (printing needs
+  no Lean installation — Lean is only needed to *check* proofs).
 
-The `PYTHONNOUSERSITE=1` guard keeps a broken `~/.local` user site from
-shadowing the venv; harmless where the user site is healthy, essential where
-it is not. Use it on the *install* command too, or transitive dependencies can
-silently resolve against the user site.
+??? note "pip/venv instead of conda"
 
-## Tier 2 — + flang (generate your own Fortran dumps)
+    If you prefer a plain virtualenv:
 
-The Fortran frontend consumes flang **with-sema parse-tree dumps**:
+    ```bash
+    python3 -m venv .venv
+    .venv/bin/pip install -e '.[dev]'
+    ```
+
+    One pitfall worth knowing either way: a stale or broken `~/.local` user
+    site-packages can shadow the environment's packages. If you see import
+    errors that make no sense, set `PYTHONNOUSERSITE=1` (on the install
+    command too) and they will go away.
+
+## Level 2 — add flang, to generate your own Fortran dumps
+
+The Fortran frontend reads flang **with-sema parse-tree dumps**:
 
 ```bash
 flang -fc1 -fdebug-dump-parse-tree kernel_source.f90 > kernel_source_ptree
@@ -38,69 +52,74 @@ flang -fc1 -fdebug-dump-parse-tree kernel_source.f90 > kernel_source_ptree
 
 The committed fixtures and the production corpus were generated with **flang
 21** (the exact version is stamped in `tests/f90/PROVENANCE`). The dump format
-has no formal stability contract, so other LLVM versions may work or may not —
-the conformance corpus exists precisely to detect and localize format drift;
-see [Port to a new LLVM](howto/new-llvm.md). Two constraints worth knowing
-before you generate dumps at scale:
+has no formal stability contract, so other LLVM versions may or may not work
+as is — the conformance corpus exists precisely to detect and localize format
+drift; see [Port to a new LLVM](howto/new-llvm.md). Two constraints to know
+before generating dumps at scale:
 
 - the source must be *semantically valid*, not merely parseable — flang emits
   no dump at all on a semantic error;
 - a file that USEs modules from other files needs those modules' `.mod` files
-  built first, i.e. a full ordered build. The MOM6 production corpus is
-  generated as a side product of the real build.
+  built first, which means a full ordered build. The production corpus in the
+  case studies is generated as a side product of the real model build.
 
-## Tier 3 — + clang (the C++ side)
+## Level 3 — add clang, for the C++ side
 
-The C++ frontend invokes `clang++` itself (`-ast-dump=json`); no dump files
-are involved — clang's JSON is consumed in memory and never committed, because
-its node IDs are memory addresses and nondeterministic across runs.
+The C++ frontend invokes `clang++` itself (`-ast-dump=json`); there are no
+dump files to manage — clang's JSON is consumed in memory and never
+committed, because its node IDs are memory addresses and change between runs.
+(Why the two frontends consume different formats at all is answered in
+[the frontends reference](reference/frontends.md#why-two-different-input-formats).)
 
 - For **standalone headers** like the quickstart's `toy_kernel.hpp`, a plain
   `clang++` on `PATH` is all you need.
-- For the **real TIM kernels**, the headers include AMReX, so the manifest
-  must also point at an AMReX install's `include/` directory (and an
-  `mpi.h`); see the pinned `include_dirs` in
+- Headers with dependencies need their include paths in the manifest. The
+  production case study's kernels include AMReX, so its manifest pins an
+  AMReX install's `include/` directory (and an `mpi.h`); see `include_dirs`
+  in
   [`examples/turbo-stack.kernels.toml`](https://github.com/alperaltuntas/groundline/blob/main/examples/turbo-stack.kernels.toml).
   The compiler and include directories are part of a kernel's identity — the
   invocation is stamped into the generated module's provenance header.
 
-## Tier 4 — + Lean 4 / Mathlib (check the proofs)
+## Level 4 — add Lean 4 / Mathlib, to check the proofs
 
-The proofs live in `lean/pilot/`, a `lake` project depending on Mathlib.
+The proofs live in `lean/groundline/`, a `lake` project depending on Mathlib.
 Install the toolchain with [elan](https://github.com/leanprover/elan), then:
 
 ```bash
-cd lean/pilot
+cd lean/groundline
 lake exe cache get   # fetch the Mathlib binary cache — thousands of prebuilt
                      # modules; without it Mathlib builds from source for hours
 lake build
 ```
 
-This unlocks the last tier of `groundline kernel verify`: after the byte-diff
-gate passes, it runs `lake build` in the manifest's `[lean] lake_dir`, which
-re-checks every theorem and re-runs the axioms audit.
+This enables the last stage of `groundline kernel verify`: after the
+byte-diff gate passes, it runs `lake build` in the manifest's
+`[lean] lake_dir`, which re-checks every theorem and re-runs the axioms
+audit.
 
 Two practical notes from experience:
 
-- **The Mathlib binary cache is not optional in practice.** Also, prefer
-  targeted imports (`Mathlib.Data.Real.Basic`, `Mathlib.Tactic.Ring`) over a
-  blanket `import Mathlib` in new proof files — on a networked filesystem the
-  blanket import can take minutes per file to elaborate.
-- **A bare elan shim is worse than no `lake`.** `verify` skips the Lean tier
-  with a clear note when `lake` is absent, but an elan shim on `PATH` without
-  a provisioned toolchain *fails* the gate (elan tries to download a toolchain
-  on the spot). Activate a real Lean environment before relying on the Lean
-  tier.
+- **Get the Mathlib binary cache.** It is technically optional and
+  practically not. Relatedly, prefer targeted imports
+  (`Mathlib.Data.Real.Basic`, `Mathlib.Tactic.Ring`) over a blanket
+  `import Mathlib` in new proof files — on a networked filesystem the blanket
+  import can take minutes per file to elaborate.
+- **A bare elan shim is worse than no `lake` at all.** `verify` skips the
+  Lean stage with a clear note when `lake` is absent, but an elan shim on
+  `PATH` without a provisioned toolchain *fails* the gate (elan tries to
+  download a toolchain on the spot). Activate a real Lean environment before
+  relying on this stage.
 
-## What each tier unlocks — summary
+## Summary — what each level adds
 
-| Tier | Adds | Unlocks |
+| Level | Adds | What you can do |
 |---|---|---|
-| 1 | `pip install` | extraction from committed dumps; Fortran-side `list`/`show`/`generate`/`verify` |
-| 2 | flang | generating with-sema dumps for your own Fortran |
-| 3 | clang++ (+ AMReX headers for TIM) | the C++ side of `show`/`generate`/`verify` |
-| 4 | Lean 4 / Mathlib (elan) | checking the equivalence theorems; the `lake build` tier of `verify` |
+| 1 | the conda environment | extract from committed dumps; Fortran-side `list`/`show`/`generate`/`verify` |
+| 2 | flang | generate with-sema dumps of your own Fortran |
+| 3 | clang++ (+ the headers' include paths) | the C++ side of `show`/`generate`/`verify` |
+| 4 | Lean 4 / Mathlib (elan) | check the equivalence theorems; the `lake build` stage of `verify` |
 
-The CLI degrades honestly between tiers: a missing `clang++` produces a
-skip note (`show`) or an explicit error (`verify`, which must not pass
-vacuously), and a missing `lake` produces a skip note naming what was skipped.
+The CLI is upfront about missing tools: without `clang++`, `show` prints a
+skip note and `verify` errors (a gate must not pass by accident); without
+`lake`, `verify` prints a skip note naming exactly what was skipped.

@@ -5,13 +5,52 @@ produce the same [kernel IR](../concepts/kernel-ir.md); everything below the
 seam is format-specific, everything above it is shared. Both are trusted-base
 code: deterministic, structural, refusing.
 
+## Why two different input formats?
+
+At first glance the asymmetry looks arbitrary: the Fortran side reads flang's
+*text* parse-tree dump from committed files, while the C++ side invokes
+clang and consumes *JSON* in memory. Couldn't both use JSON, or both use
+with-sema dumps? The short answer is no — and the asymmetry is each compiler
+met on its own terms:
+
+- **flang simply has no JSON AST dump.** Its `-fdebug-dump-parse-tree` text
+  format is the only complete serialization flang offers of the parse tree
+  after semantic analysis. There is no machine-oriented alternative to
+  switch to.
+- **clang's JSON _is_ its semantic tree.** clang runs semantic analysis
+  before dumping, so `-ast-dump=json` already gives exactly what the
+  with-sema flang dump gives: a post-sema syntax tree with names and types
+  resolved. clang does also have a *text* AST dump, but that one is a
+  pretty-printed debugging aid for humans; the JSON form is the one meant for
+  tools. Parsing the text form instead would gain no uniformity worth having
+  — just a more fragile parser.
+
+So the two frontends already consume the same *thing* — the compiler's
+post-semantic-analysis syntax tree — through the best machine-readable
+serialization each compiler provides. What genuinely differs is the
+**workflow**, and that difference is forced by the languages rather than
+chosen:
+
+- A Fortran file that USEs other modules can only be dumped after those
+  modules' `.mod` files exist — in practice, inside a full ordered build. So
+  Fortran dumps are captured once as a build side product and **committed
+  with provenance**, and the frontend reads files.
+- A C++ kernel header compiles standalone given its `-I` paths, so clang can
+  run fresh **on demand** — and must, because its JSON contains node IDs
+  that are memory addresses, nondeterministic across runs, which makes
+  committed JSON dumps useless as fixtures anyway.
+
+Nothing is lost to this asymmetry: determinism is asserted where it actually
+holds (the extracted IR and the printed Lean, both address-free), and each
+side's provenance story matches how its input is produced.
+
 ## `frontend/flang_kernel.py` — Fortran, from flang with-sema dumps
 
 **Input.** A flang **with-sema** parse-tree dump
-(`flang -fc1 -fdebug-dump-parse-tree file.f90`). With-sema matters: the
-production pipeline emits it, semantic analysis has resolved names and kinds,
-and — a practical constraint — flang emits *no dump at all* on a semantic
-error, so dumps of real code require a full ordered build with `.mod` files.
+(`flang -fc1 -fdebug-dump-parse-tree file.f90`). With-sema matters: semantic
+analysis has resolved names and kinds, and — a practical constraint — flang
+emits *no dump at all* on a semantic error, so dumps of real code require a
+full ordered build with `.mod` files.
 
 **How it reads.** The dump text is parsed into a literal node tree first (one
 node per `A -> B -> C` chain element, children attached by `|`-depth), then
@@ -66,13 +105,16 @@ Anything else refuses — pinned by a fixture where `b + 1` produces an
 **Intent mapping.** `Real &` → `inout`; `const Real` by value → `in`.
 Everything else — pointers, const refs, plain mutable by-value `Real`,
 non-Real types, default arguments — refuses. Outputs are the `Real &`
-parameters in declaration order. The mapping keys on the *qualType spellings*,
-not on where the `Real` alias comes from — which is why the AMReX-free
-quickstart header needed zero frontend changes.
+parameters in declaration order. The mapping keys on the *qualType
+spellings*, not on where the `Real` alias comes from — which is why the
+frontend needed zero changes when it met the quickstart's dependency-free
+standalone header after being built against the AMReX-based production
+headers.
 
-**No pointize.** TIM kernels are already per-point scalar functions, so
-extraction emits a rank-0 `Kernel` directly; `functionalize` and the printer
-are reused unchanged — the control-flow join machinery is frontend-agnostic.
+**No pointize.** The C++ kernels this frontend targets are already per-point
+scalar functions, so extraction emits a rank-0 `Kernel` directly;
+`functionalize` and the printer are reused unchanged — the control-flow join
+machinery is frontend-agnostic.
 
 **Format notes worth knowing** (from the original survey, all pinned):
 `amrex::Math::abs`'s callee carries no namespace qualifier in the JSON

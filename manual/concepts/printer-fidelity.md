@@ -1,7 +1,7 @@
 # The printer's fidelity contract
 
 `groundline/lean_printer.py` renders a pointized, functionalized kernel as a
-Lean 4 `def` over ℝ. Its contract is single-minded:
+Lean 4 `def` over ℝ. Its whole contract fits in one sentence:
 
 > **Mirror the source's own shapes. Simplify nothing. Equivalence is the
 > prover's job.**
@@ -39,16 +39,15 @@ the pipeline must be able to hold a generated def next to its Fortran or C++
 source and check the correspondence *by eye, one expression at a time*. A
 normalizing printer (constant-folding, flattening parentheses, canonicalizing
 `a*b+c`) would be "smarter" — and would move semantic decisions into exactly
-the component that must stay too simple to hide a bug. Every ounce of
-cleverness lives instead in the *theorems*, where the proof checker verifies
-it.
+the component that must stay too simple to hide a bug. The cleverness lives
+in the *theorems* instead, where the proof checker verifies it.
 
-The payoff is measurable: when the printer regenerated the pilot kernel from
-the production dump, the generated def was proved equal to the hand-written
-model **by `rfl`** — definitional equality, meaning Lean's kernel sees the
-two as the *same function by unfolding definitions alone*, with zero proof
-steps. There is no stronger no-drift statement; the
-[pilot case study](../case-studies/ppm-limit-pos.md) unpacks it.
+The payoff is measurable: when the printer regenerated the first banked
+kernel from the production dump, the generated def was proved equal to the
+hand-written model **by `rfl`** — definitional equality, meaning Lean's
+kernel sees the two as the *same function by unfolding definitions alone*,
+with zero proof steps. There is no stronger no-drift statement; the
+[first case study](../case-studies/ppm-limit-pos.md) unpacks it.
 
 ## What the printed module contains
 

@@ -1,6 +1,7 @@
 # The kir API
 
-The Python surface of Track B, for driving the pipeline programmatically.
+The Python surface of the kernel-verification pipeline, for driving it
+programmatically.
 Everything here is importable from an installed `groundline`; the CLI is a
 thin wrapper over exactly these calls.
 
@@ -87,7 +88,7 @@ entry = m.kernel("ppm_limit_pos")
 k_f = kb.extract_fortran_entry(entry)   # extract + pointize
 k_c = kb.extract_cpp_entry(entry)       # extract (already per-point)
 
-text_f = kb.render_fortran(m)           # full Generated.lean text
+text_f = kb.render_fortran(m)           # full GeneratedFtn.lean text
 text_c = kb.render_cpp(m)               # full GeneratedCpp.lean text
 ```
 

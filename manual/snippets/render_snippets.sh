@@ -77,8 +77,12 @@ if command -v lake >/dev/null; then
   # Write through a temp file so a failed lake run (e.g. a bare elan shim
   # without a provisioned toolchain) can't truncate the committed snippet.
   AUD=$(mktemp)
-  if ( cd lean/pilot && lake build >/dev/null 2>&1 \
-        && lake env lean Pilot/AxiomsAudit.lean ) > "$AUD"; then
+  # lean renders messages at a fixed 120-column width, which wraps the longest
+  # declaration names — rejoin continuation lines (indented) so the snippet
+  # keeps one declaration per line, as in the build log's short lines.
+  unwrap() { awk '{ if (sub(/^ +/, "")) buf = buf " " $0; else { if (buf != "") print buf; buf = $0 } } END { if (buf != "") print buf }'; }
+  if ( cd lean/groundline && lake build >/dev/null 2>&1 \
+        && lake env lean Groundline/AxiomsAudit.lean | unwrap ) > "$AUD"; then
     mv "$AUD" "$SNIP/axioms_audit.txt"
   else
     rm -f "$AUD"

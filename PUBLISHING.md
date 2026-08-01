@@ -23,8 +23,9 @@ repository setup, done in the GitHub UI by someone with admin access:
 Local preview, any time:
 
 ```bash
-PYTHONNOUSERSITE=1 .venv/bin/pip install -e '.[docs]'
-PYTHONNOUSERSITE=1 .venv/bin/mkdocs serve     # http://127.0.0.1:8000
+# in the groundline conda env (or your venv):
+pip install -e '.[docs]'
+mkdocs serve     # http://127.0.0.1:8000
 ```
 
 Keeping the manual honest: the command outputs shown in the manual are

@@ -1,10 +1,10 @@
 # Extend the construct subset
 
 The kernel subset grows **pull, not push**: a construct enters only when a
-real kernel demands it, and it enters through the conformance-corpus workflow
-(the project's "D7" discipline). The unit of work is a *construct*, not a
-kernel — CW84 entered as three constructs (logical IF statement, unary minus,
-the control-flow join), each with its own fixtures.
+real kernel demands it, and it enters through the conformance-corpus
+workflow below. The unit of work is a *construct*, not a kernel — the CW84
+kernel of the case studies entered as three constructs (logical IF
+statement, unary minus, the control-flow join), each with its own fixtures.
 
 ## The workflow, fixture first
 
@@ -48,7 +48,7 @@ rendering in `lean_printer.py`. Take expression structure from the tree,
 never from unparse text.
 
 **5. Golden-test the printed Lean.** The fixture's generated def is committed
-as a golden expectation in `tests/test_kir_lean.py` — the contract tier that
+as a golden expectation in `tests/test_kir_lean.py` — the contract layer that
 must keep passing regardless of dump-format drift.
 
 **6. Prove something with it.** An extension is done when a real kernel uses
@@ -60,9 +60,9 @@ come out byte-identical (this has held for every extension so far, and
 ## If the semantics is the question, stop
 
 Some extensions are parsing work; some are *semantic decisions*. Admitting
-plain-DO nests was the latter — modeling a sequential loop as a pointwise map
-asserts something the source doesn't say, and that decision was escalated to
-the project owner and then discharged properly, with a
+plain-DO nests was the latter — modeling a sequential loop as a pointwise
+map asserts something the source doesn't say, and that decision was raised
+explicitly and then discharged properly, with a
 [proved schema lemma](../concepts/pointize.md) rather than an assertion in
 Python. If your construct changes what a model *means* (reductions,
 recurrences, masks — see [Limits](../limits.md)), the extraction gate is the

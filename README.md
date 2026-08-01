@@ -20,7 +20,7 @@ yet implemented**.
 > **User manual:** <https://alperaltuntas.github.io/groundline/> (source under
 > `manual/`; see `PUBLISHING.md`).
 
-## Track B — kernel equivalence by proof
+## Kernel verification — equivalence by proof
 
 Alongside the structural exploration below, groundline has a second,
 **working** face: it proves that TURBO's C++/AMReX (TIM) ports of MOM6
@@ -69,10 +69,14 @@ see [`notebooks/README.md`](notebooks/README.md) for the index, the launch
 instructions, and the conventions. In short:
 
 ```bash
-python3 -m venv .venv
-PYTHONNOUSERSITE=1 .venv/bin/pip install -e '.[dev]'
-PYTHONNOUSERSITE=1 .venv/bin/jupyter lab notebooks/
+conda env create -f environment.yml    # creates the `groundline` env and installs the package
+conda activate groundline
+jupyter lab notebooks/
 ```
+
+(A plain venv works too — `python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'`;
+if a broken `~/.local` user site shadows the environment, add `PYTHONNOUSERSITE=1` —
+see [`notebooks/README.md`](notebooks/README.md).)
 
 `01_getting_started.ipynb` runs anywhere off the committed `tests/f90` fixtures —
 no corpus needed. Notebooks 02–04 read a corpus of parse-tree dumps: by default

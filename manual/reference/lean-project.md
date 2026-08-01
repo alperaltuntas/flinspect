@@ -1,25 +1,24 @@
 # The Lean project
 
-All proofs live in `lean/pilot/` — a `lake` project (Lean 4, Mathlib
-dependency) named for the Track B pilot it grew out of. `lake build` checks
-everything; `groundline kernel verify` runs it as its final tier when the
-manifest sets `[lean] lake_dir`.
+All proofs live in `lean/groundline/` — a `lake` project (Lean 4, Mathlib
+dependency). `lake build` checks everything; `groundline kernel verify` runs
+it as its final stage when the manifest sets `[lean] lake_dir`.
 
 ## Layout
 
 | File | Role |
 |---|---|
-| `Pilot/Generated.lean` | **Generated** — the five Fortran-side defs, emitted by `groundline kernel generate`; do not edit |
-| `Pilot/GeneratedCpp.lean` | **Generated** — the five C++-side defs, with the pinned clang invocation stamped in the header; do not edit |
-| `Pilot/PpmLimitPos.lean` | The pilot: hand-written models `ppmLimitPosF`/`ppmLimitPosC`, the point lemma, the `pointwise` iteration schema, the kernel theorem |
-| `Pilot/PpmLimitCw84.lean` | Second kernel: hand-written C++ model, point lemma proved directly against the generated Fortran def, kernel theorem |
-| `Pilot/Fidelity.lean` | `generated_ppm_limit_pos_fidelity` (**`rfl`**) + the transitive `generated_matches_cpp` |
-| `Pilot/FidelityCpp.lean` | C++-side fidelity theorems + the fully-mechanical chain theorems `generated_cpp_matches_generated_fortran_{pos,cw84}` |
-| `Pilot/SeqSchema.lean` | The plain-DO schema: `seqStep`, `foldSeq`, `pointwiseMap`, `foldSeq_frame`, `foldSeq_apply_of_mem`, **`foldSeq_eq_pointwiseMap`** |
-| `Pilot/EdgeThicknessUpwind.lean` | Third kernel: both endpoints generated; point lemma `rfl`; do-concurrent license |
-| `Pilot/ThicknessToDz.lean` | Fourth and fifth kernels: honest `foldSeq` models, schema-lemma instantiation |
-| `Pilot/AxiomsAudit.lean` | `#print axioms` on **every** Track B declaration ([the audit](../concepts/trusted-base.md#the-axioms-audit)) |
-| `Pilot.lean` | Root import list |
+| `Groundline/GeneratedFtn.lean` | **Generated** — the five Fortran-side defs, emitted by `groundline kernel generate`; do not edit |
+| `Groundline/GeneratedCpp.lean` | **Generated** — the five C++-side defs, with the pinned clang invocation stamped in the header; do not edit |
+| `Groundline/PpmLimitPos.lean` | The first kernel: hand-written models `ppmLimitPosF`/`ppmLimitPosC`, the point lemma, the `pointwise` iteration schema, the kernel theorem |
+| `Groundline/PpmLimitCw84.lean` | Second kernel: hand-written C++ model, point lemma proved directly against the generated Fortran def, kernel theorem |
+| `Groundline/FidelityFtn.lean` | `generated_ppm_limit_pos_fidelity` (**`rfl`**) + the transitive `generated_matches_cpp` |
+| `Groundline/FidelityCpp.lean` | C++-side fidelity theorems + the fully-mechanical chain theorems `generated_cpp_matches_generated_fortran_{pos,cw84}` |
+| `Groundline/SeqSchema.lean` | The plain-DO schema: `seqStep`, `foldSeq`, `pointwiseMap`, `foldSeq_frame`, `foldSeq_apply_of_mem`, **`foldSeq_eq_pointwiseMap`** |
+| `Groundline/EdgeThicknessUpwind.lean` | Third kernel: both endpoints generated; point lemma `rfl`; do-concurrent license |
+| `Groundline/ThicknessToDz.lean` | Fourth and fifth kernels: honest `foldSeq` models, schema-lemma instantiation |
+| `Groundline/AxiomsAudit.lean` | `#print axioms` on **every** kernel-verification declaration ([the audit](../concepts/trusted-base.md#the-axioms-audit)) |
+| `Groundline.lean` | Root import list |
 
 ## The two schemas (iteration licenses)
 
@@ -36,7 +35,7 @@ manifest sets `[lean] lake_dir`.
 ## Conventions
 
 - **No hand-written models for new kernels** (the mature pattern): point
-  lemmas relate the two *generated* defs directly. The pilot-era hand models
+  lemmas relate the two *generated* defs directly. The early hand models
   remain as machine-checked, human-readable references — no longer
   load-bearing.
 - **Targeted Mathlib imports only** (`Mathlib.Data.Real.Basic`,

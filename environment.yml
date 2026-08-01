@@ -1,0 +1,18 @@
+# The groundline conda environment.
+#
+# From the repository root:
+#   conda env create -f environment.yml
+#   conda activate groundline
+#
+# This creates an isolated Python and installs groundline into it (editable,
+# so `git pull` updates take effect immediately). It covers the Python tier
+# only — flang, clang, and Lean are separate installs; see the manual's
+# installation page for what each one adds.
+name: groundline
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - -e .[dev]

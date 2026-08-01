@@ -57,7 +57,7 @@ pinned by a regression test
 (`test_sequential_alias_read_threads_current_value`). Regenerating the
 committed models confirmed the fix changed nothing for existing kernels.
 
-The honest morals: a wrong model *cannot* be caught by the proof it feeds —
+The morals: a wrong model *cannot* be caught by the proof it feeds —
 the theorem would verify perfectly against the wrong function. What caught
 this was the discipline *around* the proofs: audit trusted-base code when its
 reach grows, refuse what you haven't audited. And plausible-looking
@@ -94,7 +94,7 @@ tactic lesson worth passing on: plain `unfold` leaves the ifs buried under
 binders where `split_ifs` cannot see them — unfolding via `simp only`
 zeta-reduces the `let`s first. The same two-line pattern later closed the
 C++-side fidelity theorem, which absorbs the same delta from the other
-direction. The kernel-level theorem reuses the pilot's `pointwise` schema
+direction. The kernel-level theorem reuses the first kernel's `pointwise` schema
 (CW84 takes no scalar argument, so the schema's scalar slot is filled with a
 dummy `0` on both sides).
 
@@ -103,14 +103,14 @@ dummy `0` on both sides).
 From the current build log:
 
 ```text
-'TrackB.Generated.ppm_limit_cw84' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.ppmLimitCw84_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.ppmLimitCw84_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.GeneratedCpp.ppm_limit_cw84_point' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedFtn.ppm_limit_cw84' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.ppmLimitCw84_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.ppmLimitCw84_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedCpp.ppm_limit_cw84_point' depends on axioms: [propext, Classical.choice, Quot.sound]
 'generated_cpp_ppm_limit_cw84_fidelity' depends on axioms: [propext, Classical.choice, Quot.sound]
 'generated_cpp_matches_generated_fortran_cw84' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
-Proof files: `lean/pilot/Pilot/PpmLimitCw84.lean`, `Pilot/FidelityCpp.lean`.
+Proof files: `lean/groundline/Groundline/PpmLimitCw84.lean`, `Groundline/FidelityCpp.lean`.
 The generated defs — including the merged-`Cond` result tuples, wide and
-honest — are in `Pilot/Generated.lean` and `Pilot/GeneratedCpp.lean`.
+honest — are in `Groundline/GeneratedFtn.lean` and `Groundline/GeneratedCpp.lean`.

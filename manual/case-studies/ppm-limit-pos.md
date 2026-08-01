@@ -1,12 +1,13 @@
-# The pilot: PPM_limit_pos
+# The first kernel: PPM_limit_pos
 
 *Kernel pair: Fortran subroutine `PPM_limit_pos`
 (`MOM6/src/core/MOM_continuity_PPM.F90`) ⇄ C++ `MOM::ppm_limit_pos_point`
 (`TIM/mom/cpp/mom_continuity_ppm_kernel.hpp`).*
 
-Track B did not start with tooling. It started with a timeboxed question:
+The kernel-verification work did not start with tooling. It started with a
+timeboxed question:
 **is this kind of proof cheap enough to be worth building anything for?** The
-rule for the pilot was: hand-write the Lean models for one already-ported
+rule for that first study was: hand-write the Lean models for one already-ported
 kernel pair, prove the equivalence, and only if that succeeds design the
 pipeline. `PPM_limit_pos` — a positivity-preserving limiter for the PPM
 reconstruction, all piecewise-polynomial arithmetic and inequality guards —
@@ -38,12 +39,12 @@ One `ring`-provable bridge identity, then rewrite. On top of it,
 `ppmLimitPos_kernel_equiv` lifts pointwise agreement to whole arrays: both
 `do concurrent (k,j,i)` and `amrex::ParallelFor(box)` are modeled as a
 pointwise map over an abstract index type ι, and the arrays-as-functions
-equality follows from the point lemma. The pilot's verdict: for kernels in
+equality follows from the point lemma. The study's verdict: for kernels in
 the TIM point-function style, the point lemma is near-mechanical.
 
-## The honest caveat — and the printer that removed it
+## The caveat — and the printer that removed it
 
-The pilot's own record flagged its weakness: the models were **hand-written**,
+The study's own record flagged its weakness: the models were **hand-written**,
 so source fidelity rested on human eyes — precisely the trust the project
 exists to eliminate. The next step built the deterministic printer
 (dump → [kernel IR](../concepts/kernel-ir.md) → Lean) and pointed it at the
@@ -51,14 +52,14 @@ exists to eliminate. The next step built the deterministic printer
 source, not a fixture. The extractor consumed `MOM_continuity_PPM.o_ptree`
 unmodified, dropped the grid struct and the six index-range arguments during
 [pointization](../concepts/pointize.md), and emitted
-`TrackB.Generated.ppm_limit_pos`.
+`Groundline.GeneratedFtn.ppm_limit_pos`.
 
 Then the question that makes or breaks the whole approach: is the generated
 def the same function as the hand-written one? In Lean, not by eye:
 
 ```lean
 theorem generated_ppm_limit_pos_fidelity :
-    TrackB.Generated.ppm_limit_pos = TrackB.ppmLimitPosF := rfl
+    Groundline.GeneratedFtn.ppm_limit_pos = Groundline.ppmLimitPosF := rfl
 ```
 
 ## Why `rfl` is the strongest possible statement
@@ -89,20 +90,20 @@ human-readable anchors.
 
 ## The theorems and their audits
 
-From the current build log (`#print axioms`, via `Pilot/AxiomsAudit.lean`):
+From the current build log (`#print axioms`, via `Groundline/AxiomsAudit.lean`):
 
 ```text
-'TrackB.ppmLimitPos_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.ppmLimitPos_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.Generated.ppm_limit_pos' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.ppmLimitPos_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.ppmLimitPos_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedFtn.ppm_limit_pos' depends on axioms: [propext, Classical.choice, Quot.sound]
 'generated_ppm_limit_pos_fidelity' depends on axioms: [propext, Classical.choice, Quot.sound]
 'generated_matches_cpp' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.GeneratedCpp.ppm_limit_pos_point' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedCpp.ppm_limit_pos_point' depends on axioms: [propext, Classical.choice, Quot.sound]
 'generated_cpp_ppm_limit_pos_fidelity' depends on axioms: [propext, Classical.choice, Quot.sound]
 'generated_cpp_matches_generated_fortran_pos' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
 Exactly Lean/Mathlib's three standard axioms, no `sorryAx` — see
 [the trusted base](../concepts/trusted-base.md). Proof files:
-`lean/pilot/Pilot/PpmLimitPos.lean`, `Pilot/Fidelity.lean`,
-`Pilot/FidelityCpp.lean`.
+`lean/groundline/Groundline/PpmLimitPos.lean`, `Groundline/FidelityFtn.lean`,
+`Groundline/FidelityCpp.lean`.

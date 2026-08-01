@@ -94,7 +94,7 @@ $ groundline kernel show accumulate --kernels /tmp/demo/kernels.toml
 --8<-- "refusal_recurrence.txt"
 ```
 
-That message is the method's honesty made visible: the pipeline states
+That message is the method being upfront about its own limits: the pipeline states
 precisely what it will not model, and [Limits & roadmap](../limits.md) states
 what a future step needs (induction over the enumeration, not a ∀-schema)
 before kernels like `find_dz_for_eta` can be banked.
@@ -104,12 +104,12 @@ before kernels like `find_dz_for_eta` can be banked.
 From the current build log:
 
 ```text
-'TrackB.Generated.edge_thickness_upwind' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.GeneratedCpp.edge_thickness_upwind_point' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.edgeThicknessUpwind_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
-'TrackB.edgeThicknessUpwind_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedFtn.edge_thickness_upwind' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.GeneratedCpp.edge_thickness_upwind_point' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.edgeThicknessUpwind_point_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Groundline.edgeThicknessUpwind_kernel_equiv' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
-Proof file: `lean/pilot/Pilot/EdgeThicknessUpwind.lean`. With this kernel and
+Proof file: `lean/groundline/Groundline/EdgeThicknessUpwind.lean`. With this kernel and
 [the two thickness conversions](thickness-to-dz.md), the bank covered five of
 five — the entire TIM point-kernel population at the time of writing.

@@ -1,9 +1,9 @@
 # Refusal catalog
 
 Every site in the pipeline that raises `UnsupportedConstruct`, what triggers
-it, and why it refuses. This list is the method's honesty made visible: what
-is *not* here is modeled exactly, and anything that hits one of these sites
-fails loudly instead of producing a plausible-but-wrong model
+it, and why it refuses. Read it as the other half of the subset's contract:
+anything *not* listed here is modeled exactly, and anything that hits one of
+these sites fails loudly instead of producing a plausible-but-wrong model
 ([why that matters](../concepts/kernel-ir.md)).
 
 The catalog is complete as of this manual's writing — it was compiled by
@@ -60,9 +60,9 @@ implies — the early-warning surface for dump-format drift (see
 | Trigger | Why it refuses |
 |---|---|
 | the function found zero or several times in the dump (`found N definitions`) | unique address, as on the Fortran side |
-| non-`void` return type | TIM point kernels return through `Real &` parameters; a return value is a different calling convention |
+| non-`void` return type | the supported kernel shape returns through `Real &` parameters; a return value is a different calling convention |
 | parameter type other than `Real &` / `const Real` (pointers, const refs, mutable by-value, non-Real, …) | the [intent mapping](frontends.md) is deliberately total on exactly two spellings |
-| a parameter with a default argument | a defaulted parameter changes the function's arity story; never appears in TIM kernels |
+| a parameter with a default argument | a defaulted parameter changes the function's arity story; does not appear in the targeted kernel shape |
 | unexpected children of the function declaration, multiple bodies, or no body | structural guards on the JSON shape |
 | locals shadowing parameters (`locals shadow parameters`) | shadowing would silently redirect reads in the flat `let` model |
 

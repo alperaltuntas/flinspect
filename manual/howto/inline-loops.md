@@ -1,8 +1,8 @@
 # Address a loop inside a subroutine
 
-Not every kernel is a tidy standalone subroutine. Real MOM6 code keeps
-kernels *inline* — a loop nest under an `if` inside a larger routine, often
-one variant per configuration branch. Track B addresses these by **source
+Not every kernel is a tidy standalone subroutine. In real code, kernels often
+live *inline* — a loop nest under an `if` inside a larger routine, sometimes
+one variant per configuration branch. groundline addresses these by **source
 order ordinal**.
 
 ## The addressing rule
@@ -48,7 +48,7 @@ routine around it.
 
 ## Worked example
 
-In production, `thickness_to_dz_3d` carries four sibling nests — a
+In the production case study, `thickness_to_dz_3d` carries four sibling nests — a
 do-concurrent and a plain-DO variant of each of its two physics branches,
 under a `do_offload` guard. In source order: nest 1 = do-concurrent
 non-Boussinesq, 2 = plain-DO non-Boussinesq, 3 = do-concurrent Boussinesq,
@@ -71,8 +71,8 @@ the address stays auditable end to end.
 !!! note "Ordinals can move"
 
     The ordinal is stable against everything except *source edits that add,
-    remove, or reorder loop nests in that subroutine*. If upstream MOM6
-    changes the routine, `groundline kernel verify` catches it: the
+    remove, or reorder loop nests in that subroutine*. If an upstream change
+    touches the routine, `groundline kernel verify` catches it: the
     regenerated def either differs (byte-diff fails) or the extraction
     refuses. Re-derive the ordinal by reading the source, update the row, and
     re-audit the def — the same one-time audit as banking.
