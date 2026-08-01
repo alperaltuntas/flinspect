@@ -44,9 +44,10 @@ relational seam is `Frontend.extract(sources) -> IR`; the kernel track's mirror 
 `KernelFrontend.extract(spec) -> Kernel` (`groundline/frontend/kernel_base.py`),
 implemented twice:
 
-- `FlangKernelFrontend` — consumes pre-generated flang **with-sema parse-tree
-  dumps** (text); addressed by `FortranKernelSpec(dump, subroutine[, nest,
-  def_name])`.
+- `FlangKernelFrontend` — consumes flang **with-sema parse-tree dumps**
+  (text), pre-generated (`dump`) or produced on demand by running flang on a
+  standalone source (`source`); addressed by
+  `FortranKernelSpec(subroutine, dump | source[, nest, def_name])`.
 - `ClangKernelFrontend` — invokes `clang++ -ast-dump=json` itself; addressed
   by `CppKernelSpec(source, function, include_dirs, compiler)` — the
   toolchain travels in the spec because it is part of the kernel's

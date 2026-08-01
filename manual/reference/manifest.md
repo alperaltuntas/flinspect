@@ -40,10 +40,16 @@ Nothing else — no home-directory config, no fallback path.
 
 | Key | Required | Meaning |
 |---|---|---|
-| `dumps` | yes | directory of flang parse-tree dumps (with sema); each kernel's `file` resolves under it |
 | `generated` | yes | the Fortran-side Lean module `kernel generate` writes (and `verify` checks) |
 | `namespace` | yes | Lean namespace of the generated module (e.g. `Groundline.GeneratedFtn`) |
+| `dumps` | only if any kernel uses `dump` | directory of pre-generated flang parse-tree dumps (with sema); each kernel's `dump` resolves under it |
+| `sources` | no (default `.`) | directory the kernels' `source` values resolve under |
+| `compiler` | no (default `flang`) | the compiler executable, run on `source` kernels to dump them on demand |
 | `blurb` | no | extra lines appended to the generated module's header comment |
+
+When any kernel is source-mode, the flang version and invocation are stamped
+into the generated module's header — the same provenance discipline as the
+C++ side.
 
 ## `[cpp]` — the clang side (omit to disable)
 
@@ -51,7 +57,7 @@ Nothing else — no home-directory config, no fallback path.
 |---|---|---|
 | `generated` | yes | the C++-side Lean module `kernel generate` writes |
 | `namespace` | yes | Lean namespace of the generated module |
-| `sources` | no (default `.`) | directory the kernels' `file` values resolve under |
+| `sources` | no (default `.`) | directory the kernels' `source` values resolve under |
 | `include_dirs` | no | pinned `-I` directories — part of the kernel identity, stamped into the generated provenance header |
 | `compiler` | no (default `clang++`) | the compiler executable |
 | `provenance_root` | no | source files display relative to this root in generated doc comments — what keeps them byte-stable across machines |
@@ -71,22 +77,30 @@ current — it prints a note saying no theorems were checked.
 ```toml
 [[kernel]]
 name = "ppm_limit_pos"
-fortran  = { file = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_pos" }
-cpp      = { file = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_pos_point" }
+fortran  = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_pos" }
+cpp      = { source = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_pos_point" }
 pointize = true
 ```
 
 - `name` (required) — the entry's identity, and (for inline-loop entries) the
   generated def's name.
-- `fortran = { file, subroutine [, nest [, def_name]] }` — `file` is a dump,
-  resolved under `[fortran].dumps`. Without `nest`, the whole subroutine is
-  the kernel and **the entry must be named after the subroutine** (enforced).
-  With `nest = N`, loop nest #N of the subroutine (source-order ordinal) is
-  extracted, generated under `def_name` if given, else under `name` — see
-  [inline-loop addressing](../howto/inline-loops.md). `def_name` without
-  `nest` refuses.
-- `cpp = { file, function }` — `file` is a `.cpp` or a header, resolved under
-  `[cpp].sources`.
+- `fortran = { dump | source, subroutine [, nest [, def_name]] }` — exactly
+  one of:
+    - `dump` — a pre-generated with-sema flang dump, resolved under
+      `[fortran].dumps`. For kernels inside a real codebase, whose modules
+      must be built before flang can run.
+    - `source` — a standalone Fortran file, resolved under
+      `[fortran].sources`; groundline runs `[fortran].compiler` on it and
+      reads the dump on demand — the mirror of the C++ side.
+
+    Without `nest`, the whole subroutine is the kernel and **the entry must
+    be named after the subroutine** (enforced). With `nest = N`, loop nest
+    #N of the subroutine (source-order ordinal) is extracted, generated
+    under `def_name` if given, else under `name` — see
+    [inline-loop addressing](../howto/inline-loops.md). `def_name` without
+    `nest` refuses.
+- `cpp = { source, function }` — `source` is a `.cpp` or a header, resolved
+  under `[cpp].sources`; clang runs on it on demand.
 - `pointize` (default `false`) — the explicit license to reduce a Fortran
   **loop nest** to its per-point body before comparing. A loop and a point
   function are different things, so a loop-shaped kernel *refuses* without
@@ -95,7 +109,7 @@ pointize = true
 - Either side may be omitted (a Fortran-only or C++-only entry is legal); an
   entry with neither refuses, as does a side whose section is absent.
 
-The manifest-relative spellings of the two `file` values (the C++ one
+The manifest-relative spellings of the `dump`/`source` values (the C++ one
 re-rooted at `provenance_root` when set) are what appear in the generated
 doc comments — resolved absolute paths never leak into generated files.
 

@@ -34,9 +34,9 @@ name and records the pairing:
 ```toml
 [[kernel]]
 name = "edge_thickness_upwind"
-fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree",
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree",
             subroutine = "zonal_edge_thickness", nest = 1 }
-cpp = { file = "mom_continuity_ppm_kernel.hpp",
+cpp = { source = "mom_continuity_ppm_kernel.hpp",
         function = "edge_thickness_upwind_point" }
 pointize = true
 ```

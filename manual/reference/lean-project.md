@@ -18,7 +18,7 @@ it as its final stage when the manifest sets `[lean] lake_dir`.
 | `Groundline/EdgeThicknessUpwind.lean` | Third kernel: both endpoints generated; point lemma `rfl`; do-concurrent license |
 | `Groundline/ThicknessToDz.lean` | Fourth and fifth kernels: honest `foldSeq` models, schema-lemma instantiation |
 | `Groundline/QuickstartFtn.lean`, `Groundline/QuickstartCpp.lean` | **Generated** — the quickstart toy pair's models (manifest `examples/quickstart/kernels.toml`); do not edit |
-| `Groundline/QuickstartEquiv.lean` | The quickstart's equivalence theorems (both `rfl`), walked through in [the quickstart](../quickstart.md) |
+| `Groundline/QuickstartEquiv.lean` | The quickstart's equivalence theorem (a one-line `rfl`), walked through in [the quickstart](../quickstart.md) |
 | `Groundline/AxiomsAudit.lean` | `#print axioms` on **every** kernel-verification declaration ([the audit](../concepts/trusted-base.md#the-axioms-audit)) |
 | `Groundline.lean` | Root import list |
 

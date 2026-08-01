@@ -42,7 +42,8 @@ from groundline.kir import (
 ```python
 from groundline.frontend.kernel_base import (
     KernelFrontend,        # Protocol: extract(spec) -> Kernel
-    FortranKernelSpec,     # dump, subroutine, nest=None, def_name=None
+    FortranKernelSpec,     # subroutine, dump | source, compiler="flang",
+                           #   nest=None, def_name=None
     CppKernelSpec,         # source, function, include_dirs=(), compiler="clang++"
 )
 from groundline.frontend.flang_kernel import FlangKernelFrontend
@@ -57,9 +58,12 @@ k = FlangKernelFrontend().extract(FortranKernelSpec(
         subroutine="ppm_limit_pos"))
 ```
 
-`FortranKernelSpec` validates that `nest` and `def_name` travel together
-(inline-loop addressing) or not at all. `CppKernelSpec` carries the pinned
-clang invocation because the toolchain is part of the kernel's identity.
+`FortranKernelSpec` takes exactly one of `dump` (a pre-generated with-sema
+dump) or `source` (a standalone Fortran file; the frontend runs `compiler`
+on it and reads the dump on the spot), and validates that `nest` and
+`def_name` travel together (inline-loop addressing) or not at all.
+`CppKernelSpec` carries the pinned clang invocation because the toolchain is
+part of the kernel's identity.
 
 ## `groundline.lean_printer` — rendering
 

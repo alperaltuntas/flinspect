@@ -50,8 +50,9 @@ $ groundline kernel show --help
 ```
 
 Extracts one kernel fresh from its sources and prints both generated Lean
-defs to stdout — no files touched. The C++ side is skipped with a stderr note
-when the manifest's clang is not on `PATH`. This is the by-eye-audit and
+defs to stdout — no files touched. A side whose compiler is not on `PATH` is
+skipped with a stderr note (the C++ side needs the manifest's clang; a
+source-mode Fortran kernel needs its flang). This is the by-eye-audit and
 debugging tool: run it after adding a manifest row, before generating.
 
 ### `kernel generate`
@@ -64,8 +65,9 @@ $ groundline kernel generate --help
 (Re)writes the generated Lean modules for each enabled side, printing every
 extracted kernel's parameter/local lists as it goes. `--skip-fortran` /
 `--skip-cpp` scope the run. Regeneration is deterministic — same inputs, same
-bytes — except the C++ module's header comment, which stamps the local clang
-version (by design: toolchain is provenance).
+bytes — except the module header comments, which stamp the local compiler
+version whenever a compiler ran on demand (by design: toolchain is
+provenance).
 
 ### `kernel verify`
 
@@ -82,8 +84,9 @@ The CI gate. It runs two checks, in order:
    (keep it in version control so a mismatch is meaningful). Any difference
    → the fresh copy is parked in a temp file, a unified-diff excerpt (first
    40 lines) is printed, and the exit code is non-zero. A missing module
-   file counts as a mismatch. A missing compiler is an **error** (a gate
-   must not pass by accident) unless `--skip-cpp` scopes the run.
+   file counts as a mismatch. A missing compiler that some kernel needs run
+   fresh is an **error** (a gate must not pass by accident) unless
+   `--skip-fortran`/`--skip-cpp` scopes the run.
 2. **Do the proofs still hold?** If the models are current and the manifest
    names a `[lean]` project, `verify` runs `lake build` there — re-checking
    every theorem in that project. If the manifest has no `[lean]` section,

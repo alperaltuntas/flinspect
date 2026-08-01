@@ -1,4 +1,4 @@
-/-- Generated from `scale_clip_acc` in `toy_kernel_ptree` (flang with-sema dump).
+/-- Generated from `scale_clip_acc` in `toy_kernel.f90` (flang with-sema dump).
 Outputs `(b)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
 def scale_clip_acc (a b s lo : ℝ) : ℝ :=
   let w := s * a

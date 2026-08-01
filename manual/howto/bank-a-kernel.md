@@ -27,8 +27,8 @@ Add a `[[kernel]]` table to your manifest (see
 ```toml
 [[kernel]]
 name = "my_kernel"
-fortran  = { file = "MOM6/MOM_something.o_ptree", subroutine = "my_kernel" }
-cpp      = { file = "mom_something_kernel.hpp", function = "my_kernel_point" }
+fortran  = { dump = "MOM6/MOM_something.o_ptree", subroutine = "my_kernel" }
+cpp      = { source = "mom_something_kernel.hpp", function = "my_kernel_point" }
 pointize = true   # only if the Fortran side is a loop nest
 ```
 

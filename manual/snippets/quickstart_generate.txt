@@ -1,5 +1,4 @@
 extracted scale_clip_acc: params=['a', 'b', 's', 'lo'] locals=['w']
-extracted scale_clip_acc_loop: params=['a', 'b', 's', 'lo'] locals=['w']
 wrote …/lean/groundline/Groundline/QuickstartFtn.lean
 extracted scale_clip_acc_point: params=['b', 'a', 's', 'lo'] locals=['w']
 wrote …/lean/groundline/Groundline/QuickstartCpp.lean

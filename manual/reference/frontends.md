@@ -8,10 +8,9 @@ code: deterministic, structural, refusing.
 ## Why two different input formats?
 
 At first glance the asymmetry looks arbitrary: the Fortran side reads flang's
-*text* parse-tree dump from committed files, while the C++ side invokes
-clang and consumes *JSON* in memory. Couldn't both use JSON, or both use
-with-sema dumps? The short answer is no — and the asymmetry is each compiler
-met on its own terms:
+*text* parse-tree dump, while the C++ side consumes clang's *JSON* in
+memory. Couldn't both use JSON, or both use with-sema dumps? The short
+answer is no — and the asymmetry is each compiler met on its own terms:
 
 - **flang simply has no JSON AST dump.** Its `-fdebug-dump-parse-tree` text
   format is the only complete serialization flang offers of the parse tree
@@ -27,30 +26,37 @@ met on its own terms:
 
 So the two frontends already consume the same *thing* — the compiler's
 post-semantic-analysis syntax tree — through the best machine-readable
-serialization each compiler provides. What genuinely differs is the
-**workflow**, and that difference is forced by the languages rather than
-chosen:
+serialization each compiler provides. The remaining difference is **when the
+compiler runs**, and that is a property of the *kernel*, not the language:
 
+- A **standalone** file compiles on demand on either side: clang always runs
+  fresh on the C++ `source` (and must — its JSON contains node IDs that are
+  memory addresses, nondeterministic across runs, so saved JSON dumps are
+  useless as fixtures anyway), and flang runs fresh the same way on a
+  Fortran `source` entry. The quickstart works like this on both sides.
 - A Fortran file that USEs other modules can only be dumped after those
   modules' `.mod` files exist — in practice, inside a full ordered build. So
-  Fortran dumps are captured once as a build side product and **kept in the
-  repository with provenance**, and the frontend reads files.
-- A C++ kernel source compiles standalone given its `-I` paths, so clang can
-  run fresh **on demand** — and must, because its JSON contains node IDs
-  that are memory addresses, nondeterministic across runs, which makes
-  saved JSON dumps useless as fixtures anyway.
+  such kernels' dumps are captured once as a build side product and **kept
+  with provenance** (`dump =` in the manifest), and the frontend reads the
+  file. This is the production instance's mode.
 
-Nothing is lost to this asymmetry: determinism is asserted where it actually
-holds (the extracted IR and the printed Lean, both address-free), and each
-side's provenance story matches how its input is produced.
+Nothing is lost to this arrangement: determinism is asserted where it
+actually holds (the extracted IR and the printed Lean, both address-free),
+and each side's provenance story matches how its input is produced — the
+generated module headers stamp the compiler version whenever a compiler ran
+on demand.
 
 ## `frontend/flang_kernel.py` — Fortran, from flang with-sema dumps
 
 **Input.** A flang **with-sema** parse-tree dump
-(`flang -fc1 -fdebug-dump-parse-tree file.f90`). With-sema matters: semantic
+(`flang -fc1 -fdebug-dump-parse-tree file.f90`) — read from a pre-generated
+file (`dump =`), or produced on the spot by running flang on a standalone
+source (`source =`; the run happens in a temp directory so flang's `.mod`
+side products never litter the source tree). With-sema matters: semantic
 analysis has resolved names and kinds, and — a practical constraint — flang
 emits *no dump at all* on a semantic error, so dumps of real code require a
-full ordered build with `.mod` files.
+full ordered build with `.mod` files (which is what rules out `source` mode
+for them).
 
 **How it reads.** The dump text is parsed into a literal node tree first (one
 node per `A -> B -> C` chain element, children attached by `|`-depth), then

@@ -21,10 +21,11 @@ This creates an isolated environment named `groundline` (Python 3.12) and
 installs the package into it in editable mode, so a `git pull` takes effect
 immediately. No compiler toolchains are involved. With this you can:
 
-- extract kernels from **committed** flang dumps — the quickstart ships one,
-  and the test fixtures under `tests/f90/` are all committed with provenance;
-- run the full Fortran side of the CLI: `groundline kernel list`, `show`,
-  `generate --skip-cpp`, `verify --skip-cpp`;
+- extract kernels from **pre-generated** flang dumps (`dump =` entries in a
+  manifest) — the test fixtures under `tests/f90/` are all committed with
+  provenance, and a production dump directory works the same way;
+- run the Fortran side of the CLI over such manifests: `groundline kernel
+  list`, `show`, `generate --skip-cpp`, `verify --skip-cpp`;
 - read and regenerate the Fortran-side generated Lean *text* (printing needs
   no Lean installation — Lean is only needed to *check* proofs).
 
@@ -42,9 +43,19 @@ immediately. No compiler toolchains are involved. With this you can:
     errors that make no sense, set `PYTHONNOUSERSITE=1` (on the install
     command too) and they will go away.
 
-## Level 2 — add flang, to generate your own Fortran dumps
+## Level 2 — add flang, for the Fortran side of your own sources
 
-The Fortran frontend reads flang **with-sema parse-tree dumps**:
+The Fortran frontend consumes flang **with-sema parse-tree dumps**, and there
+are two ways a manifest can supply them:
+
+- **Source mode** (`source =` in the kernel entry) — for a standalone file
+  that USEs nothing outside itself, groundline runs flang on it directly and
+  reads the dump in memory; no dump file exists on disk. This is how the
+  [quickstart](quickstart.md) works, and it's the mirror of how the C++ side
+  runs clang. It needs `flang` on `PATH`.
+- **Dump mode** (`dump =`) — for kernels living inside a real codebase, the
+  dump is generated once inside the code's own build and kept with
+  provenance:
 
 ```bash
 flang -fc1 -fdebug-dump-parse-tree kernel_source.f90 > kernel_source_ptree
@@ -54,14 +65,15 @@ The committed fixtures and the production dump collection were generated
 with **flang 21** (the exact version is stamped in `tests/f90/PROVENANCE`). The dump format
 has no formal stability contract, so other LLVM versions may or may not work
 as is — the conformance fixtures exist precisely to detect and localize format
-drift; see [Port to a new LLVM](howto/new-llvm.md). Two constraints to know
-before generating dumps at scale:
+drift; see [Port to a new LLVM](howto/new-llvm.md). Two constraints to know,
+whichever mode you use:
 
 - the source must be *semantically valid*, not merely parseable — flang emits
   no dump at all on a semantic error;
 - a file that USEs modules from other files needs those modules' `.mod` files
-  built first, which means a full ordered build. The case studies' dump
-  directory is generated as a side product of the real model build.
+  built first, which means a full ordered build — this is exactly what rules
+  out source mode for such files and makes dump mode exist. The case studies'
+  dump directory is generated as a side product of the real model build.
 
 ## Level 3 — add clang, for the C++ side
 
@@ -95,7 +107,7 @@ lake build
 
 This enables the last stage of `groundline kernel verify`: after the
 byte-diff gate passes, it runs `lake build` in the manifest's
-`[lean] lake_dir`, which re-checks every theorem and re-runs the axioms
+`[lean] project`, which re-checks every theorem and re-runs the axioms
 audit.
 
 Two practical notes from experience:
@@ -115,11 +127,12 @@ Two practical notes from experience:
 
 | Level | Adds | What you can do |
 |---|---|---|
-| 1 | the conda environment | extract from committed dumps; Fortran-side `list`/`show`/`generate`/`verify` |
-| 2 | flang | generate with-sema dumps of your own Fortran |
+| 1 | the conda environment | extract from pre-generated dumps; Fortran-side `list`/`show`/`generate`/`verify` over them |
+| 2 | flang | source-mode Fortran kernels (the quickstart); generate dumps of your own Fortran |
 | 3 | clang++ (+ the headers' include paths) | the C++ side of `show`/`generate`/`verify` |
 | 4 | Lean 4 / Mathlib (elan) | check the equivalence theorems; the `lake build` stage of `verify` |
 
-The CLI is upfront about missing tools: without `clang++`, `show` prints a
+The CLI is upfront about missing tools: without the compiler a side needs
+(`flang` for source-mode Fortran kernels, `clang++` for C++), `show` prints a
 skip note and `verify` errors (a gate must not pass by accident); without
 `lake`, `verify` prints a skip note naming exactly what was skipped.

@@ -10,10 +10,10 @@ order ordinal**.
 ```toml
 [[kernel]]
 name = "edge_thickness_upwind"       # the generated def's name — YOU supply it
-fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree",
+fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree",
             subroutine = "zonal_edge_thickness",
             nest = 1 }
-cpp = { file = "mom_continuity_ppm_kernel.hpp",
+cpp = { source = "mom_continuity_ppm_kernel.hpp",
         function = "edge_thickness_upwind_point" }
 pointize = true                      # an addressed nest is a loop — the license
 ```
@@ -59,9 +59,9 @@ defaults):
 ```toml
 [[kernel]]
 name = "thickness_to_dz_3d_boussinesq"
-fortran = { file = "MOM6/MOM_interface_heights.o_ptree",
+fortran = { dump = "MOM6/MOM_interface_heights.o_ptree",
             subroutine = "thickness_to_dz_3d", nest = 4 }
-cpp = { file = "mom_interface_heights_kernel.hpp",
+cpp = { source = "mom_interface_heights_kernel.hpp",
         function = "thickness_to_dz_3d_boussinesq_point" }
 pointize = true
 ```

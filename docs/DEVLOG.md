@@ -14,6 +14,44 @@
 
 ---
 
+## 2026-08-01 (later) — Fortran source mode: flang runs on demand, like clang; the quickstart goes all-source
+
+Third revision pass, closing the last asymmetry the schema-v2 round left
+open: the quickstart's Fortran side still pointed at a *committed* dump
+(`toy_kernel_ptree` + `PROVENANCE`) while its C++ side named a source and
+ran clang fresh — and the `[[kernel]]` key `file` meant "a dump" on one side
+and "a source" on the other.
+
+- **Source mode.** `FortranKernelSpec` (and the manifest) now take exactly
+  one of `dump` (a pre-generated with-sema dump — for kernels inside
+  codebases whose `.mod` environment must be built first) or `source` (a
+  standalone Fortran file; `flang_kernel.dump_parse_tree` runs
+  `flang -fc1 -fdebug-dump-parse-tree` on it in a temp cwd — no `.mod`
+  litter — and parses the dump in memory). The cpp key `file` was renamed
+  `source` to match; `[fortran]` gained `sources` and `compiler` mirroring
+  `[cpp]`. The ambiguous `file` key is gone from the schema.
+- **Provenance symmetry.** When any Fortran kernel is source-mode, the
+  generated module header stamps the flang version + invocation — exactly
+  the clang discipline. The dump-vs-source workflow story in
+  `frontends.md` is now per-*kernel*, not per-language: standalone files
+  run their compiler on demand on either side; built-codebase kernels are
+  the reason dump mode exists.
+- **Quickstart symmetric and pair-first.** Both sides now source mode
+  (`toy_kernel.f90` / `toy_kernel.cpp`; committed dump + PROVENANCE
+  deleted; requires flang like it always required clang). The loop variant
+  moved out of the head-on flow entirely — its own `toy_kernel_loop.f90`
+  and a closing manual section ("And when the Fortran kernel is a loop?")
+  that banks it live: refusal without `pointize = true`, the extracted
+  per-point def with it (both captured, both pinned by honesty tests). The
+  committed manifest, generated modules, equiv theorem, and axioms audit
+  carry only the point pair.
+- A rank-0 fixture (`tests/f90/test_kernel_rank0`) replaced the quickstart
+  dump in the pointize-gate tests, keeping them toolchain-free; the
+  quickstart goldens are now flang-gated and compare defs (headers stamp
+  local compiler versions). 196 tests green; both manifests verify end to
+  end (801 Lean jobs); production generated files unchanged byte for byte
+  under the key rename.
+
 ## 2026-08-01 — Quickstart rebuilt around symmetry; loop/point boundary made explicit; manifest schema v2
 
 A second user-driven revision pass, this time reaching into semantics.

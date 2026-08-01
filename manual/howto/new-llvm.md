@@ -54,16 +54,17 @@ $ groundline kernel verify   --kernels examples/turbo-stack.kernels.toml
 
 The byte-diff gate is the acceptance test: after a pure format port, the
 committed `GeneratedFtn.lean` must match a fresh regeneration **byte for byte**,
-and `GeneratedCpp.lean` must match in every def (its header comment re-stamps
-the new clang version — that one diff is by design and gets committed).
-`lake build` then re-checks every theorem against the regenerated defs.
+and every source-mode module must match in every def (source-mode header
+comments re-stamp the new flang/clang versions — those diffs are by design
+and get committed). `lake build` then re-checks every theorem against the
+regenerated defs.
 
 ## 5. Update the provenance records
 
 Commit together: the regenerated fixtures, the new `PROVENANCE` stamp, any
-frontend adaptations, and the re-stamped `GeneratedCpp.lean` header. The
-quickstart's committed dump (`examples/quickstart/toy_kernel_ptree` +
-`PROVENANCE`) follows the same convention — regenerate it in the same pass.
+frontend adaptations, and the re-stamped generated-module headers (the
+quickstart's `QuickstartFtn.lean`/`QuickstartCpp.lean` record which flang and
+clang extracted them).
 
 !!! note "The production dump directory is a separate pipeline"
 

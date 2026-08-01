@@ -8,12 +8,13 @@
 # representative snippets against fresh runs (gated like the other
 # corpus/clang tests), so the manual cannot rot silently.
 #
-# Requirements per tier (run what your environment provides):
+# Requirements (run what your environment provides):
 #   - always:            groundline installed (pip install -e .), run from the
 #                        repo root with the venv active
-#   - quickstart C++ &   clang++ on PATH
-#     production show:   (NCAR: . /glade/work/altuntas/llvm-root/activate_llvm.sh)
-#   - production list/show: the MOM6 corpus + TIM headers referenced by
+#   - quickstart:        flang and clang++ on PATH — the quickstart is all
+#                        source mode, each side's compiler runs on demand
+#                        (NCAR: . /glade/work/altuntas/llvm-root/activate_llvm.sh)
+#   - production list/show: the MOM6 dump directory + TIM headers referenced by
 #                        examples/turbo-stack.kernels.toml
 #   - axioms audit:      lake on PATH with the Mathlib cache provisioned
 #                        (NCAR: . /glade/work/altuntas/lean-root/activate_lean.sh)
@@ -62,22 +63,27 @@ groundline kernel list --kernels examples/turbo-stack.kernels.toml \
 groundline kernel show ppm_limit_cw84 --kernels examples/turbo-stack.kernels.toml \
     > "$SNIP/production_show_ppm_limit_cw84.txt"
 
-# --- The loop/point refusal (quickstart page) --------------------------------
-# The quickstart's loop kernel without its `pointize = true` license: loops
-# and point functions don't compare unless you say so.
+# --- The quickstart's closing loop section -----------------------------------
+# toy_kernel_loop.f90 banked without its `pointize = true` license (loops and
+# point functions don't compare unless you say so), then with it (the loop's
+# per-point body, extracted). The page presents this as "add these lines to
+# kernels.toml"; the temp manifest reproduces exactly that state.
 TMP=$(mktemp -d)
 cat > "$TMP/kernels.toml" <<MANIFEST
 [fortran]
-dumps = "$REPO/examples/quickstart"
+sources = "$REPO/examples/quickstart"
 generated = "$TMP/G.lean"
 namespace = "Demo"
 
 [[kernel]]
 name = "scale_clip_acc_loop"
-fortran = { file = "toy_kernel_ptree", subroutine = "scale_clip_acc_loop" }
+fortran = { source = "toy_kernel_loop.f90", subroutine = "scale_clip_acc_loop" }
 MANIFEST
 ( groundline kernel show scale_clip_acc_loop --kernels "$TMP/kernels.toml" 2>&1 || true ) \
     | elide > "$SNIP/quickstart_pointize_refusal.txt"
+echo "pointize = true" >> "$TMP/kernels.toml"
+groundline kernel show scale_clip_acc_loop --kernels "$TMP/kernels.toml" \
+    > "$SNIP/quickstart_show_loop.txt"
 rm -rf "$TMP"
 
 # --- A real refusal (runs everywhere; exercises the CLI error path) ---------
@@ -93,7 +99,7 @@ namespace = "Demo"
 
 [[kernel]]
 name = "accumulate"
-fortran = { file = "test_kernel_recurrence_ptree", subroutine = "accumulate" }
+fortran = { dump = "test_kernel_recurrence_ptree", subroutine = "accumulate" }
 pointize = true
 EOF
 ( groundline kernel show accumulate --kernels "$TMP/kernels.toml" 2>&1 || true ) \
