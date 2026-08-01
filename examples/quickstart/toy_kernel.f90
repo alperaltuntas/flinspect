@@ -1,5 +1,5 @@
 ! Quickstart toy kernel — a `do concurrent` point kernel inside the supported
-! Track B subset. Its with-sema flang dump (toy_kernel_ptree) is COMMITTED
+! kernel subset. Its with-sema flang dump (toy_kernel_ptree) is COMMITTED
 ! next to this file (see PROVENANCE), so the Fortran side of the quickstart
 ! works with a plain `pip install` — no flang needed. Regenerate the dump with
 !     flang -fc1 -fdebug-dump-parse-tree toy_kernel.f90 > toy_kernel_ptree

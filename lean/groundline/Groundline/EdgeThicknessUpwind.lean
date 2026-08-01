@@ -1,11 +1,11 @@
-import Pilot.PpmLimitPos
-import Pilot.Generated
-import Pilot.GeneratedCpp
+import Groundline.PpmLimitPos
+import Groundline.GeneratedFtn
+import Groundline.GeneratedCpp
 
 set_option linter.style.header false
 
 /-!
-# Track B, third kernel: upwind edge thickness (inline do concurrent)
+# The third kernel: upwind edge thickness (inline do concurrent)
 
 Kernel pair:
   Fortran:  `zonal_edge_thickness`, loop nest 1 — the in-subset
@@ -23,15 +23,15 @@ lemma relates the two generated defs directly, and here it is `rfl`: both
 sides are `(h_in, h_in)`.
 
 The loop is a `do concurrent`, so the license for the pointwise model is the
-source's own independence assertion, exactly as in the pilot — contrast
-`Pilot/ThicknessToDz.lean`, where the plain-DO kernels get a *proof* (the
+source's own independence assertion, exactly as for the first kernels — contrast
+`Groundline/ThicknessToDz.lean`, where the plain-DO kernels get a *proof* (the
 schema lemma) instead of an assertion.
 
 `meridional_edge_thickness` contains the textually identical `h_S`/`h_N`
 loop; the function proved here is the same.
 -/
 
-namespace TrackB
+namespace Groundline
 
 noncomputable section
 
@@ -42,7 +42,7 @@ model extracted from the Fortran loop. Both generated bodies are
 `(h_in, h_in)` — the equality is definitional. -/
 theorem edgeThicknessUpwind_point_equiv (h_W h_E h_in : ℝ) :
     GeneratedCpp.edge_thickness_upwind_point h_W h_E h_in
-      = Generated.edge_thickness_upwind h_in h_W h_E := rfl
+      = GeneratedFtn.edge_thickness_upwind h_in h_W h_E := rfl
 
 /-! ## The iteration schema -/
 
@@ -51,7 +51,7 @@ generated point function. No scalar argument, so `pointwise`'s scalar slot is
 filled with a dummy `0` on both sides (the CW84 idiom). -/
 def edgeThicknessUpwindLoopF {ι : Type*} (h_in h_W h_E : ι → ℝ) :
     (ι → ℝ) × (ι → ℝ) :=
-  pointwise (fun a b c _ => Generated.edge_thickness_upwind a b c)
+  pointwise (fun a b c _ => GeneratedFtn.edge_thickness_upwind a b c)
     h_in h_W h_E 0
 
 /-- The AMReX `ParallelFor` launch over the whole box (the C++ point function
@@ -71,4 +71,4 @@ theorem edgeThicknessUpwind_kernel_equiv {ι : Type*} (h_in h_W h_E : ι → ℝ
 
 end
 
-end TrackB
+end Groundline

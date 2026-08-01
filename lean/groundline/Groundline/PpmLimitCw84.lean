@@ -1,18 +1,18 @@
-import Pilot.PpmLimitPos
-import Pilot.Generated
+import Groundline.PpmLimitPos
+import Groundline.GeneratedFtn
 
 set_option linter.style.header false
 
 /-!
-# Track B, second kernel: PPM_limit_CW84 equivalence
+# The second kernel: PPM_limit_CW84 equivalence
 
 Kernel pair:
   Fortran:  subroutine PPM_limit_CW84        MOM6/src/core/MOM_continuity_PPM.F90
   C++:      MOM::ppm_limit_cw84_point        TIM/mom/cpp/mom_continuity_ppm_kernel.hpp
 
-Unlike the pilot (`PpmLimitPos.lean`), there is NO hand-written Fortran model
-here — the maturing Track B pattern is to prove the point lemma directly
-against the GENERATED model (`TrackB.Generated.ppm_limit_cw84`, emitted by the
+Unlike the first kernel (`PpmLimitPos.lean`), there is NO hand-written Fortran model
+here — the mature pattern is to prove the point lemma directly
+against the GENERATED model (`Groundline.GeneratedFtn.ppm_limit_cw84`, emitted by the
 deterministic printer from the production with-sema dump), so the printer's
 output is on the trusted path rather than checked against a second
 transcription by eye.
@@ -26,7 +26,7 @@ may have just updated; functionally that is the `let h_L' := ...; let h_R' :=
 `Cond` state threaded by `functionalize`.
 -/
 
-namespace TrackB
+namespace Groundline
 
 noncomputable section
 
@@ -76,11 +76,11 @@ representation* delta — the generated side carries the join as inline `Cond`s
 so a case split on the (shared) guards closes every branch by `rfl`. -/
 theorem ppmLimitCw84_point_equiv (h_L h_R h_in : ℝ) :
     ppmLimitCw84C h_L h_R h_in
-      = Generated.ppm_limit_cw84 h_in h_L h_R := by
+      = GeneratedFtn.ppm_limit_cw84 h_in h_L h_R := by
   -- `simp only` with the def names unfolds them AND zeta-reduces the `let`s
   -- (plain `unfold` leaves the ifs buried under `have` binders, where
   -- `split_ifs` cannot see them).
-  simp only [ppmLimitCw84C, Generated.ppm_limit_cw84]
+  simp only [ppmLimitCw84C, GeneratedFtn.ppm_limit_cw84]
   split_ifs <;> rfl
 
 /-! ## The iteration schema -/
@@ -90,7 +90,7 @@ the GENERATED point function. CW84 takes no scalar argument, so `pointwise`'s
 scalar slot is filled with a dummy `0` (ignored by the lambda) on both sides. -/
 def ppmLimitCw84LoopF {ι : Type*} (h_in h_L h_R : ι → ℝ) :
     (ι → ℝ) × (ι → ℝ) :=
-  pointwise (fun a b c _ => Generated.ppm_limit_cw84 a b c) h_in h_L h_R 0
+  pointwise (fun a b c _ => GeneratedFtn.ppm_limit_cw84 a b c) h_in h_L h_R 0
 
 /-- The AMReX `ParallelFor` launch over the whole box (the C++ point function
 takes (h_L, h_R, h_in), so adapt the argument order). -/
@@ -107,4 +107,4 @@ theorem ppmLimitCw84_kernel_equiv {ι : Type*} (h_in h_L h_R : ι → ℝ) :
 
 end
 
-end TrackB
+end Groundline

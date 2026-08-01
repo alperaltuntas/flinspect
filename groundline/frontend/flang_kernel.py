@@ -1,6 +1,6 @@
 """Kernel-IR frontend: extract one subroutine — or one addressed loop nest of a
 subroutine (:func:`extract_loop_kernel`) — from a with-sema flang parse-tree
-dump into the Track B kernel IR (``groundline/kir.py``).
+dump into the kernel IR (``groundline/kir.py``).
 
 Below the seam (DESIGN §2.3): everything flang-dump-specific about *kernel
 bodies* lives here, exactly as ``flang_dump.py`` owns the dump's *relational*

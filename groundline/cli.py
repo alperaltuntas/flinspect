@@ -1,13 +1,13 @@
 """The ``groundline`` console script (argparse only; no click/typer).
 
 Command groups are registered side by side in :func:`main` — today only the
-Track B ``kernel`` group exists; the relational track's ``check`` / ``report``
+kernel-verification ``kernel`` group exists; the relational track's ``check`` / ``report``
 commands (DESIGN §4 Phase 4) plug in as sibling ``_add_*_group`` calls.
 
 Import discipline: this module (and everything it pulls in) must stay
 widget-free — no ipywidgets/jupyter imports — so the CLI works in a bare venv.
 
-``groundline kernel`` — the Track B kernel-verification pipeline, driven by a
+``groundline kernel`` — the kernel-verification pipeline, driven by a
 declarative manifest (``kernels.toml``; see ``groundline/kernel_bank.py`` for
 the schema). Manifest resolution: ``--kernels PATH`` > ``$GROUNDLINE_KERNELS``
 > ``./kernels.toml``.
@@ -17,7 +17,7 @@ the schema). Manifest resolution: ``--kernels PATH`` > ``$GROUNDLINE_KERNELS``
     groundline kernel generate    # (re)write the generated Lean modules
     groundline kernel verify      # regenerate + byte-diff against the committed
                                  # files, then `lake build` if lake is on PATH
-                                 # (Track B's CI gate; non-zero exit on drift
+                                 # (the CI gate; non-zero exit on drift
                                  # or build failure)
 """
 
@@ -182,7 +182,7 @@ def _cmd_verify(args: argparse.Namespace) -> int:
 
 def _add_kernel_group(sub: argparse._SubParsersAction) -> None:
     kernel = sub.add_parser(
-        "kernel", help="Track B kernel bank: list, show, generate, verify")
+        "kernel", help="kernel verification: list, show, generate, verify banked kernel pairs")
     ksub = kernel.add_subparsers(dest="kernel_command", required=True,
                                  metavar="SUBCOMMAND")
     manifest_opt = argparse.ArgumentParser(add_help=False)

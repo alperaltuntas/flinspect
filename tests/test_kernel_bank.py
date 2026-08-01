@@ -1,4 +1,4 @@
-"""Track B packaging tests: the kernel manifest (``kernels.toml``), the
+"""Kernel-bank packaging tests: the kernel manifest (``kernels.toml``), the
 uniform KernelFrontend spec API, and the ``groundline kernel`` CLI.
 
 Everything here runs everywhere (no corpus, no clang, no /glade paths): the
@@ -279,7 +279,7 @@ class TestQuickstart:
 
     def test_fortran_golden(self, manifest):
         assert kb.render_fortran(manifest) == manifest.fortran.out.read_text(), \
-            "quickstart Generated.lean is stale — rerun `groundline kernel generate`"
+            "quickstart GeneratedFtn.lean is stale — rerun `groundline kernel generate`"
 
     @needs_clang
     def test_cpp_golden(self, manifest):

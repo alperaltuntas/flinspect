@@ -1,4 +1,4 @@
-! Track B conformance fixture: unary minus (flang `Negate`). Covers the bare
+! Conformance fixture: unary minus (flang `Negate`). Covers the bare
 ! leaf form (-y), a compound operand needing printer parentheses (-2.0*x(i) —
 ! Fortran parses this as the negation of the whole term, R1008), and negation
 ! of a source-parenthesized expression (-(x + y)).

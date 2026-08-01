@@ -88,13 +88,13 @@ class TestRefusalSnippet:
 
 class TestAxiomsAuditSnippet:
     """The manual's axioms-audit quote (axioms_audit.txt) stays consistent
-    with Pilot/AxiomsAudit.lean: same declarations, in the audit file's
+    with Groundline/AxiomsAudit.lean: same declarations, in the audit file's
     order, and only the three standard axioms (or subsets, which the audit
     file documents for the SeqSchema block). Re-running Lean is the verify
     gate's job; this pins manual ↔ audit-file consistency everywhere."""
 
     def test_snippet_covers_exactly_the_audited_declarations(self):
-        audit_src = (REPO / "lean" / "pilot" / "Pilot" /
+        audit_src = (REPO / "lean" / "groundline" / "Groundline" /
                      "AxiomsAudit.lean").read_text()
         audited = [line.split()[-1] for line in audit_src.splitlines()
                    if line.startswith("#print axioms ")]
@@ -102,7 +102,7 @@ class TestAxiomsAuditSnippet:
         quoted = [line.split("'")[1] for line in snippet.splitlines()]
         assert quoted == audited, (
             "manual/snippets/axioms_audit.txt lists different declarations "
-            "than Pilot/AxiomsAudit.lean — rerun render_snippets.sh with the "
+            "than Groundline/AxiomsAudit.lean — rerun render_snippets.sh with the "
             "Lean toolchain active")
 
     def test_snippet_reports_only_the_standard_axioms(self):

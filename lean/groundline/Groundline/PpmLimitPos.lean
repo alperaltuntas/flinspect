@@ -4,9 +4,9 @@ import Mathlib.Tactic.Ring
 set_option linter.style.header false
 
 /-!
-# Track B pilot: PPM_limit_pos equivalence
+# The first kernel: PPM_limit_pos equivalence
 
-Track B pilot (groundline DESIGN §4): hand-written Lean models of one already-
+The first kernel study (groundline DESIGN §4): hand-written Lean models of one already-
 ported MOM6 kernel pair, and a machine-checked equivalence proof over ℝ.
 
 Kernel pair:
@@ -30,7 +30,7 @@ Modeling choices (DESIGN Q5), decided here and to be recorded in DEVLOG:
     lemma to whole arrays.
 -/
 
-namespace TrackB
+namespace Groundline
 
 noncomputable section
 
@@ -146,4 +146,4 @@ theorem ppmLimitPos_kernel_equiv {ι : Type*}
 
 end
 
-end TrackB
+end Groundline

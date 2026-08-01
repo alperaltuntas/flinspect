@@ -1,11 +1,11 @@
-"""Track B tests: kernel-IR extraction, passes, and the Lean printer.
+"""Kernel-verification tests: kernel-IR extraction, passes, and the Lean printer.
 
 Two tiers, per D7: fixture-based tests run everywhere (the
 ``test_kernel_doconcurrent`` / ``test_kernel_ifstmt_join`` /
 ``test_kernel_negate`` conformance fixtures); the production golden test —
-regenerating ``lean/pilot/Pilot/Generated.lean`` byte-for-byte from the MOM6
+regenerating ``lean/groundline/Groundline/GeneratedFtn.lean`` byte-for-byte from the MOM6
 corpus — is gated on ``GROUNDLINE_CORPUS``. Semantic fidelity of the generated
-Lean is checked *in Lean* (``lean/pilot/Pilot/Fidelity.lean``), not here.
+Lean is checked *in Lean* (``lean/groundline/Groundline/FidelityFtn.lean``), not here.
 """
 
 import os
@@ -112,7 +112,7 @@ def neg_clip (x y : ℝ) : ℝ :=
 class TestPlainDoFixture:
     """Rule A: a plain, perfectly nested do nest as a point kernel. The Python
     gate is the same array-index check as do concurrent; the semantic license
-    is the Lean schema lemma (Pilot/SeqSchema.lean), not a source assertion."""
+    is the Lean schema lemma (Groundline/SeqSchema.lean), not a source assertion."""
 
     @pytest.fixture(autouse=True)
     def setup(self):
@@ -399,7 +399,7 @@ MANIFEST = REPO / "examples" / "turbo-stack.kernels.toml"
 
 @pytest.mark.skipif(not CORPUS, reason="GROUNDLINE_CORPUS not set")
 def test_generated_lean_is_current():
-    """lean/pilot/Pilot/Generated.lean must match a fresh regeneration from
+    """lean/groundline/Groundline/GeneratedFtn.lean must match a fresh regeneration from
     the committed production manifest — the kernel list and rendering come
     from the same kernel-bank path the CLI runs, so they can't drift apart."""
     from groundline import kernel_bank
@@ -408,14 +408,14 @@ def test_generated_lean_is_current():
         pytest.skip("manifest corpus not present")
     text = kernel_bank.render_fortran(m)
     assert text == m.fortran.out.read_text(), \
-        ("Generated.lean is stale — rerun `groundline kernel generate "
+        ("GeneratedFtn.lean is stale — rerun `groundline kernel generate "
          "--kernels examples/turbo-stack.kernels.toml`")
 
 
 @pytest.mark.skipif(shutil.which("clang++") is None,
                     reason="clang++ not on PATH (source activate_llvm.sh)")
 def test_generated_cpp_lean_is_current():
-    """lean/pilot/Pilot/GeneratedCpp.lean must match a fresh regeneration —
+    """lean/groundline/Groundline/GeneratedCpp.lean must match a fresh regeneration —
     the C++ sibling of test_generated_lean_is_current (drift alarm for the
     committed file, the TIM header, AND the pinned clang itself, whose
     version line is stamped into the output)."""

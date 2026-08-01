@@ -13,14 +13,14 @@ set_option linter.unusedVariables false
 /-!
 # GENERATED FILE — do not edit
 
-Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from flang with-sema
+Emitted by `groundline.lean_printer` from flang with-sema
 parse-tree dumps (`groundline.frontend.flang_kernel`).
 Regenerate with `groundline kernel generate` (manifest: `turbo-stack.kernels.toml`).
-Fidelity against the hand-written pilot models is machine-checked in
-`Pilot/Fidelity.lean`.
+Fidelity against the hand-written reference models is machine-checked in
+`Groundline/FidelityFtn.lean`.
 -/
 
-namespace TrackB.Generated
+namespace Groundline.GeneratedFtn
 
 noncomputable section
 
@@ -72,4 +72,4 @@ def thickness_to_dz_3d_nonboussinesq (h dz h_to_rz spv_avg : ℝ) : ℝ :=
 
 end
 
-end TrackB.Generated
+end Groundline.GeneratedFtn

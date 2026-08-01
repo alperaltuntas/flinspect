@@ -1,6 +1,6 @@
-# Track B quickstart — a toy kernel pair, end to end
+# groundline quickstart — a toy kernel pair, end to end
 
-This directory is a self-contained instance of the Track B kernel-verification
+This directory is a self-contained instance of the groundline kernel-verification
 pipeline: a tiny Fortran `do concurrent` point kernel and its C++ point-function
 twin, banked in a `kernels.toml` manifest and rendered into two generated Lean
 modules. It exists to prove (and demo) portability: everything below works in a
@@ -14,7 +14,7 @@ bare clone of groundline, anywhere — no MOM6 corpus, no AMReX, no /glade paths
 | `toy_kernel_ptree` | Its **committed** with-sema flang dump (see `PROVENANCE`), so the Fortran side needs no flang install |
 | `toy_kernel.hpp` | The C++ twin (`scale_clip_acc_point`) — standalone: its own `using Real = double;`, no AMReX/MPI includes |
 | `kernels.toml` | The manifest pairing them and pinning outputs/namespaces |
-| `Generated.lean`, `GeneratedCpp.lean` | The committed generated models (what `groundline kernel generate` writes) |
+| `GeneratedFtn.lean`, `GeneratedCpp.lean` | The committed generated models (what `groundline kernel generate` writes) |
 
 ## Walkthrough
 
@@ -57,14 +57,14 @@ remaining gap is closed by a machine-checked Lean proof.
 Regenerate the committed modules, and check them:
 
 ```console
-$ groundline kernel generate     # rewrites Generated.lean / GeneratedCpp.lean
+$ groundline kernel generate     # rewrites GeneratedFtn.lean / GeneratedCpp.lean
 $ groundline kernel verify       # byte-diffs a fresh regeneration against them
-ok [fortran]: Generated.lean matches a fresh regeneration
+ok [fortran]: GeneratedFtn.lean matches a fresh regeneration
 ok [cpp]: GeneratedCpp.lean matches a fresh regeneration
 ```
 
 `verify` exits non-zero on drift — that (plus `lake build`, for manifests that
-set `[lean] lake_dir`, like the production one) is Track B's CI gate.
+set `[lean] lake_dir`, like the production one) is the kernel bank's CI gate.
 
 ## Notes
 

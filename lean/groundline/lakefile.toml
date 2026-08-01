@@ -1,7 +1,7 @@
-name = "pilot"
+name = "groundline"
 version = "0.1.0"
 keywords = ["math"]
-defaultTargets = ["Pilot"]
+defaultTargets = ["Groundline"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -15,4 +15,4 @@ scope = "leanprover-community"
 rev = "v4.32.2"
 
 [[lean_lib]]
-name = "Pilot"
+name = "Groundline"

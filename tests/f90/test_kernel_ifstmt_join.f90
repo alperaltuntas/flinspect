@@ -1,4 +1,4 @@
-! Track B conformance fixture: logical IF statements (R1139) and the sequential
+! Conformance fixture: logical IF statements (R1139) and the sequential
 ! guarded join. The loop body ends with two guarded assignments to inout state;
 ! the second guard's RHS reads b(i), which the first IF may have just updated —
 ! functionalize must thread the merged (post-first-if) value of b, not its input.

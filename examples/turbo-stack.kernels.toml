@@ -1,4 +1,4 @@
-# Track B kernel manifest — the NCAR / turbo-stack production instance.
+# groundline kernel manifest — the NCAR / turbo-stack production instance.
 #
 # This file is the *site config* for the MOM6 ⇄ TIM kernel bank: every
 # machine-specific path (the /glade corpus, the AMReX install, the MPI
@@ -16,10 +16,10 @@
 [fortran]
 # With-sema flang parse-tree dumps of the MOM6 production build.
 corpus = "/glade/work/altuntas/turbo-stack/bin/flang_ptree/MOM6_using_FMS2"
-out = "../lean/pilot/Pilot/Generated.lean"
-namespace = "TrackB.Generated"
-blurb = """Fidelity against the hand-written pilot models is machine-checked in
-`Pilot/Fidelity.lean`."""
+out = "../lean/groundline/Groundline/GeneratedFtn.lean"
+namespace = "Groundline.GeneratedFtn"
+blurb = """Fidelity against the hand-written reference models is machine-checked in
+`Groundline/FidelityFtn.lean`."""
 
 [cpp]
 # The TIM kernel headers, and the pinned clang invocation that dumps them
@@ -37,14 +37,14 @@ include_dirs = [
 clang = "clang++"
 # Headers display relative to this root in the generated provenance comments.
 provenance_root = "/glade/work/altuntas/turbo-stack"
-out = "../lean/pilot/Pilot/GeneratedCpp.lean"
-namespace = "TrackB.GeneratedCpp"
-blurb = """Fidelity against the hand-written pilot models is machine-checked in
-`Pilot/FidelityCpp.lean`."""
+out = "../lean/groundline/Groundline/GeneratedCpp.lean"
+namespace = "Groundline.GeneratedCpp"
+blurb = """Fidelity against the hand-written reference models is machine-checked in
+`Groundline/FidelityCpp.lean`."""
 
 [lean]
 # `groundline kernel verify` runs `lake build` here (when lake is on PATH).
-lake_dir = "../lean/pilot"
+lake_dir = "../lean/groundline"
 
 # --- The banked pairs (5 of 5 TIM point kernels; DEVLOG 2026-07-31) ---------
 

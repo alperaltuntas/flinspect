@@ -1,4 +1,4 @@
-! Track B conformance fixture: inline-loop addressing (extraction rule B).
+! Conformance fixture: inline-loop addressing (extraction rule B).
 ! Two loop nests in one subroutine — nest #1 a do concurrent inside the THEN
 ! branch, nest #2 a plain do inside the ELSE branch — each extracted on its own
 ! by source-order ordinal (the flang dump carries no line numbers, so ordinals

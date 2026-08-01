@@ -1,4 +1,4 @@
-// Track B conformance fixture (C++ side): refusals. Each function holds one
+// Conformance fixture (C++ side): refusals. Each function holds one
 // construct outside the supported kernel subset; the extractor must raise
 // UnsupportedConstruct for every one of them (trusted base: refuse, never
 // guess). Extracted one at a time via -ast-dump-filter on the function name.

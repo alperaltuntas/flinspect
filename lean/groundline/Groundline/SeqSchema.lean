@@ -4,7 +4,7 @@ import Mathlib.Data.List.Basic
 set_option linter.style.header false
 
 /-!
-# The plain-DO schema lemma (Track B, extraction rule A)
+# The plain-DO schema lemma (extraction rule A)
 
 A plain Fortran `do` nest asserts nothing about iteration independence, so —
 unlike `do concurrent`, whose *source assertion* is what licenses the pointwise
@@ -36,7 +36,7 @@ sequential-vs-unordered question is real mathematics reserved for a future
 step.
 -/
 
-namespace TrackB
+namespace Groundline
 
 variable {ι σ : Type*} [DecidableEq ι]
 
@@ -106,4 +106,4 @@ theorem foldSeq_eq_pointwiseMap (f : ι → σ → σ) (enum : List ι)
     foldSeq f s₀ enum = pointwiseMap f s₀ :=
   funext fun i => foldSeq_apply_of_mem f enum hnd i (hall i) s₀
 
-end TrackB
+end Groundline

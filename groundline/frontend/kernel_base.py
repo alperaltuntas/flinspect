@@ -1,7 +1,7 @@
-"""The kernel-IR frontend seam (Track B): anything that can turn one addressed
+"""The kernel-IR frontend seam: anything that can turn one addressed
 source kernel into a :class:`~groundline.kir.Kernel`.
 
-The Track B mirror of the relational seam in ``base.py`` (DESIGN §2.2/§2.3):
+The kernel-verification mirror of the relational seam in ``base.py`` (DESIGN §2.2/§2.3):
 one deep method, ``extract(spec) -> Kernel``, hiding everything
 format-specific — the flang dump walk on the Fortran side, the clang
 invocation and JSON AST walk on the C++ side. What differs between the two

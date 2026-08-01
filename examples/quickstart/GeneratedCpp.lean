@@ -13,7 +13,7 @@ set_option linter.unusedVariables false
 /-!
 # GENERATED FILE — do not edit
 
-Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from clang JSON ASTs
+Emitted by `groundline.lean_printer` from clang JSON ASTs
 (`groundline.frontend.clang_kernel`).
 Regenerate with `groundline kernel generate` (manifest: `kernels.toml`).
 

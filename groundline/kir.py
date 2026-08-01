@@ -1,4 +1,4 @@
-"""Kernel IR (Track B) — per-procedure semantic trees, and the passes that
+"""Kernel IR — per-procedure semantic trees, and the passes that
 shape them for the Lean printer.
 
 This is the *second* IR of DESIGN §2.3: deep (typed expression/statement trees)
@@ -24,7 +24,7 @@ Passes:
   * a plain, PERFECTLY nested ``do`` nest (each level's body is exactly one
     inner ``do`` until the innermost) — the source asserts nothing, so the
     license is a *proof*: the schema lemma ``foldSeq f enum = pointwise f``
-    (``lean/pilot/Pilot/SeqSchema.lean``) shows the honest sequential-fold
+    (``lean/groundline/Groundline/SeqSchema.lean``) shows the honest sequential-fold
     semantics of such a nest equals the pointwise map, for any duplicate-free
     enumeration of the index box. The gate here is what guarantees the
     lemma's setting applies — it does not itself justify the reordering:
@@ -119,7 +119,7 @@ class ComponentRef:
 @dataclass(frozen=True)
 class Paren:
     """Source parentheses — semantically transparent, kept so the printed model
-    mirrors the source's own grouping (the pilot's fidelity principle)."""
+    mirrors the source's own grouping (the fidelity principle)."""
     inner: "Expr"
 
 

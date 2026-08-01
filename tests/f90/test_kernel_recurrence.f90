@@ -1,4 +1,4 @@
-! Track B REFUSAL fixture (extraction rule A): a cross-iteration recurrence,
+! REFUSAL fixture (extraction rule A): a cross-iteration recurrence,
 ! distilled from find_dz_for_eta's hydrostatic pressure accumulation
 ! (MOM6/src/core/MOM_interface_heights.F90):
 !

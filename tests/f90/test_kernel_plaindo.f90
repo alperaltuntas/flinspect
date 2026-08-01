@@ -1,9 +1,9 @@
-! Track B conformance fixture: a PLAIN, perfectly nested do nest as a point
+! Conformance fixture: a PLAIN, perfectly nested do nest as a point
 ! kernel (extraction rule A). Unlike do concurrent, a plain do asserts nothing
 ! about iteration independence — pointize admits it only because every array
 ! reference in the body is indexed exactly by the loop indices (the Python
 ! gate), and the Lean side carries the semantic license: the schema lemma
-! foldSeq f enum = pointwise f (Pilot/SeqSchema.lean) proves the sequential
+! foldSeq f enum = pointwise f (Groundline/SeqSchema.lean) proves the sequential
 ! fold of any such point body equals the pointwise map.
 
 module kernel_plaindo_mod

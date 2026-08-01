@@ -1,4 +1,4 @@
-# Track B quickstart manifest — a self-contained toy kernel pair.
+# groundline quickstart manifest — a self-contained toy kernel pair.
 #
 # Run from this directory (the CLI finds ./kernels.toml on its own):
 #   groundline kernel list
@@ -11,8 +11,8 @@
 
 [fortran]
 corpus = "."
-out = "Generated.lean"
-namespace = "Quickstart.Generated"
+out = "GeneratedFtn.lean"
+namespace = "Quickstart.GeneratedFtn"
 
 [cpp]
 header_dir = "."

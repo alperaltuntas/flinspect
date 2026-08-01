@@ -1,4 +1,4 @@
-// Track B conformance fixture (C++ side): the sequential guarded control-flow
+// Conformance fixture (C++ side): the sequential guarded control-flow
 // join — the point-function mirror of tests/f90/test_kernel_ifstmt_join. The
 // body ends with two guarded assignments to Real& state; the second guard's
 // RHS reads b, which the first if may have just updated. functionalize must

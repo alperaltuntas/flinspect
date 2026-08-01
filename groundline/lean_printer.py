@@ -1,4 +1,4 @@
-"""Lean printer (Track B): render a pointized, functionalized kernel as Lean 4.
+"""Lean printer: render a pointized, functionalized kernel as Lean 4.
 
 The output models real arithmetic over ℝ (VISION D6) and mirrors the *source's
 own* expression shapes: source parentheses are preserved (``Paren``), operator

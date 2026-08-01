@@ -1,4 +1,4 @@
-// Track B conformance fixture (C++ side): unary minus — the mirror of
+// Conformance fixture (C++ side): unary minus — the mirror of
 // tests/f90/test_kernel_negate, with one deliberate asymmetry it exists to
 // pin: C++ unary minus binds TIGHTER than `*`, so `-2.0_rt * x` parses as
 // `(-2.0_rt) * x` (Neg on the literal), unlike Fortran's R1008 where

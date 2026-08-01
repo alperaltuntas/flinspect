@@ -1,4 +1,4 @@
-! Track B conformance fixture: the kernel-IR subset in miniature.
+! Conformance fixture: the kernel-IR subset in miniature.
 ! A do-concurrent point kernel over inout arrays, exercising every construct
 ! the kernel frontend supports: assignment, if/elseif/else, do concurrent,
 ! literals, +,-,*,/,**, comparisons, abs, array refs at the loop indices,

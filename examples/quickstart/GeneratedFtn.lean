@@ -13,12 +13,12 @@ set_option linter.unusedVariables false
 /-!
 # GENERATED FILE — do not edit
 
-Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from flang with-sema
+Emitted by `groundline.lean_printer` from flang with-sema
 parse-tree dumps (`groundline.frontend.flang_kernel`).
 Regenerate with `groundline kernel generate` (manifest: `kernels.toml`).
 -/
 
-namespace Quickstart.Generated
+namespace Quickstart.GeneratedFtn
 
 noncomputable section
 
@@ -32,4 +32,4 @@ def scale_clip_acc (a b s lo : ℝ) : ℝ :=
 
 end
 
-end Quickstart.Generated
+end Quickstart.GeneratedFtn

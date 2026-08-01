@@ -1,9 +1,9 @@
-"""Track B kernel bank: the kernel manifest (``kernels.toml``) and the
+"""The kernel bank: the kernel manifest (``kernels.toml``) and the
 generation pipeline — load the manifest, extract both sides of every banked
 pair through the :class:`~groundline.frontend.kernel_base.KernelFrontend` seam,
 render both generated Lean modules.
 
-This module replaces the old ``lean/pilot/generate.py`` driver. Nothing here
+This module replaces the Lean project's original ad-hoc ``generate.py`` driver. Nothing here
 carries a machine path: every site-specific value — the Fortran dump corpus,
 the C++ headers and include dirs, the clang executable, output locations —
 lives in a declarative TOML manifest. The production (NCAR / turbo-stack)
@@ -15,8 +15,8 @@ expansion, and relative paths resolve against the manifest file's directory)::
 
     [fortran]                       # the flang side (omit to disable)
     corpus = "..."                  # root of the with-sema *_ptree dumps
-    out = ".../Generated.lean"      # where `kernel generate` writes
-    namespace = "TrackB.Generated"
+    out = ".../GeneratedFtn.lean"      # where `kernel generate` writes
+    namespace = "Groundline.GeneratedFtn"
     blurb = "..."                   # optional extra header-comment lines
 
     [cpp]                           # the clang side (omit to disable)
@@ -25,11 +25,11 @@ expansion, and relative paths resolve against the manifest file's directory)::
     clang = "clang++"
     provenance_root = "..."         # optional: headers display relative to this
     out = ".../GeneratedCpp.lean"
-    namespace = "TrackB.GeneratedCpp"
+    namespace = "Groundline.GeneratedCpp"
     blurb = "..."
 
     [lean]                          # optional: `kernel verify` runs lake here
-    lake_dir = "../lean/pilot"
+    lake_dir = "../lean/groundline"
 
     [[kernel]]
     name = "ppm_limit_pos"
@@ -357,7 +357,7 @@ def _regen_line(m: Manifest) -> str:
 
 
 def fortran_blurb(m: Manifest) -> str:
-    text = ("Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from "
+    text = ("Emitted by `groundline.lean_printer` from "
             "flang with-sema\nparse-tree dumps "
             "(`groundline.frontend.flang_kernel`).\n" + _regen_line(m))
     if m.fortran.blurb:
@@ -368,7 +368,7 @@ def fortran_blurb(m: Manifest) -> str:
 def cpp_blurb(m: Manifest) -> str:
     """The C++ module header, with the pinned clang invocation stamped as
     provenance (requires the manifest's clang on PATH)."""
-    text = ("Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from "
+    text = ("Emitted by `groundline.lean_printer` from "
             "clang JSON ASTs\n(`groundline.frontend.clang_kernel`).\n"
             + _regen_line(m))
     if m.cpp.blurb:

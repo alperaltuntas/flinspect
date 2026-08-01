@@ -13,11 +13,11 @@ set_option linter.unusedVariables false
 /-!
 # GENERATED FILE — do not edit
 
-Emitted by `groundline.lean_printer` (Track B; DESIGN §2.3) from clang JSON ASTs
+Emitted by `groundline.lean_printer` from clang JSON ASTs
 (`groundline.frontend.clang_kernel`).
 Regenerate with `groundline kernel generate` (manifest: `turbo-stack.kernels.toml`).
-Fidelity against the hand-written pilot models is machine-checked in
-`Pilot/FidelityCpp.lean`.
+Fidelity against the hand-written reference models is machine-checked in
+`Groundline/FidelityCpp.lean`.
 
 Extraction provenance (pinned):
   clang version 21.0.0git (https://github.com/llvm/llvm-project.git bb982e733cfcda7e4cfb0583544f68af65211ed1)
@@ -27,7 +27,7 @@ Extraction provenance (pinned):
   -I/glade/work/altuntas/llvm-hpc/include
 -/
 
-namespace TrackB.GeneratedCpp
+namespace Groundline.GeneratedCpp
 
 noncomputable section
 
@@ -79,4 +79,4 @@ def thickness_to_dz_3d_nonboussinesq_point (dz h spv h_to_rz : ℝ) : ℝ :=
 
 end
 
-end TrackB.GeneratedCpp
+end Groundline.GeneratedCpp

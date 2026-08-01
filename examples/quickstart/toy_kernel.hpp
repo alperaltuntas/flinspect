@@ -1,7 +1,7 @@
 #pragma once
 
 // Quickstart toy kernel — the C++ point-function twin of
-// toy_kernel.f90's scale_clip_acc, in the supported Track B subset.
+// toy_kernel.f90's scale_clip_acc, in the supported kernel subset.
 //
 // Deliberately STANDALONE: its own `using Real = double;`, plain reference
 // parameters, no AMReX or MPI includes — extracting it needs nothing beyond

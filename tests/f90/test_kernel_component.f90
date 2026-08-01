@@ -1,4 +1,4 @@
-! Track B conformance fixture: derived-type component reads (extraction
+! Conformance fixture: derived-type component reads (extraction
 ! rule B). A loop-invariant scalar component (cfg%fac) and a component array
 ! indexed exactly by the loop indices (cfg%w(i)) become synthesized scalar
 ! in-parameters of the pointized kernel — named after the component, appended

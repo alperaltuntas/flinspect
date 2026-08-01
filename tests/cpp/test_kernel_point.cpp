@@ -1,4 +1,4 @@
-// Track B conformance fixture (C++ side): the clang-kernel subset in
+// Conformance fixture (C++ side): the clang-kernel subset in
 // miniature — the point-function mirror of tests/f90/test_kernel_doconcurrent.
 // A per-point scalar kernel exercising: Real&/Real const intent mapping, a
 // local decl-with-init, if / else if / else, _rt literals, + - * /,

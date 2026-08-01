@@ -1,11 +1,11 @@
-import Pilot.SeqSchema
-import Pilot.Generated
-import Pilot.GeneratedCpp
+import Groundline.SeqSchema
+import Groundline.GeneratedFtn
+import Groundline.GeneratedCpp
 
 set_option linter.style.header false
 
 /-!
-# Track B, fourth and fifth kernels: thickness_to_dz (plain DO, rule A)
+# The fourth and fifth kernels: thickness_to_dz (plain DO, rule A)
 
 Kernel pairs (both from the 3-D `thickness_to_dz_3d` in
 MOM6/src/core/MOM_interface_heights.F90 — note: `src/core`, and the
@@ -30,14 +30,14 @@ component parameters (rule B): the loop-invariant scalar components
 `tv%SpV_avg(i,j,k)` becomes `spv_avg`, fed per cell (`spv i`).
 
 A plain DO asserts no iteration independence, so the Fortran side is modeled
-HONESTLY as the sequential fold `foldSeq` (Pilot/SeqSchema.lean); the
+HONESTLY as the sequential fold `foldSeq` (Groundline/SeqSchema.lean); the
 kernel-level theorems then *instantiate the schema lemma*
 `foldSeq_eq_pointwiseMap` — a proof, where `do concurrent` kernels lean on
 the source's assertion. Per the mature pattern there are no hand-written
 models: the point lemmas relate the two generated defs directly (both `rfl`).
 -/
 
-namespace TrackB
+namespace Groundline
 
 noncomputable section
 
@@ -48,14 +48,14 @@ definitional (only the parameter orders differ: C++ (dz, h, h_to_z) vs
 Fortran (h, dz, h_to_z)). -/
 theorem thicknessToDzBouss_point_equiv (dz h h_to_z : ℝ) :
     GeneratedCpp.thickness_to_dz_3d_boussinesq_point dz h h_to_z
-      = Generated.thickness_to_dz_3d_boussinesq h dz h_to_z := rfl
+      = GeneratedFtn.thickness_to_dz_3d_boussinesq h dz h_to_z := rfl
 
 /-- **Point lemma, non-Boussinesq:** both generated bodies are
 `h_to_rz * h * spv` — definitional (C++ (dz, h, spv, h_to_rz) vs Fortran
 (h, dz, h_to_rz, spv_avg)). -/
 theorem thicknessToDzNonBouss_point_equiv (dz h spv h_to_rz : ℝ) :
     GeneratedCpp.thickness_to_dz_3d_nonboussinesq_point dz h spv h_to_rz
-      = Generated.thickness_to_dz_3d_nonboussinesq h dz h_to_rz spv := rfl
+      = GeneratedFtn.thickness_to_dz_3d_nonboussinesq h dz h_to_rz spv := rfl
 
 /-! ## Kernel level: honest sequential fold ≡ AMReX launch -/
 
@@ -65,7 +65,7 @@ generated point function over an enumeration of the index box. `dz` is
 is exactly what `foldSeq` gives cells outside `enum`). -/
 def thicknessToDzBoussLoopF {ι : Type*} [DecidableEq ι]
     (h : ι → ℝ) (h_to_z : ℝ) (dz₀ : ι → ℝ) (enum : List ι) : ι → ℝ :=
-  foldSeq (fun i v => Generated.thickness_to_dz_3d_boussinesq (h i) v h_to_z)
+  foldSeq (fun i v => GeneratedFtn.thickness_to_dz_3d_boussinesq (h i) v h_to_z)
     dz₀ enum
 
 /-- The AMReX `ParallelFor` launch of the C++ point kernel over the box. -/
@@ -92,7 +92,7 @@ is loop-invariant (captured), the component array `spv_avg` is read per cell
 def thicknessToDzNonBoussLoopF {ι : Type*} [DecidableEq ι]
     (h spv : ι → ℝ) (h_to_rz : ℝ) (dz₀ : ι → ℝ) (enum : List ι) : ι → ℝ :=
   foldSeq (fun i v =>
-      Generated.thickness_to_dz_3d_nonboussinesq (h i) v h_to_rz (spv i))
+      GeneratedFtn.thickness_to_dz_3d_nonboussinesq (h i) v h_to_rz (spv i))
     dz₀ enum
 
 /-- The AMReX `ParallelFor` launch of the C++ point kernel over the box. -/
@@ -114,4 +114,4 @@ theorem thicknessToDzNonBouss_kernel_equiv {ι : Type*} [DecidableEq ι]
 
 end
 
-end TrackB
+end Groundline

@@ -1,4 +1,4 @@
-"""Track B, C++ side: clang JSON AST → kernel IR (``frontend/clang_kernel.py``).
+"""The C++ frontend: clang JSON AST → kernel IR (``frontend/clang_kernel.py``).
 
 Two tiers, mirroring ``tests/test_kir_lean.py``:
 
@@ -12,7 +12,7 @@ Two tiers, mirroring ``tests/test_kir_lean.py``:
   to the extractor, pinning the refusal behavior (casts, callees, opcodes)
   with no clang dependency.
 
-The production golden test (``Pilot/GeneratedCpp.lean`` byte-for-byte) lives
+The production golden test (``Groundline/GeneratedCpp.lean`` byte-for-byte) lives
 next to its Fortran sibling in ``tests/test_kir_lean.py``.
 """
 

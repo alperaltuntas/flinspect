@@ -1,7 +1,7 @@
 """Kernel-IR frontend: extract one C++ point-kernel function from a clang JSON
-AST dump into the Track B kernel IR (``groundline/kir.py``).
+AST dump into the kernel IR (``groundline/kir.py``).
 
-The C++ mirror of ``frontend/flang_kernel.py`` (DESIGN §2.3, §4 Track B):
+The C++ mirror of ``frontend/flang_kernel.py`` (DESIGN §2.3, §4):
 everything clang-specific about kernel bodies lives here; the kernel IR,
 ``functionalize``, and the Lean printer are reused unchanged. TIM's kernels are
 already per-point scalar functions, so extraction produces a rank-0
@@ -126,7 +126,7 @@ def _only(n: dict, context: str) -> dict:
 # ImplicitCastExpr kinds unwrapped transparently — ONLY casts that provably
 # preserve the value for the Real-only subset. Any kind not listed refuses:
 # a value-CHANGING implicit cast (IntegralToFloating, FloatingCast, ...)
-# silently unwrapped is exactly the plausible-but-wrong model Track B must
+# silently unwrapped is exactly the plausible-but-wrong model this pipeline must
 # never produce.
 _TRANSPARENT_CASTS = {
     # Reading a variable: the lvalue (a storage location) is converted to the
