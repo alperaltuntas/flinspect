@@ -87,11 +87,11 @@ The CI gate. It runs two checks, in order:
    file counts as a mismatch. A missing compiler that some kernel needs run
    fresh is an **error** (a gate must not pass by accident) unless
    `--skip-fortran`/`--skip-cpp` scopes the run.
-2. **Do the proofs still hold?** If the models are current and the manifest
-   names a `[lean]` project, `verify` runs `lake build` there — re-checking
+2. **Do the proofs hold?** If the models are current and the manifest
+   names a `[lean]` project, `verify` runs `lake build` there — checking
    every theorem in that project. If the manifest has no `[lean]` section,
    `verify` prints a note that no theorems were checked; if `lake` is not
-   on `PATH`, a note that the proofs were not re-checked; if the model
+   on `PATH`, a note that the proofs were not checked; if the model
    check already failed, the proof check is skipped (proofs about stale
    models prove nothing).
 

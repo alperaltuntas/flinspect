@@ -23,8 +23,11 @@ generated = "../../lean/groundline/Groundline/QuickstartCpp.lean"
 namespace = "Quickstart.GeneratedCpp"
 
 [lean]
-# `groundline kernel verify` re-checks the equivalence theorem here
-# (Groundline/QuickstartEquiv.lean) when `lake` is on PATH.
+# `groundline kernel verify` checks the equivalence theorem here
+# (Groundline/QuickstartEquiv.lean) when `lake` is on PATH. This is the
+# repository's one Lean project — a Mathlib-backed project is heavy, so the
+# example shares it rather than shipping its own; the `generated` modules
+# above are written into it so the theorem can import them.
 project = "../../lean/groundline"
 
 [[kernel]]

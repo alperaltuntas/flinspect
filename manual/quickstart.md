@@ -78,10 +78,14 @@ $ groundline kernel generate
 
 `generate` writes the two generated modules to wherever the manifest's
 `generated` keys point — here, into the repository's Lean proof project
-(`lean/groundline/`), where the theorem can import them. The files are
-meant to be kept in version control: they change only when a kernel's source
-(or the pipeline) changes, and step 5 leans on that. The full Fortran-side
-module, exactly as generated:
+(`lean/groundline/`), where the theorem can import them. (A generated module
+has to live inside whichever Lean project proves things about it, and a
+Mathlib-backed project is a heavyweight thing — its own toolchain, a
+multi-gigabyte dependency — so the example shares the repository's one
+project rather than shipping its own.) The files are meant to be kept in
+version control: they change only when a kernel's source (or the pipeline)
+changes, and step 5 leans on that. The full Fortran-side module, exactly as
+generated:
 
 ```lean
 --8<-- "lean/groundline/Groundline/QuickstartFtn.lean"
@@ -112,8 +116,8 @@ For shape-identical pairs like this one it is a single `rfl` line. For real
 kernels, whose bodies differ in shape between the two languages, the working
 patterns are documented — see [Bank a new kernel pair](howto/bank-a-kernel.md)
 and the [case studies](case-studies/ppm-limit-pos.md); every kernel banked
-so far closed with a handful of lines. Once written, the theorem is
-re-checked mechanically forever after (next step).
+so far closed with a handful of lines. Once written, the theorem is checked
+mechanically — by the next step's command, and by every CI run after it.
 
 ## 5. Verify — the whole chain as one command
 
@@ -124,14 +128,14 @@ $ groundline kernel verify
 
 `verify` does two things, in order:
 
-1. **Are the generated models current?** For each side, it re-extracts every
-   kernel from its sources and re-renders the Lean module in memory, then
+1. **Are the generated models current?** For each side, it extracts every
+   kernel fresh from its sources and renders the Lean module in memory, then
    compares the result **byte for byte** with the module on disk from step 3.
    Any difference — an edited source, a stale module, a changed pipeline —
    fails with a diff excerpt, and the fresh copy is parked in a temp file so
    you can inspect it.
-2. **Do the proofs still hold?** Because this manifest names a `[lean]`
-   project, `verify` then runs `lake build` there, which re-checks every
+2. **Do the proofs hold?** Because this manifest names a `[lean]`
+   project, `verify` then runs `lake build` there, which checks every
    theorem in that project — for the quickstart, the equivalence theorem
    above. If a manifest names no `[lean]` project, `verify` says so
    explicitly and you have only checked that the models are current, not
@@ -139,8 +143,8 @@ $ groundline kernel verify
 
 Both stages exit non-zero on failure, which is what makes `verify` a CI
 gate: after any change to the Fortran, the C++, or the pipeline itself, one
-command re-establishes that the committed models match the sources *and*
-the equivalence still holds. See [Wire verification into CI](howto/ci.md).
+command establishes that the committed models match the sources *and* the
+equivalence holds. See [Wire verification into CI](howto/ci.md).
 
 ## Where the production instance differs
 

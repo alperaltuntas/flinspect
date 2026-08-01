@@ -15,11 +15,11 @@ the schema). Manifest resolution: ``--kernels PATH`` > ``$GROUNDLINE_KERNELS``
     groundline kernel list        # kernels in the manifest + basic status
     groundline kernel show NAME   # print one kernel's generated Lean defs
     groundline kernel generate    # (re)write the generated Lean modules
-    groundline kernel verify      # re-extract + compare against the generated
-                                 # modules on disk, then re-check the proofs
-                                 # (`lake build`) when the manifest names a
-                                 # [lean] project (the CI gate; non-zero exit
-                                 # on any mismatch or failure)
+    groundline kernel verify      # extract fresh + compare against the
+                                 # generated modules on disk, then check the
+                                 # proofs (`lake build`) when the manifest
+                                 # names a [lean] project (the CI gate;
+                                 # non-zero exit on any mismatch or failure)
 """
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ def _cmd_verify(args: argparse.Namespace) -> int:
         print("note: the manifest names no [lean] project — the generated "
               "models were checked, but no theorems were")
     elif shutil.which("lake") is None:
-        print("note: `lake` not on PATH — the proofs were NOT re-checked "
+        print("note: `lake` not on PATH — the proofs were NOT checked "
               "(activate a Lean toolchain to include them)")
     elif not ok:
         print("skipping the proof check (`lake build`) — fix the mismatch "
@@ -195,7 +195,7 @@ def _cmd_verify(args: argparse.Namespace) -> int:
             print(f"FAIL: lake build exited {proc.returncode}")
             ok = False
         else:
-            print("ok [lean]: every theorem in the project re-checked")
+            print("ok [lean]: every theorem in the project checked")
     return 0 if ok else 1
 
 
@@ -233,7 +233,7 @@ def _add_kernel_group(sub: argparse._SubParsersAction) -> None:
 
     p = ksub.add_parser(
         "verify", parents=[manifest_opt, skip_opts],
-        help="check the generated modules are current, then re-check the "
+        help="check the generated modules are current, then check the "
              "proofs (non-zero exit on any mismatch or failure)")
     p.set_defaults(func=_cmd_verify)
 

@@ -35,7 +35,7 @@ From this directory (the CLI picks up `./kernels.toml` automatically):
 $ groundline kernel list        # what the manifest declares, with status
 $ groundline kernel show NAME   # print one kernel's generated Lean, both sides
 $ groundline kernel generate    # (re)write the generated Lean modules
-$ groundline kernel verify      # models current? then: do the proofs still hold?
+$ groundline kernel verify      # models current? then: do the proofs hold?
 ```
 
 `verify` exits non-zero on any mismatch or proof failure — the CI gate in
