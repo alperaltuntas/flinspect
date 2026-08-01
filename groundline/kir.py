@@ -228,6 +228,15 @@ class Kernel:
 # Pass 1: pointization
 # --------------------------------------------------------------------------- #
 
+def is_loop_nest(kernel: Kernel) -> bool:
+    """True iff the kernel body is exactly one top-level loop nest
+    (``do concurrent`` or plain ``do``) — the shape :func:`pointize` reduces.
+    The kernel bank uses this to tell loop kernels (which need an explicit
+    ``pointize = true`` license in the manifest) from kernels that are
+    already per-point."""
+    return len(kernel.body) == 1 and isinstance(kernel.body[0], (DoConcurrent, Do))
+
+
 def pointize(kernel: Kernel) -> Kernel:
     """Strip a single top-level loop-nest wrapper; scalarize arrays.
 

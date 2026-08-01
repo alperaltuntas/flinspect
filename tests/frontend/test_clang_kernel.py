@@ -5,7 +5,7 @@ Two tiers, mirroring ``tests/test_kir_lean.py``:
 - Fixture-based tests compile the ``tests/cpp/`` conformance fixtures with
   clang at test time (the fixtures are self-contained — no includes), so they
   are gated on ``clang++`` being on ``PATH``, the C++ analogue of
-  the ``GROUNDLINE_CORPUS`` gate. Raw JSON dumps are never golden-compared
+  the ``GROUNDLINE_DUMPS`` gate. Raw JSON dumps are never golden-compared
   (node ids are memory addresses); assertions are on the extracted kernel IR
   and the printed Lean.
 - Node-level allowlist tests run everywhere: they feed hand-built JSON dicts

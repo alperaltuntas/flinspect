@@ -1,26 +1,41 @@
-# groundline quickstart manifest — a self-contained toy kernel pair.
+# The quickstart manifest — a self-contained toy kernel pair.
+#
+# How to read it: [fortran] and [cpp] configure each language side once —
+# where its inputs live, which compiler reads them, and which Lean module
+# `groundline kernel generate` writes. Each [[kernel]] then gives one
+# kernel's location on each side.
 #
 # Run from this directory (the CLI finds ./kernels.toml on its own):
-#   groundline kernel list
-#   groundline kernel show scale_clip_acc
-#   groundline kernel generate
-# or from anywhere with `--kernels path/to/this/file`.
-#
-# Relative paths resolve against this file's directory. The Fortran dump is
-# committed (no flang needed); the C++ side needs only `clang++` on PATH.
+#   groundline kernel list | show NAME | generate | verify
+# Relative paths resolve against this file's directory.
 
 [fortran]
-corpus = "."
-out = "GeneratedFtn.lean"
+dumps     = "."     # directory of flang parse-tree dumps (toy_kernel_ptree is committed here)
+generated = "../../lean/groundline/Groundline/QuickstartFtn.lean"
 namespace = "Quickstart.GeneratedFtn"
 
 [cpp]
-header_dir = "."
-clang = "clang++"
-out = "GeneratedCpp.lean"
+sources   = "."
+compiler  = "clang++"
+generated = "../../lean/groundline/Groundline/QuickstartCpp.lean"
 namespace = "Quickstart.GeneratedCpp"
 
+[lean]
+# `groundline kernel verify` re-checks the equivalence theorems here
+# (Groundline/QuickstartEquiv.lean) when `lake` is on PATH.
+project = "../../lean/groundline"
+
+# The point pair: both sides compute one grid point, so they compare directly.
 [[kernel]]
-name = "scale_clip_acc"
-fortran = { dump = "toy_kernel_ptree", subroutine = "scale_clip_acc" }
-cpp = { header = "toy_kernel.hpp", function = "scale_clip_acc_point" }
+name    = "scale_clip_acc"
+fortran = { file = "toy_kernel_ptree", subroutine = "scale_clip_acc" }
+cpp     = { file = "toy_kernel.cpp", function = "scale_clip_acc_point" }
+
+# The same update written as a loop over a column. A loop is not the same
+# thing as a point function, so groundline refuses to compare them unless
+# `pointize = true` explicitly licenses reducing the loop to its per-point
+# body first.
+[[kernel]]
+name     = "scale_clip_acc_loop"
+fortran  = { file = "toy_kernel_ptree", subroutine = "scale_clip_acc_loop" }
+pointize = true

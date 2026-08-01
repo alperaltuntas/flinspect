@@ -65,21 +65,22 @@ class TestFortranSpecAPI:
 
 MINI_MANIFEST = """\
 [fortran]
-corpus = "${TEST_CORPUS_DIR}"
-out = "Generated.lean"
+dumps = "${TEST_DUMP_DIR}"
+generated = "Generated.lean"
 namespace = "Mini.Generated"
 
 [[kernel]]
 name = "clamp_scale"
-fortran = { dump = "test_kernel_doconcurrent_ptree", subroutine = "clamp_scale" }
+fortran = { file = "test_kernel_doconcurrent_ptree", subroutine = "clamp_scale" }
+pointize = true
 """
 
 
 @pytest.fixture
 def mini_manifest(tmp_path, monkeypatch):
     """A minimal fortran-only manifest over the committed f90 fixtures; the
-    corpus travels through ${TEST_CORPUS_DIR} to pin env expansion."""
-    monkeypatch.setenv("TEST_CORPUS_DIR", str(F90_DIR))
+    dump directory travels through ${TEST_DUMP_DIR} to pin env expansion."""
+    monkeypatch.setenv("TEST_DUMP_DIR", str(F90_DIR))
     path = tmp_path / "kernels.toml"
     path.write_text(MINI_MANIFEST)
     return path
@@ -89,22 +90,23 @@ class TestManifestLoading:
 
     def test_load_expands_env_and_resolves_paths(self, mini_manifest, tmp_path):
         m = kb.load_manifest(mini_manifest)
-        assert m.fortran.corpus == F90_DIR
-        assert m.fortran.out == tmp_path / "Generated.lean"   # manifest-relative
+        assert m.fortran.dumps == F90_DIR
+        assert m.fortran.generated == tmp_path / "Generated.lean"   # manifest-relative
         e = m.kernel("clamp_scale")
         assert e.fortran.dump == F90_DIR / "test_kernel_doconcurrent_ptree"
-        assert e.fortran_dump_label == "test_kernel_doconcurrent_ptree"
+        assert e.fortran_label == "test_kernel_doconcurrent_ptree"
+        assert e.pointize is True
         assert e.cpp is None
 
     def test_unset_env_var_refused(self, mini_manifest, monkeypatch):
-        monkeypatch.delenv("TEST_CORPUS_DIR")
-        with pytest.raises(kb.ManifestError, match="TEST_CORPUS_DIR"):
+        monkeypatch.delenv("TEST_DUMP_DIR")
+        with pytest.raises(kb.ManifestError, match="TEST_DUMP_DIR"):
             kb.load_manifest(mini_manifest)
 
     def test_unknown_key_refused(self, mini_manifest):
-        text = mini_manifest.read_text().replace("corpus =", "corpsu =")
+        text = mini_manifest.read_text().replace("dumps =", "dumsp =")
         mini_manifest.write_text(text)
-        with pytest.raises(kb.ManifestError, match="corpsu"):
+        with pytest.raises(kb.ManifestError, match="dumsp"):
             kb.load_manifest(mini_manifest)
 
     def test_missing_manifest_refused(self, tmp_path):
@@ -129,7 +131,7 @@ class TestManifestLoading:
     def test_duplicate_kernel_names_refused(self, mini_manifest):
         text = mini_manifest.read_text()
         text += ('\n[[kernel]]\nname = "clamp_scale"\n'
-                 'fortran = { dump = "test_kernel_doconcurrent_ptree", '
+                 'fortran = { file = "test_kernel_doconcurrent_ptree", '
                  'subroutine = "clamp_scale" }\n')
         mini_manifest.write_text(text)
         with pytest.raises(kb.ManifestError, match="duplicate"):
@@ -138,10 +140,10 @@ class TestManifestLoading:
     def test_cpp_side_without_cpp_section_refused(self, mini_manifest):
         text = mini_manifest.read_text()
         text = text.replace(
-            'fortran = { dump = "test_kernel_doconcurrent_ptree", '
+            'fortran = { file = "test_kernel_doconcurrent_ptree", '
             'subroutine = "clamp_scale" }',
-            'fortran = { dump = "test_kernel_doconcurrent_ptree", '
-            'subroutine = "clamp_scale" }\ncpp = { header = "x.hpp", '
+            'fortran = { file = "test_kernel_doconcurrent_ptree", '
+            'subroutine = "clamp_scale" }\ncpp = { file = "x.cpp", '
             'function = "f" }')
         mini_manifest.write_text(text)
         with pytest.raises(kb.ManifestError, match=r"no \[cpp\] section"):
@@ -230,7 +232,9 @@ class TestRenderAndCli:
         assert EXPECTED_CLAMP_SCALE_DEF in out_file.read_text()
         assert cli_main(["kernel", "verify", "--kernels",
                          str(mini_manifest)]) == 0
-        assert "matches a fresh regeneration" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "matches a fresh extraction" in out
+        assert "names no [lean] project" in out   # verify says what it didn't check
 
     def test_cli_verify_detects_drift(self, mini_manifest, tmp_path, capsys):
         assert cli_main(["kernel", "generate", "--kernels",
@@ -265,21 +269,63 @@ class TestRenderAndCli:
 
 
 # =============================================================================
+# The loop/point boundary: pointize is an explicit license
+# =============================================================================
+
+class TestPointizeGate:
+    """A loop nest and a point function are different things: comparing them
+    requires `pointize = true` on the manifest entry, and the option refuses
+    on a kernel that is not a loop."""
+
+    def test_loop_without_pointize_refuses(self, mini_manifest):
+        from groundline.kir import UnsupportedConstruct
+        text = mini_manifest.read_text().replace("pointize = true\n", "")
+        mini_manifest.write_text(text)
+        m = kb.load_manifest(mini_manifest)
+        with pytest.raises(UnsupportedConstruct, match="pointize = true"):
+            kb.extract_fortran_entry(m.kernel("clamp_scale"))
+
+    def test_pointize_on_point_kernel_refuses(self, tmp_path):
+        from groundline.kir import UnsupportedConstruct
+        manifest = tmp_path / "kernels.toml"
+        manifest.write_text(
+            f'[fortran]\n'
+            f'dumps = "{QUICKSTART}"\n'
+            f'generated = "G.lean"\n'
+            f'namespace = "T"\n\n'
+            f'[[kernel]]\n'
+            f'name = "scale_clip_acc"\n'
+            f'fortran = {{ file = "toy_kernel_ptree", '
+            f'subroutine = "scale_clip_acc" }}\n'
+            f'pointize = true\n')
+        m = kb.load_manifest(manifest)
+        with pytest.raises(UnsupportedConstruct, match="not a loop"):
+            kb.extract_fortran_entry(m.kernel("scale_clip_acc"))
+
+
+# =============================================================================
 # Quickstart example (the committed portability proof)
 # =============================================================================
 
 class TestQuickstart:
     """The committed toy pair in examples/quickstart: the Fortran side runs
     everywhere (its with-sema dump is committed), the C++ side needs clang
-    (its header is standalone — no AMReX, no MPI)."""
+    (its .cpp is standalone — plain double, no includes)."""
 
     @pytest.fixture
     def manifest(self):
         return kb.load_manifest(QUICKSTART / "kernels.toml")
 
     def test_fortran_golden(self, manifest):
-        assert kb.render_fortran(manifest) == manifest.fortran.out.read_text(), \
-            "quickstart GeneratedFtn.lean is stale — rerun `groundline kernel generate`"
+        assert kb.render_fortran(manifest) == \
+            manifest.fortran.generated.read_text(), \
+            "quickstart QuickstartFtn.lean is stale — rerun `groundline kernel generate`"
+
+    def test_rank0_kernel_extracts_without_pointize(self, manifest):
+        e = manifest.kernel("scale_clip_acc")
+        assert e.pointize is False
+        k = kb.extract_fortran_entry(e)     # already per-point: no license needed
+        assert [p.name for p in k.params] == ["a", "b", "s", "lo"]
 
     @needs_clang
     def test_cpp_golden(self, manifest):
@@ -288,5 +334,5 @@ class TestQuickstart:
         def defs(text: str) -> str:
             return text.split("-/\n", 1)[1]
         assert defs(kb.render_cpp(manifest)) == \
-            defs(manifest.cpp.out.read_text()), \
-            "quickstart GeneratedCpp.lean is stale — rerun `groundline kernel generate`"
+            defs(manifest.cpp.generated.read_text()), \
+            "quickstart QuickstartCpp.lean is stale — rerun `groundline kernel generate`"

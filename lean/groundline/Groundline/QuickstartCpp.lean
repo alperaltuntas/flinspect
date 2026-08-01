@@ -2,12 +2,9 @@ import Mathlib.Data.Real.Basic
 import Mathlib.Tactic.Ring
 
 set_option linter.style.header false
--- Generated code keeps each expression on one line (merged-join tuples can be
--- arbitrarily wide), so the line-length style lint does not apply.
+-- Generated expressions stay on one line, however wide.
 set_option linter.style.longLine false
--- Generated defs keep every parameter positionally (inout/out outputs are
--- also inputs); a kernel that never reads an output's incoming value leaves
--- its binder unused by design.
+-- Outputs are also inputs; a kernel may never read an output's incoming value.
 set_option linter.unusedVariables false
 
 /-!
@@ -26,7 +23,7 @@ namespace Quickstart.GeneratedCpp
 
 noncomputable section
 
-/-- Generated from `scale_clip_acc_point` in `toy_kernel.hpp` (clang JSON AST).
+/-- Generated from `scale_clip_acc_point` in `toy_kernel.cpp` (clang JSON AST).
 Outputs `(b)` — the `intent(inout)` arguments, modeled functionally over ℝ. -/
 def scale_clip_acc_point (b a s lo : ℝ) : ℝ :=
   let w := s * a

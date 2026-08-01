@@ -4,7 +4,7 @@ Two tiers, per D7: fixture-based tests run everywhere (the
 ``test_kernel_doconcurrent`` / ``test_kernel_ifstmt_join`` /
 ``test_kernel_negate`` conformance fixtures); the production golden test —
 regenerating ``lean/groundline/Groundline/GeneratedFtn.lean`` byte-for-byte from the MOM6
-corpus — is gated on ``GROUNDLINE_CORPUS``. Semantic fidelity of the generated
+dump directory — is gated on ``GROUNDLINE_DUMPS``. Semantic fidelity of the generated
 Lean is checked *in Lean* (``lean/groundline/Groundline/FidelityFtn.lean``), not here.
 """
 
@@ -390,24 +390,24 @@ def test_sequential_alias_read_threads_current_value():
 
 
 # =============================================================================
-# Production golden test (gated on the corpus)
+# Production golden test (gated on the dump directory)
 # =============================================================================
 
-CORPUS = os.environ.get("GROUNDLINE_CORPUS")
+DUMPS = os.environ.get("GROUNDLINE_DUMPS")
 MANIFEST = REPO / "examples" / "turbo-stack.kernels.toml"
 
 
-@pytest.mark.skipif(not CORPUS, reason="GROUNDLINE_CORPUS not set")
+@pytest.mark.skipif(not DUMPS, reason="GROUNDLINE_DUMPS not set")
 def test_generated_lean_is_current():
     """lean/groundline/Groundline/GeneratedFtn.lean must match a fresh regeneration from
     the committed production manifest — the kernel list and rendering come
     from the same kernel-bank path the CLI runs, so they can't drift apart."""
     from groundline import kernel_bank
     m = kernel_bank.load_manifest(MANIFEST)
-    if not m.fortran.corpus.is_dir():
-        pytest.skip("manifest corpus not present")
+    if not m.fortran.dumps.is_dir():
+        pytest.skip("manifest dump directory not present")
     text = kernel_bank.render_fortran(m)
-    assert text == m.fortran.out.read_text(), \
+    assert text == m.fortran.generated.read_text(), \
         ("GeneratedFtn.lean is stale — rerun `groundline kernel generate "
          "--kernels examples/turbo-stack.kernels.toml`")
 
@@ -421,11 +421,11 @@ def test_generated_cpp_lean_is_current():
     version line is stamped into the output)."""
     from groundline import kernel_bank
     m = kernel_bank.load_manifest(MANIFEST)
-    if not all(e.cpp.header.exists() for e in kernel_bank.cpp_entries(m)):
+    if not all(e.cpp.source.exists() for e in kernel_bank.cpp_entries(m)):
         pytest.skip("TIM kernel headers not present")
     if not all(Path(d).exists() for d in m.cpp.include_dirs):
         pytest.skip("pinned C++ include dirs not present")
     text = kernel_bank.render_cpp(m)
-    assert text == m.cpp.out.read_text(), \
+    assert text == m.cpp.generated.read_text(), \
         ("GeneratedCpp.lean is stale — rerun `groundline kernel generate "
          "--kernels examples/turbo-stack.kernels.toml`")

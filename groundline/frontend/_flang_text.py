@@ -66,7 +66,7 @@ def unparse_text(line):
 # not accessible by name in the calling scope (e.g. only the generic is
 # USE-imported, or the specifics are private), flang prints a fully qualified
 # form:  <module-imported-through>$<symbol-owner-module>$<specific>
-# Derived empirically from the MOM6+FMS2 production corpus (994 distinct mangled
+# Derived empirically from the MOM6+FMS2 production dumps (994 distinct mangled
 # names, all exactly three components): the FIRST component is the module the
 # name was imported through; the SECOND is the module that *owns the specific's
 # symbol* — usually its definition site (`fms_mod$mpp_mod$mpp_error_basic`: the

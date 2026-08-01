@@ -5,6 +5,7 @@ import Groundline.FidelityCpp
 import Groundline.SeqSchema
 import Groundline.EdgeThicknessUpwind
 import Groundline.ThicknessToDz
+import Groundline.QuickstartEquiv
 
 set_option linter.style.header false
 
@@ -58,3 +59,10 @@ no `sorryAx`. The output is checked by eye in the build log.
 #print axioms Groundline.GeneratedCpp.thickness_to_dz_3d_nonboussinesq_point
 #print axioms Groundline.thicknessToDzNonBouss_point_equiv
 #print axioms Groundline.thicknessToDzNonBouss_kernel_equiv
+
+-- The quickstart pair (examples/quickstart/kernels.toml)
+#print axioms Quickstart.GeneratedFtn.scale_clip_acc
+#print axioms Quickstart.GeneratedFtn.scale_clip_acc_loop
+#print axioms Quickstart.GeneratedCpp.scale_clip_acc_point
+#print axioms Quickstart.scale_clip_acc_equiv
+#print axioms Quickstart.scale_clip_acc_loop_equiv

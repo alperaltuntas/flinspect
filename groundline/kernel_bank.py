@@ -4,41 +4,46 @@ pair through the :class:`~groundline.frontend.kernel_base.KernelFrontend` seam,
 render both generated Lean modules.
 
 This module replaces the Lean project's original ad-hoc ``generate.py`` driver. Nothing here
-carries a machine path: every site-specific value — the Fortran dump corpus,
-the C++ headers and include dirs, the clang executable, output locations —
+carries a machine path: every site-specific value — the directory of Fortran
+dumps, the C++ sources and include dirs, the compiler, output locations —
 lives in a declarative TOML manifest. The production (NCAR / turbo-stack)
 instance is ``examples/turbo-stack.kernels.toml``; a self-contained toy
 instance is ``examples/quickstart/kernels.toml``.
 
 Manifest shape (stdlib ``tomllib``; string values support ``${ENV_VAR}``
-expansion, and relative paths resolve against the manifest file's directory)::
+expansion, and relative paths resolve against the manifest file's directory).
+``[fortran]`` and ``[cpp]`` configure each language side once — inputs,
+toolchain, output module; each ``[[kernel]]`` gives one kernel's location on
+each side::
 
     [fortran]                       # the flang side (omit to disable)
-    corpus = "..."                  # root of the with-sema *_ptree dumps
-    out = ".../GeneratedFtn.lean"      # where `kernel generate` writes
+    dumps = "..."                   # directory of with-sema *_ptree dumps
+    generated = ".../GeneratedFtn.lean"   # module `kernel generate` writes
     namespace = "Groundline.GeneratedFtn"
     blurb = "..."                   # optional extra header-comment lines
 
     [cpp]                           # the clang side (omit to disable)
-    header_dir = "."                # root the kernels' `header` values resolve under
+    sources = "."                   # dir the kernels' `file` values resolve under
     include_dirs = ["...", ...]     # pinned -I dirs (part of the kernel identity)
-    clang = "clang++"
-    provenance_root = "..."         # optional: headers display relative to this
-    out = ".../GeneratedCpp.lean"
+    compiler = "clang++"
+    provenance_root = "..."         # optional: files display relative to this
+    generated = ".../GeneratedCpp.lean"
     namespace = "Groundline.GeneratedCpp"
     blurb = "..."
 
-    [lean]                          # optional: `kernel verify` runs lake here
-    lake_dir = "../lean/groundline"
+    [lean]                          # optional: `kernel verify` checks proofs here
+    project = "../lean/groundline"
 
     [[kernel]]
     name = "ppm_limit_pos"
-    fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree",
+    fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree",
                 subroutine = "ppm_limit_pos" }      # + optional nest = N,
                                                     #   def_name = "..." for
                                                     #   rule-B inline loops
-    cpp     = { header = "mom_continuity_ppm_kernel.hpp",
+    cpp     = { file = "mom_continuity_ppm_kernel.hpp",
                 function = "ppm_limit_pos_point" }
+    pointize = true                 # license: this kernel is a loop nest;
+                                    # reduce it to its per-point body
 
 Manifest resolution order (used by the CLI): explicit ``--kernels`` flag >
 ``$GROUNDLINE_KERNELS`` > ``./kernels.toml`` in the current directory. There is
@@ -61,7 +66,7 @@ from typing import Optional
 from groundline.frontend.clang_kernel import ClangKernelFrontend, clang_version
 from groundline.frontend.flang_kernel import FlangKernelFrontend
 from groundline.frontend.kernel_base import CppKernelSpec, FortranKernelSpec
-from groundline.kir import Kernel, pointize
+from groundline.kir import Kernel, UnsupportedConstruct, is_loop_nest, pointize
 from groundline.lean_printer import print_module
 
 MANIFEST_ENV = "GROUNDLINE_KERNELS"
@@ -78,19 +83,19 @@ class ManifestError(Exception):
 
 @dataclass(frozen=True)
 class FortranConfig:
-    corpus: Path
-    out: Path
+    dumps: Path
+    generated: Path
     namespace: str
     blurb: str = ""
 
 
 @dataclass(frozen=True)
 class CppConfig:
-    out: Path
+    generated: Path
     namespace: str
-    header_dir: Path
+    sources: Path
     include_dirs: tuple[str, ...] = ()
-    clang: str = "clang++"
+    compiler: str = "clang++"
     provenance_root: Optional[Path] = None
     blurb: str = ""
 
@@ -104,8 +109,9 @@ class KernelEntry:
     name: str
     fortran: Optional[FortranKernelSpec]
     cpp: Optional[CppKernelSpec]
-    fortran_dump_label: str = ""
-    cpp_header_label: str = ""
+    fortran_label: str = ""
+    cpp_label: str = ""
+    pointize: bool = False
 
 
 @dataclass(frozen=True)
@@ -114,7 +120,7 @@ class Manifest:
     fortran: Optional[FortranConfig]
     cpp: Optional[CppConfig]
     kernels: tuple[KernelEntry, ...]
-    lake_dir: Optional[Path] = None
+    lean_project: Optional[Path] = None
 
     def kernel(self, name: str) -> KernelEntry:
         for k in self.kernels:
@@ -161,7 +167,11 @@ def _check_keys(table: dict, allowed: dict[str, type], required: set[str],
 
 def _path(value: str, base: Path, context: str) -> Path:
     p = Path(_expand(value, context))
-    return p if p.is_absolute() else base / p
+    if not p.is_absolute():
+        p = base / p
+    # Lexical cleanup only (no symlink resolution): keeps `a/b/../c` out of
+    # CLI output and provenance-free config paths.
+    return Path(os.path.normpath(p))
 
 
 def resolve_manifest_path(explicit: Optional[str] = None) -> Path:
@@ -197,11 +207,11 @@ def load_manifest(path: Path | str) -> Manifest:
     fortran = _load_fortran(data.get("fortran"), base, name)
     cpp = _load_cpp(data.get("cpp"), base, name)
 
-    lake_dir = None
+    lean_project = None
     if "lean" in data:
-        _check_keys(data["lean"], {"lake_dir": str}, {"lake_dir"},
+        _check_keys(data["lean"], {"project": str}, {"project"},
                     f"{name} [lean]")
-        lake_dir = _path(data["lean"]["lake_dir"], base, f"{name} [lean]")
+        lean_project = _path(data["lean"]["project"], base, f"{name} [lean]")
 
     kernels = tuple(_load_kernel(tbl, i, fortran, cpp, name)
                     for i, tbl in enumerate(data.get("kernel", []), start=1))
@@ -210,7 +220,7 @@ def load_manifest(path: Path | str) -> Manifest:
     if dupes:
         raise ManifestError(f"{name}: duplicate kernel name(s) {dupes}")
     return Manifest(path=path.resolve(), fortran=fortran, cpp=cpp,
-                    kernels=kernels, lake_dir=lake_dir)
+                    kernels=kernels, lean_project=lean_project)
 
 
 def _load_fortran(tbl: Optional[dict], base: Path, name: str) \
@@ -218,10 +228,10 @@ def _load_fortran(tbl: Optional[dict], base: Path, name: str) \
     if tbl is None:
         return None
     ctx = f"{name} [fortran]"
-    _check_keys(tbl, {"corpus": str, "out": str, "namespace": str,
-                      "blurb": str}, {"corpus", "out", "namespace"}, ctx)
-    return FortranConfig(corpus=_path(tbl["corpus"], base, ctx),
-                         out=_path(tbl["out"], base, ctx),
+    _check_keys(tbl, {"dumps": str, "generated": str, "namespace": str,
+                      "blurb": str}, {"dumps", "generated", "namespace"}, ctx)
+    return FortranConfig(dumps=_path(tbl["dumps"], base, ctx),
+                         generated=_path(tbl["generated"], base, ctx),
                          namespace=_expand(tbl["namespace"], ctx),
                          blurb=tbl.get("blurb", ""))
 
@@ -230,17 +240,18 @@ def _load_cpp(tbl: Optional[dict], base: Path, name: str) -> Optional[CppConfig]
     if tbl is None:
         return None
     ctx = f"{name} [cpp]"
-    _check_keys(tbl, {"header_dir": str, "include_dirs": list, "clang": str,
-                      "provenance_root": str, "out": str, "namespace": str,
-                      "blurb": str}, {"out", "namespace"}, ctx)
+    _check_keys(tbl, {"sources": str, "include_dirs": list, "compiler": str,
+                      "provenance_root": str, "generated": str,
+                      "namespace": str, "blurb": str},
+                {"generated", "namespace"}, ctx)
     include_dirs = tuple(str(_path(d, base, ctx))
                          for d in tbl.get("include_dirs", []))
     root = tbl.get("provenance_root")
-    return CppConfig(out=_path(tbl["out"], base, ctx),
+    return CppConfig(generated=_path(tbl["generated"], base, ctx),
                      namespace=_expand(tbl["namespace"], ctx),
-                     header_dir=_path(tbl.get("header_dir", "."), base, ctx),
+                     sources=_path(tbl.get("sources", "."), base, ctx),
                      include_dirs=include_dirs,
-                     clang=_expand(tbl.get("clang", "clang++"), ctx),
+                     compiler=_expand(tbl.get("compiler", "clang++"), ctx),
                      provenance_root=_path(root, base, ctx) if root else None,
                      blurb=tbl.get("blurb", ""))
 
@@ -248,7 +259,8 @@ def _load_cpp(tbl: Optional[dict], base: Path, name: str) -> Optional[CppConfig]
 def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
                  cpp: Optional[CppConfig], name: str) -> KernelEntry:
     ctx = f"{name} [[kernel]] #{ordinal}"
-    _check_keys(tbl, {"name": str, "fortran": dict, "cpp": dict}, {"name"}, ctx)
+    _check_keys(tbl, {"name": str, "fortran": dict, "cpp": dict,
+                      "pointize": bool}, {"name"}, ctx)
     kname = tbl["name"]
     ctx = f"{name} kernel '{kname}'"
 
@@ -258,10 +270,10 @@ def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
             raise ManifestError(f"{ctx}: has a fortran side but the manifest "
                                 f"has no [fortran] section")
         ftbl = tbl["fortran"]
-        _check_keys(ftbl, {"dump": str, "subroutine": str, "nest": int,
-                           "def_name": str}, {"dump", "subroutine"},
+        _check_keys(ftbl, {"file": str, "subroutine": str, "nest": int,
+                           "def_name": str}, {"file", "subroutine"},
                     f"{ctx} fortran")
-        flabel = _expand(ftbl["dump"], f"{ctx} fortran")
+        flabel = _expand(ftbl["file"], f"{ctx} fortran")
         nest = ftbl.get("nest")
         def_name = ftbl.get("def_name")
         if nest is None:
@@ -274,7 +286,7 @@ def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
                     f"subroutine — rename the entry to "
                     f"'{ftbl['subroutine']}' or address a loop nest")
         fspec = FortranKernelSpec(
-            dump=_path(flabel, fortran.corpus, f"{ctx} fortran"),
+            dump=_path(flabel, fortran.dumps, f"{ctx} fortran"),
             subroutine=ftbl["subroutine"], nest=nest,
             def_name=(def_name or kname) if nest is not None else None)
 
@@ -284,24 +296,26 @@ def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
             raise ManifestError(f"{ctx}: has a cpp side but the manifest has "
                                 f"no [cpp] section")
         ctbl = tbl["cpp"]
-        _check_keys(ctbl, {"header": str, "function": str},
-                    {"header", "function"}, f"{ctx} cpp")
-        raw = _expand(ctbl["header"], f"{ctx} cpp")
-        header = _path(raw, cpp.header_dir, f"{ctx} cpp")
+        _check_keys(ctbl, {"file": str, "function": str},
+                    {"file", "function"}, f"{ctx} cpp")
+        raw = _expand(ctbl["file"], f"{ctx} cpp")
+        source = _path(raw, cpp.sources, f"{ctx} cpp")
         clabel = raw
         if cpp.provenance_root is not None:
             try:
-                clabel = str(header.resolve().relative_to(
+                clabel = str(source.resolve().relative_to(
                     cpp.provenance_root.resolve()))
             except ValueError:
-                clabel = str(header)
-        cspec = CppKernelSpec(header=header, function=ctbl["function"],
-                              include_dirs=cpp.include_dirs, clang=cpp.clang)
+                clabel = str(source)
+        cspec = CppKernelSpec(source=source, function=ctbl["function"],
+                              include_dirs=cpp.include_dirs,
+                              compiler=cpp.compiler)
 
     if fspec is None and cspec is None:
         raise ManifestError(f"{ctx}: needs a fortran and/or cpp side")
     return KernelEntry(name=kname, fortran=fspec, cpp=cspec,
-                       fortran_dump_label=flabel, cpp_header_label=clabel)
+                       fortran_label=flabel, cpp_label=clabel,
+                       pointize=tbl.get("pointize", False))
 
 
 # --------------------------------------------------------------------------- #
@@ -311,26 +325,42 @@ def _load_kernel(tbl: dict, ordinal: int, fortran: Optional[FortranConfig],
 def fortran_provenance(entry: KernelEntry) -> str:
     spec = entry.fortran
     if spec.nest is None:
-        return (f"`{spec.subroutine}` in `{entry.fortran_dump_label}` "
+        return (f"`{spec.subroutine}` in `{entry.fortran_label}` "
                 f"(flang with-sema dump)")
     return (f"loop nest {spec.nest} of `{spec.subroutine}` in "
-            f"`{entry.fortran_dump_label}` (flang with-sema dump)")
+            f"`{entry.fortran_label}` (flang with-sema dump)")
 
 
 def cpp_provenance(entry: KernelEntry) -> str:
-    return (f"`{entry.cpp.function}` in `{entry.cpp_header_label}` "
+    return (f"`{entry.cpp.function}` in `{entry.cpp_label}` "
             f"(clang JSON AST)")
 
 
 def extract_fortran_entry(entry: KernelEntry) -> Kernel:
-    """Extract + pointize one entry's Fortran side (the loop nest becomes the
-    per-point scalar kernel — semantics identical to the old driver)."""
-    return pointize(FlangKernelFrontend().extract(entry.fortran))
+    """Extract one entry's Fortran side. A kernel that is already per-point
+    (scalar arguments, no loop) passes through as written. A loop nest is a
+    different thing from a point function, so it refuses unless the entry
+    carries ``pointize = true`` — the explicit license to reduce the loop to
+    its per-point body via :func:`~groundline.kir.pointize`."""
+    k = FlangKernelFrontend().extract(entry.fortran)
+    if is_loop_nest(k):
+        if not entry.pointize:
+            raise UnsupportedConstruct(
+                f"{k.name}: the Fortran kernel is a loop nest, which is not "
+                f"the same thing as a point function — to compare its "
+                f"per-point body, set `pointize = true` on this kernel's "
+                f"manifest entry (see the manual's Pointize page)")
+        return pointize(k)
+    if entry.pointize:
+        raise UnsupportedConstruct(
+            f"{k.name}: `pointize = true`, but the kernel is not a loop "
+            f"nest — drop the option; the kernel is compared as written")
+    return k
 
 
 def extract_cpp_entry(entry: KernelEntry) -> Kernel:
-    """Extract one entry's C++ side (TIM-style point kernels are already
-    per-point: no pointize on this side)."""
+    """Extract one entry's C++ side (point functions extract as written; no
+    pointize on this side — the clang frontend has no loop support yet)."""
     return ClangKernelFrontend().extract(entry.cpp)
 
 
@@ -374,7 +404,7 @@ def cpp_blurb(m: Manifest) -> str:
     if m.cpp.blurb:
         text += "\n" + m.cpp.blurb
     text += (f"\n\nExtraction provenance (pinned):\n"
-             f"  {clang_version(m.cpp.clang)}\n"
+             f"  {clang_version(m.cpp.compiler)}\n"
              f"  -std=c++20 -fsyntax-only -Xclang -ast-dump=json "
              f"-Xclang -ast-dump-filter")
     for d in m.cpp.include_dirs:

@@ -91,7 +91,7 @@ class Use:
     """A ``USE`` relation edge: ``scope`` imports from module named ``module``.
 
     ``module`` is a name, not necessarily a defined ``EntityId`` — external modules
-    (netcdf, mpi, …) are referenced but never defined in the corpus.
+    (netcdf, mpi, …) are referenced but never defined in the parsed dumps.
     """
 
     scope: EntityId

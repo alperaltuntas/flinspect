@@ -124,7 +124,7 @@ def _only(n: dict, context: str) -> dict:
 # --------------------------------------------------------------------------- #
 
 # ImplicitCastExpr kinds unwrapped transparently — ONLY casts that provably
-# preserve the value for the Real-only subset. Any kind not listed refuses:
+# preserve the value for the real-scalar subset. Any kind not listed refuses:
 # a value-CHANGING implicit cast (IntegralToFloating, FloatingCast, ...)
 # silently unwrapped is exactly the plausible-but-wrong model this pipeline must
 # never produce.
@@ -237,10 +237,11 @@ def _extract_call(n: dict) -> Call:
 # Statement extraction
 # --------------------------------------------------------------------------- #
 
-# Local declarations: the observed spellings of amrex::Real locals (the header
-# does `using amrex::Real`, so qualType prints the alias). Anything else — a
-# non-Real local, a pointer, a reference — refuses.
-_REAL_LOCAL_TYPES = {"Real", "const Real"}
+# Local declarations: real scalars only, matched on the observed qualType
+# spellings — `Real` (amrex's alias; the headers do `using amrex::Real`, so
+# qualType prints the alias) and plain `double`, each optionally const.
+# Anything else — a non-real local, a pointer, a reference — refuses.
+_REAL_LOCAL_TYPES = {"Real", "const Real", "double", "const double"}
 
 
 def _extract_stmts(n: dict, locals_out: list[Param]) -> list[Stmt]:
@@ -281,8 +282,8 @@ def _extract_vardecl(vd: dict, locals_out: list[Param]) -> Stmt:
     name = vd["name"]
     qual = vd.get("type", {}).get("qualType")
     if qual not in _REAL_LOCAL_TYPES:
-        raise UnsupportedConstruct(f"local '{name}': type '{qual}' (only Real "
-                                   f"scalars are supported)")
+        raise UnsupportedConstruct(f"local '{name}': type '{qual}' (only real "
+                                   f"scalars — Real or double — are supported)")
     if vd.get("init") != "c":
         raise UnsupportedConstruct(
             f"local '{name}' without a copy-initializer (= form) — an "
@@ -316,21 +317,22 @@ def _extract_if(n: dict, locals_out: list[Param]) -> If:
 # --------------------------------------------------------------------------- #
 
 def _extract_param(pd: dict) -> Param:
-    """Intent mapping (the C++ calling convention of the TIM point kernels):
-    ``Real &`` (non-const lvalue reference) → inout; ``Real const`` by value
-    (clang prints ``const Real``) → in. Anything else — pointers, const refs,
-    non-Real types, defaulted parameters — refuses."""
+    """Intent mapping (the point-kernel calling convention): a non-const
+    lvalue reference (``Real &`` / ``double &``) → inout; a const by-value
+    scalar (clang prints ``const Real`` / ``const double``) → in. Anything
+    else — pointers, const refs, non-real types, defaulted parameters —
+    refuses."""
     name = pd.get("name")
     if _inner(pd) or pd.get("init"):
         raise UnsupportedConstruct(f"parameter '{name}' has a default argument")
     qual = pd.get("type", {}).get("qualType")
-    if qual == "Real &":
+    if qual in ("Real &", "double &"):
         return Param(name, "real", "inout", 0)
-    if qual == "const Real":
+    if qual in ("const Real", "const double"):
         return Param(name, "real", "in", 0)
     raise UnsupportedConstruct(
-        f"parameter '{name}': type '{qual}' (supported: 'Real &' → inout, "
-        f"'const Real' → in)")
+        f"parameter '{name}': type '{qual}' (supported: 'Real &'/'double &' "
+        f"→ inout, 'const Real'/'const double' → in)")
 
 
 def extract_kernel_from_decl(decl: dict) -> Kernel:
@@ -387,5 +389,5 @@ class ClangKernelFrontend:
     importable for tests that pin it directly."""
 
     def extract(self, spec: CppKernelSpec) -> Kernel:
-        return extract_kernel(spec.header, spec.function, clang=spec.clang,
+        return extract_kernel(spec.source, spec.function, clang=spec.compiler,
                               include_dirs=spec.include_dirs)

@@ -12,6 +12,78 @@ Program -> ProgramUnit -> Module
 | | | | DummyArg -> Name = 'b'
 | | | | DummyArg -> Name = 's'
 | | | | DummyArg -> Name = 'lo'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'a'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'b'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 's'
+| | | | | EntityDecl
+| | | | | | Name = 'lo'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | EntityDecl
+| | | | | | Name = 'w'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'w=s*a'
+| | | | | Variable = 'w'
+| | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | Expr = 's*a'
+| | | | | | Multiply
+| | | | | | | Expr = 's'
+| | | | | | | | Designator -> DataRef -> Name = 's'
+| | | | | | | Expr = 'a'
+| | | | | | | | Designator -> DataRef -> Name = 'a'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> IfConstruct
+| | | | | IfThenStmt
+| | | | | | Scalar -> Logical -> Expr = 'w<lo'
+| | | | | | | LT
+| | | | | | | | Expr = 'w'
+| | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | | | | Expr = 'lo'
+| | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | Block
+| | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'b=b+lo'
+| | | | | | | Variable = 'b'
+| | | | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | | | Expr = 'b+lo'
+| | | | | | | | Add
+| | | | | | | | | Expr = 'b'
+| | | | | | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | | | | | Expr = 'lo'
+| | | | | | | | | | Designator -> DataRef -> Name = 'lo'
+| | | | | ElseBlock
+| | | | | | ElseStmt -> 
+| | | | | | Block
+| | | | | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'b=b+w'
+| | | | | | | | Variable = 'b'
+| | | | | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | | | | Expr = 'b+w'
+| | | | | | | | | Add
+| | | | | | | | | | Expr = 'b'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | | | | | | Expr = 'w'
+| | | | | | | | | | | Designator -> DataRef -> Name = 'w'
+| | | | | EndIfStmt -> 
+| | | EndSubroutineStmt -> Name = 'scale_clip_acc'
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'scale_clip_acc_loop'
+| | | | DummyArg -> Name = 'a'
+| | | | DummyArg -> Name = 'b'
+| | | | DummyArg -> Name = 's'
+| | | | DummyArg -> Name = 'lo'
 | | | | DummyArg -> Name = 'n'
 | | | SpecificationPart
 | | | | ImplicitPart -> 
@@ -119,5 +191,5 @@ Program -> ProgramUnit -> Module
 | | | | | | | | | | | | | Designator -> DataRef -> Name = 'w'
 | | | | | | | EndIfStmt -> 
 | | | | | EndDoStmt -> 
-| | | EndSubroutineStmt -> Name = 'scale_clip_acc'
+| | | EndSubroutineStmt -> Name = 'scale_clip_acc_loop'
 | EndModuleStmt -> Name = 'toy_kernel_mod'

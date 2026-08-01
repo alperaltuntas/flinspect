@@ -73,7 +73,7 @@ from module 'jupyter-cytoscape'"* → missing labextension (half 2).
 
 Notebooks 02–04 read a corpus of with-sema parse-tree dumps
 (`flang -fc1 -fdebug-dump-parse-tree`, files named `*_ptree`). The corpus root
-comes from the `GROUNDLINE_CORPUS` environment variable, defaulting to the one on
+comes from the `GROUNDLINE_DUMPS` environment variable, defaulting to the one on
 NCAR's glade filesystem:
 
 ```
@@ -82,7 +82,7 @@ NCAR's glade filesystem:
 
 **There is no TIM corpus yet** — `MOM6_using_TIM/` is an empty skeleton because
 the dump-only toolchain cannot build AMReX (`docs/DEVLOG.md`, 2026-05-28). When
-one exists, point `GROUNDLINE_CORPUS` at it; nothing in the notebooks is
+one exists, point `GROUNDLINE_DUMPS` at it; nothing in the notebooks is
 FMS2-specific.
 
 Without glade access, generate dumps for any Fortran tree you can compile (see

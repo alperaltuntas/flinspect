@@ -50,13 +50,14 @@ class FortranKernelSpec:
 
 @dataclass(frozen=True)
 class CppKernelSpec:
-    """Address of one C++ point-kernel function, plus the pinned clang
-    invocation that produces its JSON AST (compiler and include dirs are part
-    of the kernel's identity — a different toolchain is a different dump)."""
-    header: Path
+    """Address of one C++ point-kernel function in a source file (a ``.cpp``
+    or a header), plus the pinned clang invocation that produces its JSON AST
+    (compiler and include dirs are part of the kernel's identity — a
+    different toolchain is a different dump)."""
+    source: Path
     function: str
     include_dirs: tuple[str, ...] = ()
-    clang: str = "clang++"
+    compiler: str = "clang++"
 
 
 @runtime_checkable

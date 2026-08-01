@@ -69,13 +69,14 @@ class TestRefusalSnippet:
         manifest = tmp_path / "kernels.toml"
         manifest.write_text(
             f'[fortran]\n'
-            f'corpus = "{REPO / "tests" / "f90"}"\n'
-            f'out = "{tmp_path / "Generated.lean"}"\n'
+            f'dumps = "{REPO / "tests" / "f90"}"\n'
+            f'generated = "{tmp_path / "Generated.lean"}"\n'
             f'namespace = "Demo"\n\n'
             f'[[kernel]]\n'
             f'name = "accumulate"\n'
-            f'fortran = {{ dump = "test_kernel_recurrence_ptree", '
-            f'subroutine = "accumulate" }}\n')
+            f'fortran = {{ file = "test_kernel_recurrence_ptree", '
+            f'subroutine = "accumulate" }}\n'
+            f'pointize = true\n')
         rc = cli_main(["kernel", "show", "accumulate",
                        "--kernels", str(manifest)])
         assert rc == 2
@@ -83,6 +84,32 @@ class TestRefusalSnippet:
         committed = (SNIPPETS / "refusal_recurrence.txt").read_text()
         assert committed.strip() == err.strip(), (
             "manual/snippets/refusal_recurrence.txt has rotted — "
+            "rerun manual/snippets/render_snippets.sh")
+
+
+class TestPointizeRefusalSnippet:
+    """The quickstart's loop/point refusal (quickstart_pointize_refusal.txt)
+    is the real CLI error, reproduced against the committed quickstart dump
+    with the `pointize = true` license removed."""
+
+    def test_refusal_line_matches(self, tmp_path, capsys):
+        manifest = tmp_path / "kernels.toml"
+        manifest.write_text(
+            f'[fortran]\n'
+            f'dumps = "{REPO / "examples" / "quickstart"}"\n'
+            f'generated = "{tmp_path / "G.lean"}"\n'
+            f'namespace = "Demo"\n\n'
+            f'[[kernel]]\n'
+            f'name = "scale_clip_acc_loop"\n'
+            f'fortran = {{ file = "toy_kernel_ptree", '
+            f'subroutine = "scale_clip_acc_loop" }}\n')
+        rc = cli_main(["kernel", "show", "scale_clip_acc_loop",
+                       "--kernels", str(manifest)])
+        assert rc == 2
+        err = capsys.readouterr().err
+        committed = (SNIPPETS / "quickstart_pointize_refusal.txt").read_text()
+        assert committed.strip() == err.strip(), (
+            "manual/snippets/quickstart_pointize_refusal.txt has rotted — "
             "rerun manual/snippets/render_snippets.sh")
 
 

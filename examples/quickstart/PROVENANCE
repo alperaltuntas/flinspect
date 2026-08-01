@@ -1,7 +1,7 @@
 Provenance of the toy_kernel_ptree fixture in this directory (with-sema dump,
 mirroring tests/f90/PROVENANCE).
 
-Generated: 2026-07-31 11:12:28 UTC
+Generated: 2026-08-01 18:59:43 UTC
 Command:   flang -fc1 -fdebug-dump-parse-tree toy_kernel.f90
 
 flang version 21.0.0git (https://github.com/llvm/llvm-project.git bb982e733cfcda7e4cfb0583544f68af65211ed1)

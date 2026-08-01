@@ -15,10 +15,11 @@ the schema). Manifest resolution: ``--kernels PATH`` > ``$GROUNDLINE_KERNELS``
     groundline kernel list        # kernels in the manifest + basic status
     groundline kernel show NAME   # print one kernel's generated Lean defs
     groundline kernel generate    # (re)write the generated Lean modules
-    groundline kernel verify      # regenerate + byte-diff against the committed
-                                 # files, then `lake build` if lake is on PATH
-                                 # (the CI gate; non-zero exit on drift
-                                 # or build failure)
+    groundline kernel verify      # re-extract + compare against the generated
+                                 # modules on disk, then re-check the proofs
+                                 # (`lake build`) when the manifest names a
+                                 # [lean] project (the CI gate; non-zero exit
+                                 # on any mismatch or failure)
 """
 
 from __future__ import annotations
@@ -62,16 +63,16 @@ def _cmd_list(args: argparse.Namespace) -> int:
             nest = f", loop nest {e.fortran.nest}" if e.fortran.nest else ""
             print(_describe_side(
                 "fortran:", f"subroutine '{e.fortran.subroutine}'{nest} "
-                f"in {e.fortran_dump_label}", e.fortran.dump))
+                f"in {e.fortran_label}", e.fortran.dump))
         if e.cpp is not None:
             print(_describe_side(
-                "cpp:", f"function '{e.cpp.function}' in {e.cpp_header_label}",
-                e.cpp.header))
+                "cpp:", f"function '{e.cpp.function}' in {e.cpp_label}",
+                e.cpp.source))
     outs = [("fortran", m.fortran), ("cpp", m.cpp)]
     for side, cfg in outs:
         if cfg is not None:
-            state = "present" if cfg.out.exists() else "not yet generated"
-            print(f"{side} output: {cfg.out}  [{state}]")
+            state = "present" if cfg.generated.exists() else "not yet generated"
+            print(f"{side} generated module: {cfg.generated}  [{state}]")
     return 0
 
 
@@ -83,12 +84,12 @@ def _cmd_show(args: argparse.Namespace) -> int:
         shown.append(print_kernel(kb.extract_fortran_entry(e),
                                   provenance=kb.fortran_provenance(e)))
     if e.cpp is not None:
-        if shutil.which(e.cpp.clang):
+        if shutil.which(e.cpp.compiler):
             shown.append(print_kernel(kb.extract_cpp_entry(e),
                                       provenance=kb.cpp_provenance(e)))
         else:
-            print(f"note: '{e.cpp.clang}' not on PATH — skipping the C++ side",
-                  file=sys.stderr)
+            print(f"note: '{e.cpp.compiler}' not on PATH — skipping the C++ "
+                  f"side", file=sys.stderr)
     print("\n".join(shown), end="")
     return 0
 
@@ -110,36 +111,37 @@ def _cmd_generate(args: argparse.Namespace) -> int:
         text = kb.render_fortran(m, _extract_verbosely(
             kb.fortran_entries(m), kb.extract_fortran_entry,
             kb.fortran_provenance))
-        m.fortran.out.write_text(text)
-        print(f"wrote {m.fortran.out}")
+        m.fortran.generated.write_text(text)
+        print(f"wrote {m.fortran.generated}")
     if not args.skip_cpp and m.cpp is not None:
         text = kb.render_cpp(m, _extract_verbosely(
             kb.cpp_entries(m), kb.extract_cpp_entry, kb.cpp_provenance))
-        m.cpp.out.write_text(text)
-        print(f"wrote {m.cpp.out}")
+        m.cpp.generated.write_text(text)
+        print(f"wrote {m.cpp.generated}")
     return 0
 
 
-def _verify_side(side: str, fresh: str, committed_path: Path) -> bool:
-    """Byte-diff one regenerated module against its committed file."""
-    if not committed_path.is_file():
-        print(f"DRIFT [{side}]: {committed_path} does not exist — "
+def _verify_side(side: str, fresh: str, on_disk: Path) -> bool:
+    """Compare one freshly rendered module against the file `generate`
+    wrote (byte for byte)."""
+    if not on_disk.is_file():
+        print(f"DRIFT [{side}]: {on_disk} does not exist — "
               f"run `groundline kernel generate`")
         return False
-    committed = committed_path.read_text()
+    committed = on_disk.read_text()
     if fresh == committed:
-        print(f"ok [{side}]: {committed_path.name} matches a fresh regeneration")
+        print(f"ok [{side}]: {on_disk.name} matches a fresh extraction")
         return True
-    fd, tmp_name = tempfile.mkstemp(prefix=f"{committed_path.stem}.",
+    fd, tmp_name = tempfile.mkstemp(prefix=f"{on_disk.stem}.",
                                     suffix=".fresh.lean")
     os.close(fd)
     tmp = Path(tmp_name)
     tmp.write_text(fresh)
-    print(f"DRIFT [{side}]: {committed_path} differs from a fresh "
-          f"regeneration (written to {tmp})")
+    print(f"DRIFT [{side}]: {on_disk} differs from a fresh "
+          f"extraction (written to {tmp})")
     diff = list(difflib.unified_diff(
         committed.splitlines(), fresh.splitlines(),
-        fromfile=str(committed_path), tofile=str(tmp), lineterm=""))
+        fromfile=str(on_disk), tofile=str(tmp), lineterm=""))
     for line in diff[:_DIFF_CONTEXT_LINES]:
         print(line)
     if len(diff) > _DIFF_CONTEXT_LINES:
@@ -151,28 +153,32 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     m = _load(args)
     ok = True
     if not args.skip_fortran and m.fortran is not None:
-        ok &= _verify_side("fortran", kb.render_fortran(m), m.fortran.out)
+        ok &= _verify_side("fortran", kb.render_fortran(m),
+                           m.fortran.generated)
     if not args.skip_cpp and m.cpp is not None:
-        if shutil.which(m.cpp.clang) is None:
-            print(f"error: '{m.cpp.clang}' not on PATH — cannot verify the "
+        if shutil.which(m.cpp.compiler) is None:
+            print(f"error: '{m.cpp.compiler}' not on PATH — cannot verify the "
                   f"C++ side (pass --skip-cpp to verify the Fortran side only)")
             ok = False
         else:
-            ok &= _verify_side("cpp", kb.render_cpp(m), m.cpp.out)
-    if m.lake_dir is not None:
-        if shutil.which("lake") is None:
-            print("note: `lake` not on PATH — skipping the Lean build tier of "
-                  "the gate (activate a Lean toolchain to run it)")
-        elif not ok:
-            print("skipping `lake build` — fix the drift above first")
+            ok &= _verify_side("cpp", kb.render_cpp(m), m.cpp.generated)
+    if m.lean_project is None:
+        print("note: the manifest names no [lean] project — the generated "
+              "models were checked, but no theorems were")
+    elif shutil.which("lake") is None:
+        print("note: `lake` not on PATH — the proofs were NOT re-checked "
+              "(activate a Lean toolchain to include them)")
+    elif not ok:
+        print("skipping the proof check (`lake build`) — fix the mismatch "
+              "above first")
+    else:
+        print(f"checking the proofs: `lake build` in {m.lean_project} ...")
+        proc = subprocess.run(["lake", "build"], cwd=m.lean_project)
+        if proc.returncode != 0:
+            print(f"FAIL: lake build exited {proc.returncode}")
+            ok = False
         else:
-            print(f"running `lake build` in {m.lake_dir} ...")
-            proc = subprocess.run(["lake", "build"], cwd=m.lake_dir)
-            if proc.returncode != 0:
-                print(f"FAIL: lake build exited {proc.returncode}")
-                ok = False
-            else:
-                print("ok [lean]: lake build succeeded")
+            print("ok [lean]: every theorem in the project re-checked")
     return 0 if ok else 1
 
 
@@ -210,8 +216,8 @@ def _add_kernel_group(sub: argparse._SubParsersAction) -> None:
 
     p = ksub.add_parser(
         "verify", parents=[manifest_opt, skip_opts],
-        help="regenerate, byte-diff against the committed files, lake build "
-             "(non-zero exit on drift or failure)")
+        help="check the generated modules are current, then re-check the "
+             "proofs (non-zero exit on any mismatch or failure)")
     p.set_defaults(func=_cmd_verify)
 
 

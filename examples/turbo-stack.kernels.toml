@@ -1,9 +1,14 @@
 # groundline kernel manifest — the NCAR / turbo-stack production instance.
 #
 # This file is the *site config* for the MOM6 ⇄ TIM kernel bank: every
-# machine-specific path (the /glade corpus, the AMReX install, the MPI
-# headers) lives HERE, not in groundline code — the package itself has no
+# machine-specific path (the /glade dump directory, the AMReX install, the
+# MPI headers) lives HERE, not in groundline code — the package itself has no
 # built-in defaults. On another site, copy this file and repoint the paths.
+#
+# How to read it: [fortran] and [cpp] configure each language side once —
+# where its inputs live, which compiler reads them, and which Lean module
+# `groundline kernel generate` writes. Each [[kernel]] then gives one
+# kernel's location on each side.
 #
 # Use it via any of (resolution order):
 #   groundline kernel list --kernels examples/turbo-stack.kernels.toml
@@ -14,18 +19,18 @@
 # this file's directory. Schema reference: groundline/kernel_bank.py.
 
 [fortran]
-# With-sema flang parse-tree dumps of the MOM6 production build.
-corpus = "/glade/work/altuntas/turbo-stack/bin/flang_ptree/MOM6_using_FMS2"
-out = "../lean/groundline/Groundline/GeneratedFtn.lean"
+# Directory of flang parse-tree dumps (with sema) from the MOM6 production build.
+dumps = "/glade/work/altuntas/turbo-stack/bin/flang_ptree/MOM6_using_FMS2"
+generated = "../lean/groundline/Groundline/GeneratedFtn.lean"
 namespace = "Groundline.GeneratedFtn"
 blurb = """Fidelity against the hand-written reference models is machine-checked in
 `Groundline/FidelityFtn.lean`."""
 
 [cpp]
-# The TIM kernel headers, and the pinned clang invocation that dumps them
+# The TIM kernel headers, and the pinned clang invocation that reads them
 # (clang 21 via activate_llvm.sh; the include dirs are part of the kernel
-# identity — a different toolchain is a different dump).
-header_dir = "/glade/work/altuntas/turbo-stack/submodules/infra/TIM/mom/cpp"
+# identity — a different toolchain is a different AST).
+sources = "/glade/work/altuntas/turbo-stack/submodules/infra/TIM/mom/cpp"
 include_dirs = [
   # AMReX install (AMReX_REAL.H etc.)
   "/glade/work/altuntas/turbo-stack/bin/gnu/MOM6_using_TIM/amrex/install/include",
@@ -34,35 +39,43 @@ include_dirs = [
   # mpi.h for AMReX's #include <mpi.h>
   "/glade/work/altuntas/llvm-hpc/include",
 ]
-clang = "clang++"
-# Headers display relative to this root in the generated provenance comments.
+compiler = "clang++"
+# Files display relative to this root in the generated provenance comments.
 provenance_root = "/glade/work/altuntas/turbo-stack"
-out = "../lean/groundline/Groundline/GeneratedCpp.lean"
+generated = "../lean/groundline/Groundline/GeneratedCpp.lean"
 namespace = "Groundline.GeneratedCpp"
 blurb = """Fidelity against the hand-written reference models is machine-checked in
 `Groundline/FidelityCpp.lean`."""
 
 [lean]
-# `groundline kernel verify` runs `lake build` here (when lake is on PATH).
-lake_dir = "../lean/groundline"
+# `groundline kernel verify` re-checks every theorem here (when lake is on PATH).
+project = "../lean/groundline"
 
 # --- The banked pairs (5 of 5 TIM point kernels; DEVLOG 2026-07-31) ---------
+#
+# Every Fortran kernel below is a loop nest in the source, compared against a
+# per-point C++ function — `pointize = true` licenses reducing each loop to
+# its per-point body (see the manual's Pointize page for the two iteration
+# licenses that justify it).
 
 [[kernel]]
 name = "ppm_limit_pos"
-fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_pos" }
-cpp = { header = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_pos_point" }
+fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_pos" }
+cpp = { file = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_pos_point" }
+pointize = true
 
 [[kernel]]
 name = "ppm_limit_cw84"
-fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_cw84" }
-cpp = { header = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_cw84_point" }
+fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "ppm_limit_cw84" }
+cpp = { file = "mom_continuity_ppm_kernel.hpp", function = "ppm_limit_cw84_point" }
+pointize = true
 
 [[kernel]]
 # zonal_edge_thickness nest 1 = the do concurrent under CS%upwind_1st.
 name = "edge_thickness_upwind"
-fortran = { dump = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "zonal_edge_thickness", nest = 1 }
-cpp = { header = "mom_continuity_ppm_kernel.hpp", function = "edge_thickness_upwind_point" }
+fortran = { file = "MOM6/MOM_continuity_PPM.o_ptree", subroutine = "zonal_edge_thickness", nest = 1 }
+cpp = { file = "mom_continuity_ppm_kernel.hpp", function = "edge_thickness_upwind_point" }
+pointize = true
 
 # thickness_to_dz_3d nests, in source order: 1 = do-concurrent non-Boussinesq,
 # 2 = plain-DO non-Boussinesq, 3 = do-concurrent Boussinesq, 4 = plain-DO
@@ -72,10 +85,12 @@ cpp = { header = "mom_continuity_ppm_kernel.hpp", function = "edge_thickness_upw
 
 [[kernel]]
 name = "thickness_to_dz_3d_boussinesq"
-fortran = { dump = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 4 }
-cpp = { header = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_boussinesq_point" }
+fortran = { file = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 4 }
+cpp = { file = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_boussinesq_point" }
+pointize = true
 
 [[kernel]]
 name = "thickness_to_dz_3d_nonboussinesq"
-fortran = { dump = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 2 }
-cpp = { header = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_nonboussinesq_point" }
+fortran = { file = "MOM6/MOM_interface_heights.o_ptree", subroutine = "thickness_to_dz_3d", nest = 2 }
+cpp = { file = "mom_interface_heights_kernel.hpp", function = "thickness_to_dz_3d_nonboussinesq_point" }
+pointize = true
