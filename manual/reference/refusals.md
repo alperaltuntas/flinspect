@@ -125,11 +125,13 @@ implies — the early-warning surface for dump-format drift (see
 
 ## Printer (`groundline/lean_printer.py`)
 
-These are final honesty gates — reachable only if a caller bypasses the
-normal pipeline order:
+Two of these gates guard live semantics; the rest are final honesty gates,
+reachable only if a caller bypasses the normal pipeline order:
 
 | Trigger | Why it refuses |
 |---|---|
+| integer-valued `/` or `**` — both operands built from integer literals (`a * (2/3)`) | the source evaluates these in **truncating integer arithmetic** (2/3 is 0), which the model over ℝ cannot represent; a mixed real/int operand is fine (the integer promotes). The C++ twin refuses earlier, at the cast allowlist. Faithful integer semantics is [roadmap](../limits.md#integer-values-in-kernel-bodies) |
+| an integer **local** read in the modeled body | it would be modeled as a real, hiding any truncation its assignments perform. Integers as *addresses* — loop indices, bounds, subscripts — are unaffected: pointize consumes and drops them |
 | a call the printer cannot spell (anything but `abs`/`min`/`max`) | no invented Lean spelling for an unmodeled callee |
 | an `ArrayRef` or `ComponentRef` surviving to printing | pointization was skipped or incomplete — printing them as bare names would silently change meaning |
 | a non-real parameter surviving to printing | the generated def's signature is `(… : ℝ)`; anything else must have been dropped or synthesized away |

@@ -1,0 +1,94 @@
+======================== Flang: parse tree dump ========================
+Program -> ProgramUnit -> Module
+| ModuleStmt -> Name = 'test_kernel_intarith'
+| SpecificationPart
+| | ImplicitPart -> ImplicitPartStmt -> ImplicitStmt -> 
+| ModuleSubprogramPart
+| | ContainsStmt
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'int_div_literals'
+| | | | DummyArg -> Name = 'a'
+| | | | DummyArg -> Name = 'b'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | | KindSelector -> Scalar -> Integer -> Constant -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'a'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | | KindSelector -> Scalar -> Integer -> Constant -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'b'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'b=b+a*0._8'
+| | | | | Variable = 'b'
+| | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | Expr = 'b+a*0._8'
+| | | | | | Add
+| | | | | | | Expr = 'b'
+| | | | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | | | Expr = 'a*0._8'
+| | | | | | | | Multiply
+| | | | | | | | | Expr = 'a'
+| | | | | | | | | | Designator -> DataRef -> Name = 'a'
+| | | | | | | | | Expr = '(0_4)'
+| | | | | | | | | | Parentheses -> Expr = '0_4'
+| | | | | | | | | | | Divide
+| | | | | | | | | | | | Expr = '2_4'
+| | | | | | | | | | | | | LiteralConstant -> IntLiteralConstant = '2'
+| | | | | | | | | | | | Expr = '3_4'
+| | | | | | | | | | | | | LiteralConstant -> IntLiteralConstant = '3'
+| | | EndSubroutineStmt -> Name = 'int_div_literals'
+| | ModuleSubprogram -> SubroutineSubprogram
+| | | SubroutineStmt
+| | | | Name = 'int_local'
+| | | | DummyArg -> Name = 'a'
+| | | | DummyArg -> Name = 'b'
+| | | SpecificationPart
+| | | | ImplicitPart -> 
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | | KindSelector -> Scalar -> Integer -> Constant -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | | | AttrSpec -> IntentSpec -> Intent = In
+| | | | | EntityDecl
+| | | | | | Name = 'a'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> Real
+| | | | | | KindSelector -> Scalar -> Integer -> Constant -> Expr = '8_4'
+| | | | | | | LiteralConstant -> IntLiteralConstant = '8'
+| | | | | AttrSpec -> IntentSpec -> Intent = InOut
+| | | | | EntityDecl
+| | | | | | Name = 'b'
+| | | | DeclarationConstruct -> SpecificationConstruct -> TypeDeclarationStmt
+| | | | | DeclarationTypeSpec -> IntrinsicTypeSpec -> IntegerTypeSpec -> 
+| | | | | EntityDecl
+| | | | | | Name = 'k'
+| | | ExecutionPart -> Block
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'k=2_4'
+| | | | | Variable = 'k'
+| | | | | | Designator -> DataRef -> Name = 'k'
+| | | | | Expr = '2_4'
+| | | | | | LiteralConstant -> IntLiteralConstant = '2'
+| | | | ExecutionPartConstruct -> ExecutableConstruct -> ActionStmt -> AssignmentStmt = 'b=b+a*real(k,kind=8)'
+| | | | | Variable = 'b'
+| | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | Expr = 'b+a*real(k,kind=8)'
+| | | | | | Add
+| | | | | | | Expr = 'b'
+| | | | | | | | Designator -> DataRef -> Name = 'b'
+| | | | | | | Expr = 'a*real(k,kind=8)'
+| | | | | | | | Multiply
+| | | | | | | | | Expr = 'a'
+| | | | | | | | | | Designator -> DataRef -> Name = 'a'
+| | | | | | | | | Expr = 'k'
+| | | | | | | | | | Designator -> DataRef -> Name = 'k'
+| | | EndSubroutineStmt -> Name = 'int_local'
+| EndModuleStmt -> Name = 'test_kernel_intarith'

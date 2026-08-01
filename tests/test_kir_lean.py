@@ -162,6 +162,38 @@ class TestRecurrenceRefusalFixture:
         assert target.subscripts[1] == BinOp("add", Var("k"), IntLit("1"))
 
 
+class TestIntegerArithmeticRefusals:
+    """Integer VALUES in a modeled body refuse at print: Fortran evaluates
+    integer `/` (and `**`) in truncating integer arithmetic, and an integer
+    local would be modeled as a real — either way the ℝ model would be
+    plausibly wrong, never coarse. (The C++ twin of the literal-division case
+    refuses earlier, at the clang cast allowlist: `IntegralToFloating`.)
+    Integers as ADDRESSES — loop indices, bounds, subscripts — are unaffected;
+    pointize consumes and drops them (`test_pointize_drops_loop_machinery`)."""
+
+    def test_integer_literal_division_refused(self):
+        kernel = extract_kernel(F90_DIR / "test_kernel_intarith_ptree",
+                                "int_div_literals")
+        with pytest.raises(UnsupportedConstruct, match="integer-valued '/'"):
+            print_kernel(kernel)
+
+    def test_integer_local_refused(self):
+        kernel = extract_kernel(F90_DIR / "test_kernel_intarith_ptree",
+                                "int_local")
+        with pytest.raises(UnsupportedConstruct, match="non-real local"):
+            print_kernel(kernel)
+
+    def test_integer_pow_refused_and_mixed_operands_pass(self):
+        # No fixture needed at the IR tier: int**int refuses; real/int (the
+        # ubiquitous `w / 2`, `w ** 2`) prints — the integer promotes and
+        # real arithmetic is what the source computes.
+        from groundline.lean_printer import print_expr
+        with pytest.raises(UnsupportedConstruct, match=r"integer-valued '\*\*'"):
+            print_expr(BinOp("pow", IntLit("2"), IntLit("3")))
+        assert print_expr(BinOp("div", Var("w"), IntLit("2"))) == "w / 2"
+        assert print_expr(BinOp("pow", Var("w"), IntLit("2"))) == "w ^ 2"
+
+
 class TestInlineNestsFixture:
     """Rule B addressing: loop nest #N of a subroutine, by source-order
     ordinal (counting both do-concurrent and plain-DO nests), with the

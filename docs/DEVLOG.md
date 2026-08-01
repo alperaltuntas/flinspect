@@ -14,6 +14,41 @@
 
 ---
 
+## 2026-08-01 (later still) — A wrong-model bug found by a precedence question: integer values now refuse
+
+A user question — "does Fortran/C++ operator precedence differ, and does the
+printer account for it?" — audited well (precedence is consumed by each
+compiler's own parser; the printer only owes *Lean's* precedence, which it
+pays with the `_BIN` table and defensive `Neg` parens), until the "other
+differences?" sweep found a real hole: **Fortran integer division inside a
+real expression extracted and printed with no refusal.** `b = b + a * (2/3)`
+became `b + a * (2 / 3)` over ℝ — but Fortran computes `2/3 = 0`. A
+plausible-but-wrong model, the exact failure mode the refusal discipline
+exists to prevent. The C++ twin was already safe: clang wraps the int result
+in `IntegralToFloating`, which the cast allowlist refuses.
+
+Fix (refuse, don't model — for now): the printer gained two gates. `div`/
+`pow` with both operands built from integer literals refuses ("integer-valued
+'/': the source evaluates this in integer arithmetic…"), and a non-real
+*local* in the modeled body refuses like non-real params always did (an
+integer local modeled as ℝ would hide truncation in its assignments).
+Integers as addresses — indices, bounds, subscripts — are untouched;
+pointize consumes them. Fixture `tests/f90/test_kernel_intarith` pins both
+refusals end to end.
+
+Why refuse rather than model faithfully (the user pushed on this, rightly):
+Lean's `Int.div` does truncate toward zero, but faithful integers are a
+modeling *project* — conversion-point placement, the MOD family, C++ signed
+overflow (UB: no faithful total function exists), and mixed ℤ/ℝ defs that
+break the uniform `rfl`/`ring` proof story — all for machinery no banked
+kernel exercises. Unexercised semantics in the trusted base is where wrong
+models hide. Recorded as a Limits roadmap item ("Integer values in kernel
+bodies"), alongside a new "read-only stencils" item from the same
+conversation: neighbor reads (`a(i-1)`) refuse at the array-index gate, not
+the integer gate, and their admission path (synthesized per-offset inputs,
+an environment-threading schema-lemma variant) is much cheaper than the
+k-recurrence frontier. 199 tests green; nothing banked was affected.
+
 ## 2026-08-01 (later) — Fortran source mode: flang runs on demand, like clang; the quickstart goes all-source
 
 Third revision pass, closing the last asymmetry the schema-v2 round left

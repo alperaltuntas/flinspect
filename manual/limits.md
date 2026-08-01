@@ -39,6 +39,51 @@ What a future step would need:
   and it was deliberately **reserved** rather than hand-waved when plain DO
   was admitted.
 
+## Neighbor reads: read-only stencils
+
+A stencil like `b(i) = a(i-1) + a(i+1)` refuses today at the array-index gate
+(every reference must sit exactly at the loop indices). But when the offset
+reads are of arrays **never written in the loop**, this is a much cheaper
+extension than the recurrences above — the iterations still don't interact:
+
+- **extraction** — admit subscripts of the form *loop index ± integer
+  literal* on read-only arrays; each distinct offset pattern becomes a
+  synthesized scalar input (`a(i-1)` → `a_m1`), the same move rule B already
+  makes for component arrays. Writes must still land in the iteration's own
+  cell. The offset is absorbed into *which input* — it never becomes integer
+  arithmetic inside the ℝ model;
+- **licenses** — `do concurrent`'s assertion carries over unchanged; the
+  plain-DO schema lemma needs a variant that threads the read-only arrays as
+  a fixed environment instead of mutable cell state — a strictly easier
+  frame argument than the one already proved;
+- **the C++ side** — the ports read `a(i-1,j,k)` off an `Array4` inside a
+  point function, so the clang frontend needs the mirror admission, mapping
+  the same literal-offset reads to the same synthesized inputs.
+
+Distinct from a k-recurrence, where the offset read is of the array being
+*written* — that one genuinely sequentializes and lives in the section above.
+
+## Integer values in kernel bodies
+
+Integers as **addresses** (loop indices, bounds, subscripts) are fully
+supported — pointize consumes and drops them. Integer **values** in the
+modeled arithmetic refuse instead
+([the printer's gate](reference/refusals.md)): Fortran evaluates `2/3` in
+truncating integer arithmetic (it is 0), an ℝ model would say ⅔, and a
+plausible-but-wrong model is the one failure mode the pipeline must never
+have. The C++ frontend refuses the same shapes at its cast allowlist
+(`IntegralToFloating`).
+
+Faithful integer semantics is possible — Lean's `Int.div` truncates toward
+zero, matching both languages — but it is a real modeling project, not one
+gate: mixed ℤ/ℝ defs with coercions (breaking the uniform `rfl`/`ring` proof
+story), the exact *placement* of int→real conversion points (the with-sema
+tree marks them; each placement changes the value), the `MOD`/`MODULO`/`%`
+family (truncating vs flooring), and C++ signed overflow, which is undefined
+behavior and has no faithful total function at all. It enters by the
+[subset-extension workflow](howto/extend-subset.md) when a real kernel
+demands it — fixture first, refusal edges pinned — not before.
+
 ## Masks and per-cell guards
 
 Many kernels in the case-study code base guard their arithmetic per cell

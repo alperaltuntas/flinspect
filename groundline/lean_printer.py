@@ -33,6 +33,19 @@ def _real_lit(text: str) -> str:
     return text
 
 
+def _is_int_expr(e: Expr) -> bool:
+    """A subexpression the source evaluates in *integer* arithmetic: built
+    entirely from integer literals. (Integer-typed names never get this far —
+    parameters and locals are gated in :func:`print_kernel`.)"""
+    if isinstance(e, IntLit):
+        return True
+    if isinstance(e, (Paren, Neg)):
+        return _is_int_expr(e.inner)
+    if isinstance(e, BinOp):
+        return _is_int_expr(e.lhs) and _is_int_expr(e.rhs)
+    return False
+
+
 def print_expr(e: Expr, parent_prec: int = 0, right: bool = False) -> str:
     if isinstance(e, RealLit):
         return _real_lit(e.text)
@@ -52,6 +65,18 @@ def print_expr(e: Expr, parent_prec: int = 0, right: bool = False) -> str:
         s = f"-{inner}"
         return f"({s})" if parent_prec > 1 else s
     if isinstance(e, BinOp):
+        # Integer-valued `/` (and `**`) evaluate in integer arithmetic in the
+        # source — 2/3 is 0 in Fortran and C++, 2/3 in ℝ. The real-valued
+        # model cannot represent that, so it refuses rather than mismodel
+        # (faithful integer semantics is roadmap — the manual's Limits page).
+        # Mixed operands are fine: the integer promotes, and real division
+        # is what the source computes.
+        if e.op in ("div", "pow") and _is_int_expr(e.lhs) and _is_int_expr(e.rhs):
+            spelled = {"div": "/", "pow": "**"}[e.op]
+            raise UnsupportedConstruct(
+                f"integer-valued '{spelled}': the source evaluates this in "
+                f"integer arithmetic, which the model over ℝ cannot "
+                f"represent — spell the operands as real literals")
         sym, prec = _BIN[e.op]
         lhs = print_expr(e.lhs, prec, right=False)
         rhs = print_expr(e.rhs, prec, right=True)
@@ -132,6 +157,15 @@ def print_kernel(kernel: Kernel, *, provenance: str = "") -> str:
         raise UnsupportedConstruct(
             f"{kernel.name}: non-real parameters survived pointization: "
             f"{[p.name for p in non_real]}")
+    # Same discipline for locals: an integer local would be modeled as a real
+    # (hiding the source's truncating integer arithmetic — a wrong model, not
+    # a coarse one). Loop indices never get this far; pointize drops them.
+    non_real_locals = [p.name for p in kernel.locals if p.type != "real"]
+    if non_real_locals:
+        raise UnsupportedConstruct(
+            f"{kernel.name}: non-real local(s) {non_real_locals} — integer "
+            f"locals cannot be modeled over ℝ (integer arithmetic truncates; "
+            f"the model would not)")
     args = " ".join(p.name for p in params)
     ret = " × ".join("ℝ" for _ in outputs)
     # Name the outputs by their actual intents (dedup, declaration order).
